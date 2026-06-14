@@ -15,6 +15,7 @@ target/
 *.keystore
 secrets*.yml
 secrets*.yaml
+application-local.properties
 
 ### STS ###
 .apt_generated
