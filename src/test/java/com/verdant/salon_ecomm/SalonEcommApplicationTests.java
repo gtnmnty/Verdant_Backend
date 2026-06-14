@@ -1,4 +1,4 @@
-package com.gilded.salon_ecomm;
+package com.verdant.salon_ecomm;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

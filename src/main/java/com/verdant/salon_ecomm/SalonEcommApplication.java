@@ -1,4 +1,4 @@
-package com.gilded.salon_ecomm;
+package com.verdant.salon_ecomm;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -8,5 +8,4 @@ public class SalonEcommApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(SalonEcommApplication.class, args);
 	}
-
 }
