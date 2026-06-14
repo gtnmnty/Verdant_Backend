@@ -1,0 +1,47 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Build output and local caches
+target
+build
+out
+.gradle
+.cache
+.mvn/timing.properties
+
+# Logs and diagnostics
+*.log
+hs_err_pid*
+replay_pid*
+
+# Source control and local tooling
+.git
+.gitignore
+.dockerignore
+Dockerfile*
+compose.y*ml
+docker-compose*.yml
+.idea
+.vscode
+.vs
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Generated Java metadata
+*.class
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
