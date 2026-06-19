@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Setter
@@ -48,6 +49,9 @@ public class Stylist {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
+    @ManyToMany(mappedBy = "stylists")
+    private List<SalonService> services;
 
     @PrePersist
     protected void onCreate() {

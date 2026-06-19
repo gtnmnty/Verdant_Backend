@@ -41,23 +41,8 @@ public class User {
     @Column(name = "stripe_customer_id")
     private String stripeCustomerId;
 
-    @Column(name = "address_line1", length = 255)
-    private String addressLine1;
-
-    @Column(name = "address_line2", length = 255)
-    private String addressLine2;
-
-    @Column(name = "address_city", length = 100)
-    private String addressCity;
-
-    @Column(name = "address_state", length = 100)
-    private String addressState;
-
-    @Column(name = "address_postal", length = 20)
-    private String addressPostal;
-
-    @Column(name = "address_country", length = 2)
-    private String addressCountry = "PH";
+    @Embedded
+    private Address address;
 
     @Column(name = "stripe_pm_id")
     private String stripePmId;
@@ -73,6 +58,18 @@ public class User {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(name = "email_verified_at")
+    private OffsetDateTime emailVerifiedAt;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Column(name = "avatar_public_id", length = 255)
+    private String avatarPublicId;
 
     @PrePersist
     protected void onCreate() {

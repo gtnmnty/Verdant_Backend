@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.StringListConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -7,6 +8,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Setter
@@ -48,6 +50,10 @@ public class SalonService {
     @Column(length = 50)
     private String badge;
 
+    @Column(columnDefinition = "jsonb")
+    @Convert(converter = StringListConverter.class)
+    private List<String> tags;
+
     @Column(name = "is_home_service", nullable = false)
     private Boolean isHomeService = false;
 
@@ -62,6 +68,20 @@ public class SalonService {
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
+
+    @Column(name = "is_featured")
+    private boolean isFeatured = false;
+
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
+    @ManyToMany
+    @JoinTable(
+            name = "stylist_services",
+            joinColumns = @JoinColumn(name = "service_id"),
+            inverseJoinColumns = @JoinColumn(name = "stylist_id")
+    )
+    private List<Stylist> stylists;
 
     @PrePersist
     protected void onCreate() {
