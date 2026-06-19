@@ -13,7 +13,11 @@ public abstract class UserMapper {
     @Mapping(source = "password", target = "passwordHash")
     @Mapping(target = "role", ignore = true)
     @Mapping(target = "status", ignore = true)
-    @Mapping(target = "addressCountry", ignore = true)
+    @Mapping(target = "address.line1", source = "addressLine1")
+    @Mapping(target = "address.line2", source = "addressLine2")
+    @Mapping(target = "address.city", source = "addressCity")
+    @Mapping(target = "address.state", source = "addressState")
+    @Mapping(target = "address.postal", source = "addressPostal")
     public abstract User toEntity(RegisterUserRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
