@@ -1,17 +1,18 @@
 package com.verdant.salon_ecomm.controllers;
 
+import com.verdant.salon_ecomm.dtos.user.ChangePasswordRequest;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserRequest;
 import com.verdant.salon_ecomm.dtos.user.UpdateUserRequest;
 import com.verdant.salon_ecomm.dtos.user.UserResponse;
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.UserMapper;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.AllArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.Set;
 import java.util.UUID;
 
 @AllArgsConstructor
@@ -22,10 +23,9 @@ public class UserController {
     private final UserMapper userMapper;
 
     @GetMapping
-    public Iterable<UserResponse> getAll(@RequestParam(required = false, defaultValue = "", name = "sort") String sort) {
-        if (!Set.of("fullName", "email").contains(sort)) sort = "fullName";
+    public Iterable<UserResponse> getAll() {
 
-        return userRepository.findAll(Sort.by(Sort.Direction.ASC, sort))
+        return userRepository.findAll()
             .stream()
             .map(userMapper::toDto)
             .toList();
@@ -67,6 +67,34 @@ public class UserController {
         userRepository.delete(user);
 
         return ResponseEntity.noContent().build();
+    }
+
+
+//    @PatchMapping("/{id}/change-password")
+//    public ResponseEntity<UserResponse> changePassword(@RequestBody ChangePasswordRequest request, @PathVariable UUID id) {
+//        var user = userRepository.findById(id).orElseThrow(null);
+//
+//        if ("SUSPENDED".equals(user.getStatus())) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+//
+//        if(!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())){
+//            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+//        }
+//
+//        user.setPasswordHash(password.encoder(request.getNewPassword()));
+//        userRepository.save(user);
+//        return ResponseEntity.ok(userMapper.toDto(user));
+//    }
+
+    @PatchMapping("/{id}/profile")
+    public ResponseEntity<UserResponse> updateUserProfile(@PathVariable UUID id, @RequestBody UpdateUserRequest request) {
+        var user = userRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user == null) return ResponseEntity.notFound().build();
+
+        userMapper.updateUser(request, user);
+        var updatedUser = userRepository.save(user);
+        return ResponseEntity.ok(userMapper.toDto(updatedUser));
     }
 
 
