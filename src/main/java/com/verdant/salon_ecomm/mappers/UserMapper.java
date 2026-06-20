@@ -1,25 +1,40 @@
 package com.verdant.salon_ecomm.mappers;
 
 import com.verdant.salon_ecomm.dtos.user.RegisterUserRequest;
-import com.verdant.salon_ecomm.dtos.user.UpdateUserRequest;
 import com.verdant.salon_ecomm.dtos.user.UserResponse;
+import com.verdant.salon_ecomm.dtos.user.UpdateUserRequest;
 import com.verdant.salon_ecomm.entities.User;
 import org.mapstruct.*;
 
-@Mapper(componentModel = "spring")
-public abstract class UserMapper {
-    public abstract UserResponse toDto(User user);
+@Mapper(
+        componentModel = "spring",
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE,
+        unmappedTargetPolicy = ReportingPolicy.IGNORE
+)
+public interface UserMapper {
 
-    @Mapping(source = "password", target = "passwordHash")
-    @Mapping(target = "role", ignore = true)
-    @Mapping(target = "status", ignore = true)
-    @Mapping(target = "address.line1", source = "addressLine1")
-    @Mapping(target = "address.line2", source = "addressLine2")
-    @Mapping(target = "address.city", source = "addressCity")
-    @Mapping(target = "address.state", source = "addressState")
-    @Mapping(target = "address.postal", source = "addressPostal")
-    public abstract User toEntity(RegisterUserRequest request);
+    // Registration → new entity (password is set separately after encoding)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "role", constant = "USER")
+    @Mapping(target = "emailVerified", constant = "false")
+    @Mapping(target = "active", constant = "true")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    User toEntity(RegisterUserRequest request);
 
+    UserResponse toDto(User user);
+
+    // Entity → public profile
+    UserResponse.Profile toProfile(User user);
+
+    //Entity → minimal embed (e.g. inside OrderResponse)
+    UserResponse.Summary toSummary(User user);
+
+    // Entity → admin view
+    UserResponse.Admin toAdmin(User user);
+
+    //Partial update — only non-null fields are applied
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    public abstract void updateUser(UpdateUserRequest request, @MappingTarget User user);
+    void updateEntity(UpdateUserRequest request, @MappingTarget User user);
 }

@@ -24,7 +24,7 @@ public class ProductResponse {
             String category,
             String brand,
             String sku,
-            String tags,
+            List<String> tags,
             double averageRating,
             int reviewCount,
             List<String> imageUrls
