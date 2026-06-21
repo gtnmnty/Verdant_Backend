@@ -1,0 +1,9 @@
+#Health check added
+
+type Query {
+    healthCheck: String!
+}
+
+type Mutation {
+    ping: String
+}

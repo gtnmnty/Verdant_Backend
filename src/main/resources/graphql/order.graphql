@@ -1,0 +1,71 @@
+extend type Query {
+    orders(status: OrderStatus, search: String, first: Int = 10, after: String): OrderConnection!
+    order(id: ID!): Order
+}
+
+extend type Mutation {
+    buyAgain(orderItemId: ID!): Cart!
+    submitReview(input: SubmitReviewInput!): Review!
+}
+
+enum OrderStatus {
+    PLACED
+    PROCESSED
+    ON_TRANSIT
+    OUT_FOR_DELIVERY
+    DELIVERED
+    CANCELLED
+}
+
+enum PaymentStatus {
+    PENDING
+    PROCESSED
+    PAID
+    FAILED
+    REFUNDED
+    CANCELLED
+}
+
+type Order {
+    id: ID!
+    placedAt: DateTime!
+    status: OrderStatus!
+    paymentStatus: PaymentStatus!
+    paymentMethod: String!
+    subtotal: BigDecimal!
+    deliveryFee: BigDecimal!
+    total: BigDecimal!
+    shippingAddress: Address
+    notes: String
+    items: [OrderItem!]!
+}
+
+type OrderItem {
+    id: ID!
+    product: Product
+    productNameSnapshot: String!
+    imageUrlSnapshot: String
+    unitPrice: BigDecimal!
+    quantity: Int!
+    subtotal: BigDecimal!
+    canReview: Boolean!
+}
+
+type OrderConnection {
+    items: [Order!]!
+    pageInfo: PageInfo!
+}
+
+type Review {
+    id: ID!
+    rating: Int!
+    comment: String
+    createdAt: DateTime!
+}
+
+input SubmitReviewInput {
+    targetId: ID!
+    targetType: CatalogItemType!
+    rating: Int!
+    comment: String
+}

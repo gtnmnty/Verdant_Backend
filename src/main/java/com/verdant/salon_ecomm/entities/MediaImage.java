@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.entities;
 
 
+import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,7 +22,8 @@ public class MediaImage {
     private UUID id;
 
     @Column(name = "entity_type", nullable = false, length = 20)
-    private String entityType; // "PRODUCT" or "SERVICE"
+    @Enumerated(EnumType.STRING)
+    private ItemType itemtype = ItemType.GENERAL; // "PRODUCT" or "SERVICE"
 
     @Column(name = "entity_id", nullable = false)
     private UUID entityId;

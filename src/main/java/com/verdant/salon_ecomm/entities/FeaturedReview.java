@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,7 +24,7 @@ public class FeaturedReview {
     private UUID targetId;
 
     @Column(name = "target_type", nullable = false, length = 20)
-    private String targetType;
+    private ItemType targetType =  ItemType.GENERAL;
 
     @Column(name = "display_name", nullable = false, length = 100)
     private String displayName;

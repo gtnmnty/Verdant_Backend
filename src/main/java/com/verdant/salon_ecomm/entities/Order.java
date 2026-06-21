@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.OrderStatus;
+import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,10 +27,12 @@ public class Order {
     private User user;
 
     @Column(nullable = false, length = 30)
-    private String status = "pending";
+    @Enumerated(EnumType.STRING)
+    private OrderStatus orderStatus = OrderStatus.PLACED;
 
     @Column(name = "payment_status", nullable = false, length = 30)
-    private String paymentStatus = "unpaid";
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus paymentStatus =  PaymentStatus.PROCESSED;
 
     @Column(name = "payment_method", nullable = false, length = 50)
     private String paymentMethod;

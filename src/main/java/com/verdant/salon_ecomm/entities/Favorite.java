@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,7 +28,8 @@ public class Favorite {
     private UUID targetId;
 
     @Column(name = "target_type", nullable = false, length = 20)
-    private String targetType;
+    @Enumerated(EnumType.STRING)
+    private ItemType targetType =  null;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

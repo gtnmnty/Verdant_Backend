@@ -1,8 +1,7 @@
 package com.verdant.salon_ecomm.models.enums;
 
-public enum ListStatus {
+public enum CollectionStatus {
     ACTIVE,
     INACTIVE,
-    DRAFT,
-    SALE
+    ON_SALE
 }

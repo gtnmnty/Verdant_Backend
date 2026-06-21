@@ -30,7 +30,8 @@ public class Stylist {
     private String phone;
 
     @Column(nullable = false, length = 50)
-    private String role = "stylist";
+    @Enumerated(EnumType.STRING)
+    private String role = "STYLIST";
 
     @Column(nullable = false, length = 20)
     private String status = "active";
