@@ -1,0 +1,63 @@
+scalar UUID
+
+extend type Query {
+    me: User!
+}
+
+extend type Mutation {
+    updateProfile(input: UpdateProfileInput!): User!
+}
+
+type User {
+    id: ID!
+    fullName: String!
+    email: String!
+    phone: String
+    shippingAddress: Address
+    avatarUrl: String
+    savedPaymentMethod: PaymentMethodSummary
+    createdAt: DateTime!
+    cart: Cart
+}
+
+type PaymentMethodSummary {
+    brand: String!
+    last4: String!
+}
+
+type Address {
+    line1: String!
+    line2: String
+    city: String!
+    state: String!
+    postalCode: String!
+    country: String
+}
+
+input AddressInput {
+    line1: String!
+    line2: String
+    city: String!
+    state: String!
+    postalCode: String!
+    country: String!
+}
+
+input UpdateProfileInput {
+    fullName: String
+    phone: String
+    shippingAddress: AddressInput
+}
+
+type Cart {
+    items: [CartItem!]!
+    totalItems: Int!
+    subtotal: BigDecimal!
+}
+
+type CartItem {
+    id: ID!
+    product: Product!
+    quantity: Int!
+    deliveryOption: String!
+}

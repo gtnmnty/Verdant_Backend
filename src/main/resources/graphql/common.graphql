@@ -1,0 +1,36 @@
+scalar DateTime
+scalar BigDecimal
+
+type PageInfo {
+    hasNextPage: Boolean!
+    endCursor: String
+}
+
+enum CatalogItemType {
+    PRODUCT
+    SALON_SERVICE
+}
+
+interface CatalogItem {
+    id: ID!
+    name: String!
+    description: String
+    category: String!
+    price: BigDecimal!
+    reviewCount: Int!
+    averageRating: Float!
+    isFeatured: Boolean!
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    images: [MediaImage!]!
+    isFavorited: Boolean!
+}
+
+type MediaImage {
+    id: ID!
+    url: String!
+    publicId: String!
+    isPrimary: Boolean!
+    sortOrder: Int
+}

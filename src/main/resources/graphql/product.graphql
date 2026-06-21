@@ -1,0 +1,56 @@
+extend type Query {
+    products(
+        category: String
+        search: String
+        sort: ProductSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 6
+    ): ProductPage!
+    product(id: ID!): Product
+    favorites(first: Int = 10, after: String): CatalogItemConnection!
+}
+
+extend type Mutation {
+    toggleFavorite(targetId: ID!, targetType: CatalogItemType!): CatalogItem!
+    addToCart(productId: ID!, quantity: Int = 1, deliveryOption: String = "standard"): Cart!
+}
+
+enum ProductSort {
+    NEWEST
+    OLDEST
+    PRICE_LOW_TO_HIGH
+    PRICE_HIGH_TO_LOW
+}
+
+type Product implements CatalogItem {
+    id: ID!
+    name: String!
+    description: String
+    category: String!
+    price: BigDecimal!
+    reviewCount: Int!
+    averageRating: Float!
+    isFeatured: Boolean!
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    images: [MediaImage!]!
+    isFavorited: Boolean!
+    sku: String!
+    salePrice: BigDecimal
+    effectivePrice: BigDecimal!
+    inStock: Boolean!
+}
+
+type ProductPage {
+    items: [Product!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type CatalogItemConnection {
+    items: [CatalogItem!]!
+    pageInfo: PageInfo!
+}

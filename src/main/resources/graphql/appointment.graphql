@@ -1,0 +1,97 @@
+# appointment.graphqls
+#
+# Rebuilt against the real `appointments` table. Requires a new
+# `price_snapshot numeric` column on appointments (decided in chat) -
+# see migration note alongside this file.
+#
+# Still deliberately missing: a human-readable code like "#APT-8821" -
+# only a raw uuid `id` exists right now; orders have the same gap.
+
+extend type Query {
+    appointments(status: AppointmentStatus, first: Int = 10, after: String): AppointmentPage!
+    appointment(id: ID!): Appointment
+    appointmentStatusCounts: AppointmentStatusCounts!
+}
+
+extend type Mutation {
+    bookAppointment(input: BookAppointmentInput!): Appointment!
+    rescheduleAppointment(id: ID!, newScheduledAt: DateTime!): Appointment!
+    cancelAppointment(id: ID!): Appointment!
+}
+
+enum AppointmentStatus {
+    PENDING
+    UPCOMING
+    COMPLETED
+    CANCELLED
+}
+
+type Appointment {
+    id: ID!
+    service: SalonService
+    serviceName: String!
+    serviceType: String!
+    priceSnapshot: BigDecimal!
+    stylist: Stylist
+    branch: String
+    scheduledAt: DateTime!
+    durationMinutes: Int!
+    status: AppointmentStatus!
+    guests: Int!
+    homeAddress: Address
+    notes: String
+}
+
+type SalonService implements CatalogItem {
+    id: ID!
+    name: String!
+    description: String
+    category: String!
+    price: BigDecimal!
+    reviewCount: Int!
+    averageRating: Float!
+    isFeatured: Boolean!
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    images: [MediaImage!]!
+    isFavorited: Boolean!
+    durationMinutes: Int!
+    isHomeService: Boolean!
+    stylists: [Stylist!]!
+}
+
+type Stylist {
+    id: ID!
+    name: String!
+    bio: String
+    avatarUrl: String
+    branch: String
+    services: [SalonService!]!
+}
+
+type AppointmentPage {
+    items: [Appointment!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type AppointmentStatusCounts {
+    all: Int!
+    pending: Int!
+    upcoming: Int!
+    completed: Int!
+    cancelled: Int!
+}
+
+input BookAppointmentInput {
+    serviceId: ID!
+    stylistId: ID
+    branch: String
+    scheduledAt: DateTime!
+    guests: Int = 1
+    homeAddress: AddressInput
+    notes: String
+}
