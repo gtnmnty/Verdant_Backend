@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,7 +32,8 @@ public class CartItem {
     private Integer quantity = 1;
 
     @Column(name = "delivery_option", nullable = false, length = 50)
-    private String deliveryOption = "standard";
+    @Enumerated(EnumType.STRING)
+    private DeliveryOption deliveryOption = DeliveryOption.STANDARD;
 
     @Column(name = "added_at")
     private OffsetDateTime addedAt;

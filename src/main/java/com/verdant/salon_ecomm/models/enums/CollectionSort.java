@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.models.enums;
 
-public enum ListSort {
+public enum CollectionSort {
     NEWWEST,
     OLDEST,
     PRICE_LOW_TO_HIGH,

@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.AppointmentStatusType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -56,7 +57,8 @@ public class Appointment {
     private String notes;
 
     @Column(nullable = false, length = 30)
-    private String status = "pending";
+    @Enumerated(EnumType.STRING)
+    private AppointmentStatusType status = AppointmentStatusType.PENDING;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

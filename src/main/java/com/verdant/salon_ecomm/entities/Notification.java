@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.NotificationType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -24,7 +25,8 @@ public class Notification {
     private User user;
 
     @Column(nullable = false)
-    private String type;
+    @Enumerated(EnumType.STRING)
+    private NotificationType type = NotificationType.GENERAL;
 
     @Column(nullable = false)
     private String message;

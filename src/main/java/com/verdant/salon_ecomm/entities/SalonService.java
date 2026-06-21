@@ -1,6 +1,8 @@
 package com.verdant.salon_ecomm.entities;
 
 import com.verdant.salon_ecomm.StringListConverter;
+import com.verdant.salon_ecomm.models.enums.ItemCatalog;
+import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -28,7 +30,8 @@ public class SalonService {
     private String name;
 
     @Column(nullable = false, length = 100)
-    private String category;
+    @Enumerated(EnumType.STRING)
+    private ItemCatalog itemCatalog = ItemCatalog.GENERAL;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;

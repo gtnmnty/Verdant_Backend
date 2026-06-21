@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.dtos.service;
 
-import com.verdant.salon_ecomm.models.enums.ListStatus;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.NotBlank;
@@ -31,7 +31,7 @@ public class UpdateServiceRequest {
     Boolean isFeatured;
 
     @Enumerated(EnumType.STRING)
-    ListStatus status;
+    CollectionStatus status;
 
     @NotNull
     @Positive
