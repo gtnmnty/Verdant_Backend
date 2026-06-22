@@ -23,7 +23,7 @@ public class MediaImage {
 
     @Column(name = "entity_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private ItemType itemtype = ItemType.GENERAL; // "PRODUCT" or "SERVICE"
+    private ItemType itemtype;
 
     @Column(name = "entity_id", nullable = false)
     private UUID entityId;

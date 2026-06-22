@@ -26,7 +26,7 @@ public class Notification {
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private NotificationType type = NotificationType.GENERAL;
+    private NotificationType type;
 
     @Column(nullable = false)
     private String message;

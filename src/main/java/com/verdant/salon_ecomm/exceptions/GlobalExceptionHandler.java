@@ -1,112 +1,90 @@
 package com.verdant.salon_ecomm.exceptions;
 
-
-import com.verdant.salon_ecomm.dtos.ErrorResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
+import graphql.GraphQLError;
+import graphql.GraphqlErrorBuilder;
+import graphql.schema.DataFetchingEnvironment;
+import org.springframework.graphql.data.method.annotation.GraphQlExceptionHandler;
+import org.springframework.graphql.execution.ErrorType;
 
-import java.time.LocalDateTime;
+import java.util.Map;
 
-@RestControllerAdvice
+@ControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
-        return ResponseEntity.status(404).body(new ErrorResponse(
-            LocalDateTime.now(),
-            404,
-            "NOT_FOUND",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handleNotFound(ResourceNotFoundException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.NOT_FOUND)
+            .extensions(Map.of("code", "NOT_FOUND", "status", 404))
+            .build();
     }
 
     // Email is already registered
-    @ExceptionHandler(DuplicateEmailException.class)
-    public ResponseEntity<ErrorResponse> handleException(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(409).body(new ErrorResponse(
-            LocalDateTime.now(),
-            409,
-            "CONFLICT",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handleBadRequest(DuplicateEmailException ex,  DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "EMAIL_ALREADY_EXISTS", "status", 409))
+            .build();
     }
 
     // Wrong password or login credentials
-    @ExceptionHandler(InvalidCrendetialsException.class)
-    public  ResponseEntity<ErrorResponse> handleUnauthorized(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(401).body(new ErrorResponse(
-            LocalDateTime.now(),
-            401,
-            "UNAUTHORIZED",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handleUnauthorized(InvalidCrendetialsException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.UNAUTHORIZED)
+            .extensions(Map.of("code", "UNAUTHORIZED", "status", 401))
+            .build();
     }
 
     // JWT Token is expired
-    @ExceptionHandler(TokenExpiredException.class)
-    public  ResponseEntity<ErrorResponse> handleInternalServerError(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(401).body(new ErrorResponse(
-            LocalDateTime.now(),
-            401,
-            "TOKEN_EXPIRED",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handleTokenExpired(TokenExpiredException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "TOKEN_EXPIRED", "status", 401))
+            .build();
     }
 
     // Wrong role accessing endpoint
-    @ExceptionHandler(ForbiddenException.class)
-    public  ResponseEntity<ErrorResponse> handleBadRequest(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(400).body(new ErrorResponse(
-            LocalDateTime.now(),
-            400,
-            "FORBIDDEN",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handleAccessPoint(ForbiddenException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "FORBIDDEN", "status", 403))
+            .build();
     }
 
     // Payment Failure
-    @ExceptionHandler(PaymentException.class)
-    public  ResponseEntity<ErrorResponse> handleConflict(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(402).body(new ErrorResponse(
-            LocalDateTime.now(),
-            402,
-            "PAYMENT_FAILED",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handlePaymentFailure(PaymentException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "PAYMENT_FAILED", "status", 402))
+            .build();
     }
 
     // Appointment Slot already booked
-    @ExceptionHandler(AppointmentConflictException.class)
-    public  ResponseEntity<ErrorResponse> handleUnprocessable(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(409).body(new ErrorResponse(
-            LocalDateTime.now(),
-            409,
-            "APPOINTMENT_CONFLICT",
-            ex.getMessage(),
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError handleAppointmentConflict(AppointmentConflictException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "APPOINTMENT_CONFLICT", "status", 409))
+            .build();
     }
 
     // Catch for all
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> catchAllException(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(500).body(new ErrorResponse(
-            LocalDateTime.now(),
-            500,
-            "INTERNAL_ERROR",
-            "Something went wrong",
-            request.getRequestURI()
-        ));
+    @GraphQlExceptionHandler
+    public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message("Something went wrong on our server.")
+            .errorType(ErrorType.INTERNAL_ERROR)
+            .extensions(Map.of("code", "INTERNAL_ERROR", "status", 500))
+            .build();
     }
-
-
-
 }

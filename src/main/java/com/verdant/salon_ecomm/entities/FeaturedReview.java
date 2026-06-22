@@ -24,7 +24,7 @@ public class FeaturedReview {
     private UUID targetId;
 
     @Column(name = "target_type", nullable = false, length = 20)
-    private ItemType targetType =  ItemType.GENERAL;
+    private ItemType targetType;
 
     @Column(name = "display_name", nullable = false, length = 100)
     private String displayName;

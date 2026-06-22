@@ -1,6 +1,11 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.AccountStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -24,20 +29,25 @@ public class User {
     private String fullName;
 
     @Column(nullable = false, unique = true, length = 255)
+    @NotBlank(message = "Email is required")
+    @Email(message = "Please provide a valid email address")
     private String email;
 
     @Column(length = 20)
     private String phone;
 
     @Column(name = "password_hash", nullable = false)
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, message = "Password must be at least {min} characters long")
     private String passwordHash;
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private String role = "CUSTOMER";
+    private AccountRole role;
 
     @Column(nullable = false, length = 20)
-    private String status = "ACTIVE";
+    @Enumerated(EnumType.STRING)
+    private AccountStatus status;
 
     @Column(name = "stripe_customer_id")
     private String stripeCustomerId;

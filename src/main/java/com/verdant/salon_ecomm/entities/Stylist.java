@@ -31,7 +31,7 @@ public class Stylist {
 
     @Column(nullable = false, length = 50)
     @Enumerated(EnumType.STRING)
-    private String role = "STYLIST";
+    private String role;
 
     @Column(nullable = false, length = 20)
     private String status = "active";
