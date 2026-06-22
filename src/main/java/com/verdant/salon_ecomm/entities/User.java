@@ -29,16 +29,12 @@ public class User {
     private String fullName;
 
     @Column(nullable = false, unique = true, length = 255)
-    @NotBlank(message = "Email is required")
-    @Email(message = "Please provide a valid email address")
     private String email;
 
     @Column(length = 20)
     private String phone;
 
     @Column(name = "password_hash", nullable = false)
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least {min} characters long")
     private String passwordHash;
 
     @Column(nullable = false, length = 20)
