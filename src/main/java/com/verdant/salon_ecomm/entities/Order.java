@@ -28,11 +28,11 @@ public class Order {
 
     @Column(nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
-    private OrderStatus orderStatus = OrderStatus.PLACED;
+    private OrderStatus orderStatus;
 
     @Column(name = "payment_status", nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
-    private PaymentStatus paymentStatus =  PaymentStatus.PROCESSED;
+    private PaymentStatus paymentStatus;
 
     @Column(name = "payment_method", nullable = false, length = 50)
     private String paymentMethod;

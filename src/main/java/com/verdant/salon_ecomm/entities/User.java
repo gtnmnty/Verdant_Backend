@@ -1,6 +1,11 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.AccountStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -34,10 +39,11 @@ public class User {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private String role = "CUSTOMER";
+    private AccountRole role;
 
     @Column(nullable = false, length = 20)
-    private String status = "ACTIVE";
+    @Enumerated(EnumType.STRING)
+    private AccountStatus status;
 
     @Column(name = "stripe_customer_id")
     private String stripeCustomerId;

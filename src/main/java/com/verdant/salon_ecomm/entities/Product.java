@@ -31,7 +31,7 @@ public class Product {
 
     @Column(nullable = false, length = 100)
     @Enumerated(EnumType.STRING)
-    private ItemCatalog itemCatalog = ItemCatalog.GENERAL;
+    private ItemCatalog itemCatalog;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;

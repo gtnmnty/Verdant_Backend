@@ -33,7 +33,7 @@ public class CartItem {
 
     @Column(name = "delivery_option", nullable = false, length = 50)
     @Enumerated(EnumType.STRING)
-    private DeliveryOption deliveryOption = DeliveryOption.STANDARD;
+    private DeliveryOption deliveryOption;
 
     @Column(name = "added_at")
     private OffsetDateTime addedAt;

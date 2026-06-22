@@ -58,7 +58,7 @@ public class Appointment {
 
     @Column(nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
-    private AppointmentStatusType status = AppointmentStatusType.PENDING;
+    private AppointmentStatusType status;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
