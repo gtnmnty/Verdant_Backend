@@ -29,6 +29,13 @@ public class SalonService {
     @Column(nullable = false, length = 200)
     private String name;
 
+    @Column(nullable = false)
+    private String subName;
+
+    @Column(nullable = false, length = 50)
+    @Enumerated(EnumType.STRING)
+    private ItemType itemType;
+
     @Column(name = "category", nullable = false, length = 100)
     @Enumerated(EnumType.STRING)
     private ItemCatalog itemCatalog;
