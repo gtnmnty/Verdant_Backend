@@ -4,7 +4,7 @@ package com.verdant.salon_ecomm.dtos.user;
 import java.time.Instant;
 import java.util.UUID;
 
-public class UserResponse {
+public class UserDto {
 
     public record Summary(
         UUID id,

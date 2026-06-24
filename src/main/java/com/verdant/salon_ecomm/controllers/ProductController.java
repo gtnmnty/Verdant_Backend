@@ -3,7 +3,6 @@ package com.verdant.salon_ecomm.controllers;
 import com.verdant.salon_ecomm.dtos.product.CreateProductRequest;
 import com.verdant.salon_ecomm.dtos.product.ProductResponse;
 import com.verdant.salon_ecomm.dtos.product.UpdateProductRequest;
-import com.verdant.salon_ecomm.dtos.user.UserResponse;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.ProductMapper;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
@@ -73,7 +72,7 @@ public class ProductController {
 
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
-        product.setItemCatalog(request.getItemCatalog());
+        product.setItemCatalog(request.getCategory());
         product.setName(request.getName());
 
         var updatedProduct = productRepository.save(product);

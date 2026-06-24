@@ -3,13 +3,14 @@ package com.verdant.salon_ecomm.entities;
 import com.verdant.salon_ecomm.models.enums.AccountRole;
 import com.verdant.salon_ecomm.models.enums.AccountStatus;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.*;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Setter
@@ -19,7 +20,7 @@ import java.util.UUID;
 @Builder
 @Entity
 @Table(name = "users")
-public class User {
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -78,6 +79,15 @@ public class User {
     @Column(name = "avatar_public_id", length = 255)
     private String avatarPublicId;
 
+    @Column(name = "verification_code")
+    private String verificationCode;
+
+    @Column(name = "verificationCode_expiration")
+    private OffsetDateTime verificationCodeExpiration;
+
+    @Column
+    private boolean enabled;
+
     @PrePersist
     protected void onCreate() {
         createdAt = OffsetDateTime.now();
@@ -89,4 +99,45 @@ public class User {
         updatedAt = OffsetDateTime.now();
     }
 
+    public User(String passwordHash, String phone, String email, String fullName) {
+        this.passwordHash = passwordHash;
+        this.phone = phone;
+        this.email = email;
+        this.fullName = fullName;
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+    }
+
+    @Override
+    public boolean isAccountNonExpired(){
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked(){
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return emailVerified;
+    }
+
+    @Override
+    public String getPassword() {
+        return passwordHash;
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
 }

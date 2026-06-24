@@ -23,7 +23,8 @@ public class FeaturedReview {
     @Column(name = "target_id", nullable = false)
     private UUID targetId;
 
-    @Column(name = "target_type", nullable = false, length = 20)
+    @Column(name = "target_type", nullable = false, length = 20, columnDefinition = "varchar(20)")
+    @Enumerated(EnumType.STRING)
     private ItemType targetType;
 
     @Column(name = "display_name", nullable = false, length = 100)

@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.dtos.product;
 
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.NotBlank;
@@ -20,7 +21,7 @@ public class UpdateProductRequest {
     String name;
 
     String description;
-    String category;
+    ItemCatalog category;
     String brand;
 
     @NotBlank
