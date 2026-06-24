@@ -23,7 +23,7 @@ public class MediaImage {
 
     @Column(name = "entity_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private ItemType itemtype;
+    private ItemType entityType;
 
     @Column(name = "entity_id", nullable = false)
     private UUID entityId;

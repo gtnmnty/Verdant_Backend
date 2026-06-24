@@ -28,6 +28,10 @@ public class Appointment {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stylist_id")
+    private Stylist stylist;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_id")
     private SalonService service;
 
@@ -50,6 +54,7 @@ public class Appointment {
     @Column(name = "home_address", columnDefinition = "jsonb")
     private Map<String, Object> homeAddress;
 
+    @Builder.Default
     @Column(nullable = false)
     private Short guests = 1;
 
@@ -67,6 +72,4 @@ public class Appointment {
     protected void onCreate() {
         createdAt = OffsetDateTime.now();
     }
-
-
 }

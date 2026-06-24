@@ -28,7 +28,7 @@ public class Notification {
     @Enumerated(EnumType.STRING)
     private NotificationType type;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String message;
 
     @Column(name = "is_read", nullable = false)
@@ -36,6 +36,15 @@ public class Notification {
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
+
+    @Column(nullable = false, length = 150)
+    private String title;
+
+    @Column(name = "reference_type", length = 50)
+    private String referenceType;
+
+    @Column(name = "reference_id")
+    private UUID referenceId;
 
     @PrePersist
     protected void onCreate() {
