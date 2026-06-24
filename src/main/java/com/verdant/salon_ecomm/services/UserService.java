@@ -1,9 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.dtos.user.ChangePasswordRequest;
-import com.verdant.salon_ecomm.dtos.user.RegisterUserRequest;
-import com.verdant.salon_ecomm.dtos.user.UpdateUserRequest;
-import com.verdant.salon_ecomm.dtos.user.UserResponse;
+import com.verdant.salon_ecomm.dtos.user.*;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.DuplicateEmailException;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
@@ -14,8 +11,6 @@ import com.verdant.salon_ecomm.models.enums.AccountStatus;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -29,18 +24,18 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     // Manager or Owner only
-    public Page<UserResponse.Admin> getAllUsers(Pageable pageable) {
-        return userRepository.findAll(pageable).map(userMapper::toAdmin);
-    }
+//    public Page<UserDto.Admin> getAllUsers(Pageable pageable) {
+//        return userRepository.findAll(pageable).map(userMapper::toAdmin);
+//    }
 
-    public UserResponse.Profile getUserById(UUID id) {
+    public UserDto.Profile getUserById(UUID id) {
         return userRepository.findById(id)
             .map(userMapper::toProfile)
             .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 
     @Transactional
-    public UserResponse.Summary registerUser(RegisterUserRequest request){
+    public UserDto.Summary registerUser(RegisterUserDto request){
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateEmailException("Email already in use");
         }
@@ -56,7 +51,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse.Profile updateUserProfile(UUID id, UpdateUserRequest request){
+    public UserDto.Profile updateUserProfile(UUID id, UpdateUserRequest request){
         var user = findUserOrThrow(id);
 
         userMapper.updateEntity(request, user);

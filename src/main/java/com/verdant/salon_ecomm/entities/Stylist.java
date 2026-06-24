@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.AccountRole;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,7 +32,7 @@ public class Stylist {
 
     @Column(nullable = false, length = 50)
     @Enumerated(EnumType.STRING)
-    private String role;
+    private AccountRole role = AccountRole.STYLIST;
 
     @Column(nullable = false, length = 20)
     private String status = "active";

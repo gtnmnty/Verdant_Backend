@@ -26,7 +26,7 @@ public class Order {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(nullable = false, length = 30)
+    @Column(name="status", nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
 

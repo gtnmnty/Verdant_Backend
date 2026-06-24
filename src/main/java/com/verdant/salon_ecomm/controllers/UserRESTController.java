@@ -1,9 +1,6 @@
 package com.verdant.salon_ecomm.controllers;
 
-import com.verdant.salon_ecomm.dtos.user.ChangePasswordRequest;
-import com.verdant.salon_ecomm.dtos.user.RegisterUserRequest;
-import com.verdant.salon_ecomm.dtos.user.UpdateUserRequest;
-import com.verdant.salon_ecomm.dtos.user.UserResponse;
+import com.verdant.salon_ecomm.dtos.user.*;
 import com.verdant.salon_ecomm.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +18,12 @@ public class UserRESTController {
     private final UserService userService;
 
     @PostMapping
-    public ResponseEntity<UserResponse.Summary> createUser(
-        @Valid @RequestBody RegisterUserRequest request,
+    public ResponseEntity<UserDto.Summary> createUser(
+        @Valid @RequestBody RegisterUserDto request,
         UriComponentsBuilder uriBuilder
     ) {
         // 1. Pass the 'request' payload object into your service folder
-        UserResponse.Summary newUser = userService.registerUser(request);
+        UserDto.Summary newUser = userService.registerUser(request);
 
         // 2. Build the Location URI using the inner record's .id() accessor
         var uri = uriBuilder.path("/api/v1/users/{id}").buildAndExpand(newUser.id()).toUri();
@@ -35,11 +32,11 @@ public class UserRESTController {
     }
 
     @PutMapping("/{id}/update-profile")
-    public ResponseEntity<UserResponse.Profile> updateProfile(
+    public ResponseEntity<UserDto.Profile> updateProfile(
         @PathVariable UUID id,
         @Valid @RequestBody UpdateUserRequest request
     ){
-        UserResponse.Profile user = userService.updateUserProfile(id, request);
+        UserDto.Profile user = userService.updateUserProfile(id, request);
         return ResponseEntity.ok(user);
     }
 
@@ -54,7 +51,7 @@ public class UserRESTController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<UserResponse> deleteUser(@PathVariable UUID id){
+    public ResponseEntity<UserDto> deleteUser(@PathVariable UUID id){
         userService.deleteUserById(id);
         return ResponseEntity.noContent().build();
     }
