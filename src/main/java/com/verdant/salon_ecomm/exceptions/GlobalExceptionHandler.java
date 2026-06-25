@@ -78,6 +78,42 @@ public class GlobalExceptionHandler {
             .build();
     }
 
+    // Verification Code Expired
+    @GraphQlExceptionHandler
+    public GraphQLError handleVerificationCodeExpired(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+                .message(ex.getMessage())
+                .extensions(Map.of("code", "VERFICATION_CODE_EXPIRED", "status", 400))
+                .build();
+    }
+
+    // Verification Code Expired
+    @GraphQlExceptionHandler
+    public GraphQLError handleAccountNotVerified(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+                .message(ex.getMessage())
+                .extensions(Map.of("code", "ACCOUNT_NOT_VERIFIED", "status", 403))
+                .build();
+    }
+
+    // Verification Code Expired
+    @GraphQlExceptionHandler
+    public GraphQLError handleEmailDeliveryFailure(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+                .message(ex.getMessage())
+                .extensions(Map.of("code", "EMAIL_DELIVERY_FAILURE", "status", 409))
+                .build();
+    }
+
+    // Verification Code Expired
+    @GraphQlExceptionHandler
+    public GraphQLError handleInvalidVerificationCode(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+        return GraphqlErrorBuilder.newError(env)
+                .message(ex.getMessage())
+                .extensions(Map.of("code", "INVALID_CREDENTIALS", "status", 400))
+                .build();
+    }
+
     // Catch for all
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {

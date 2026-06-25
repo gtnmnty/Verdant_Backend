@@ -1,0 +1,126 @@
+package com.verdant.salon_ecomm.services;
+
+import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
+import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
+import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
+import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.exceptions.AccountNotVerifiedException;
+import com.verdant.salon_ecomm.exceptions.InvalidVerificationCodeException;
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.exceptions.VerificationCodeExpiredException;
+import com.verdant.salon_ecomm.repositories.UserRepository;
+import jakarta.mail.MessagingException;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.security.SecureRandom;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+
+@Service
+public class AuthenticationService {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final EmailService emailService;
+    private final JwtService jwtService;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    public AuthenticationService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            AuthenticationManager authenticationManager,
+            EmailService emailService, JwtService jwtService
+    ) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.emailService = emailService;
+        this.jwtService = jwtService;
+    }
+
+    public User signUp(RegisterUserDto input) {
+        User user = new User();
+        user.setFullName(input.getFullName());
+        user.setEmail(input.getEmail());
+        user.setPhone(input.getPhoneNumber());
+        user.setPasswordHash(passwordEncoder.encode(input.getPassword()));
+        user.setVerificationCode(generateVerificationCode());
+        user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(5));
+        user.setEnabled(false);
+
+        sendVerificationEmail(user);
+        return userRepository.save(user);
+    }
+
+    public User authenticate(LogInUserDto input) {
+        User user = userRepository.findByEmail(input.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!user.isEnabled()) {
+            throw new AccountNotVerifiedException("Account is not verified. Please check your email.");
+        }
+
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        input.getEmail(),
+                        input.getPassword()
+                )
+        );
+
+        return user;
+    }
+
+    public void verifyUser(VerifyUserDto input) {
+        User user = userRepository.findByEmail(input.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user.getVerificationCodeExpiration().isBefore(OffsetDateTime.now())) {
+            throw new VerificationCodeExpiredException("Verification code has expired.");
+        }
+
+        if (!user.getVerificationCode().equals(input.getVerificationCode())) {
+            throw new InvalidVerificationCodeException("Invalid verification code.");
+        }
+
+        user.setEnabled(true);
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiration(null);
+        userRepository.save(user);
+    }
+
+    public void resendVerifictionCode(String email){
+        Optional<User> optionalUser = userRepository.findByEmail(email);
+        if(optionalUser.isPresent()){
+            User user = optionalUser.get();
+            if(user.isEnabled()){
+                throw new RuntimeException("Already verified");
+            }
+
+            user.setVerificationCode(generateVerificationCode());
+            user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(5));
+            sendVerificationEmail(user);
+            userRepository.save(user);
+        } else {
+            throw new RuntimeException("User not found");
+        }
+    }
+
+    public void sendVerificationEmail(User user) {
+
+        try {
+            emailService.sendVerificationEmail(user.getEmail(), user.getVerificationCode());
+        } catch (MessagingException e) {
+            e.printStackTrace();
+            // Handles the message error if it didn't work
+        }
+    }
+
+    private String generateVerificationCode() {
+        int code = SECURE_RANDOM.nextInt(900000) + 100000;
+        return String.valueOf(code);
+    }
+}
