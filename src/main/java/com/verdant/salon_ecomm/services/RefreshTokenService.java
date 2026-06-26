@@ -6,7 +6,7 @@ import com.verdant.salon_ecomm.exceptions.RefreshTokenExpiredException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.repositories.RefreshTokenRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
-import com.verdant.salon_ecomm.response.AuthResponse;
+import com.verdant.salon_ecomm.response.AuthResult;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -43,6 +43,7 @@ public class RefreshTokenService {
         RefreshToken newrefreshToken = new RefreshToken();
         newrefreshToken.setUser(user);
         newrefreshToken.setToken(UUID.randomUUID().toString());
+        newrefreshToken.setJti(UUID.randomUUID().toString());
         newrefreshToken.setExpiresAt(OffsetDateTime.now().plusSeconds(refreshTokenDurationMs / 1000));
 
         return refreshTokenRepository.save(newrefreshToken);
@@ -64,9 +65,8 @@ public class RefreshTokenService {
                 .orElseThrow(() -> new ResourceNotFoundException("Refresh token not found"));
     }
 
-
     @Transactional
-    public AuthResponse rotateRefreshToken(String incomingToken) {
+    public AuthResult rotateRefreshToken(String incomingToken) {
         RefreshToken  oldRefreshToken = refreshTokenRepository.findByToken(incomingToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Refresh token not found"));
 
@@ -83,7 +83,7 @@ public class RefreshTokenService {
         RefreshToken newRefreshToken = createRefreshToken(user.getEmail());
         long expirationTime = jwtService.getExpirationTime();
 
-        return new AuthResponse(
+        return new AuthResult(
                 newAccessToken,
                 newRefreshToken.getToken(),
                 expirationTime
@@ -92,10 +92,10 @@ public class RefreshTokenService {
 
     @Transactional
     public void deleteByUserId(UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found."));
-
-        refreshTokenRepository.deleteAllByUserId(user.getId());
+        refreshTokenRepository.deleteAllByUserId(userId);
     }
 
+    public long getRefreshTokenDurationSeconds() {
+        return refreshTokenDurationMs / 1000;
+    }
 }
