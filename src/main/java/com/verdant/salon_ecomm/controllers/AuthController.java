@@ -23,18 +23,36 @@ public class AuthController {
     private final AuthenticationService authenticationService;
     private final RefreshTokenService refreshTokenService;
 
+    /**
+     * Registers a new user account.
+     *
+     * @param  registerUser  the registration details
+     * @return               the created user
+     */
     @PostMapping("/signup")
     public ResponseEntity<User> signUp(@RequestBody RegisterUserDto registerUser) {
         User registered = authenticationService.signUp(registerUser);
         return ResponseEntity.ok(registered);
     }
 
+    /**
+     * Authenticates a user and returns their authentication details.
+     *
+     * @param logInUser the login credentials to authenticate
+     * @return the authentication response for the supplied credentials
+     */
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> logIn(@RequestBody LogInUserDto logInUser) {
         AuthResponse authResponse = authenticationService.authenticate(logInUser);
         return ResponseEntity.ok(authResponse);
     }
 
+    /**
+     * Verifies a user account.
+     *
+     * @param  verifyUser  the verification details
+     * @return             a response with "Account verified" on success, or a bad request with the error message if verification fails
+     */
     @PostMapping("/verify")
     public ResponseEntity<?> verifyUser(@RequestBody VerifyUserDto verifyUser) {
         try {
@@ -45,6 +63,12 @@ public class AuthController {
         }
     }
 
+    /**
+     * Resends a verification code to the specified email address.
+     *
+     * @param email the email address to send the verification code to
+     * @return a success message when the code is resent, or an error message when resending fails
+     */
     @PostMapping("/resend")
     public ResponseEntity<?> resendVerificationCode(@RequestBody String email){
         try{

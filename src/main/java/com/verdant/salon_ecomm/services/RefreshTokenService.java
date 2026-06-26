@@ -22,11 +22,20 @@ public class RefreshTokenService {
     @Value("${security.jwt.refresh-expiration-time}")
     private long refreshTokenDurationMs;
 
+    /**
+     * Creates a refresh token service with the given repositories.
+     */
     public RefreshTokenService(RefreshTokenRepository refreshTokenRepository, UserRepository userRepository) {
         this.refreshTokenRepository = refreshTokenRepository;
         this.userRepository = userRepository;
     }
 
+    /**
+     * Creates a refresh token for the user identified by email.
+     *
+     * @param email the user's email address
+     * @return the saved refresh token
+     */
     @Transactional
     public RefreshToken createRefreshToken(String email) {
         User user = userRepository.findByEmail(email)
@@ -42,6 +51,13 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(newrefreshToken);
     }
 
+    /**
+     * Validates that a refresh token has not expired.
+     *
+     * @param refreshToken the refresh token to validate
+     * @return the same refresh token if it is still valid
+     * @throws RefreshTokenExpiredException if the refresh token has expired
+     */
     @Transactional
     public RefreshToken verifyRefreshToken(RefreshToken refreshToken) {
         if(refreshToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
@@ -55,7 +71,11 @@ public class RefreshTokenService {
 //    @Transactional
 //    public RefreshToken updateRefreshToken(RefreshToken refreshToken) {
 //
-//    }
+/**
+     * Deletes all refresh tokens for a user.
+     *
+     * @param userId the user's identifier
+     */
 
     @Transactional
     public void deleteByUserId(UUID userId) {
