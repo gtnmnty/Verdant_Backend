@@ -3,12 +3,14 @@ package com.verdant.salon_ecomm.services;
 import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
+import com.verdant.salon_ecomm.entities.RefreshToken;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.AccountNotVerifiedException;
 import com.verdant.salon_ecomm.exceptions.InvalidVerificationCodeException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.exceptions.VerificationCodeExpiredException;
 import com.verdant.salon_ecomm.repositories.UserRepository;
+import com.verdant.salon_ecomm.response.AuthResponse;
 import jakarta.mail.MessagingException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,20 +30,31 @@ public class AuthenticationService {
     private final JwtService jwtService;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private final RefreshTokenService refreshTokenService;
 
+    /**
+     * Creates an authentication service with its required dependencies.
+     */
     public AuthenticationService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
-            EmailService emailService, JwtService jwtService
-    ) {
+            EmailService emailService, JwtService jwtService,
+            RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.emailService = emailService;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
     }
 
+    /**
+     * Registers a new user account and sends a verification code.
+     *
+     * @param  input  the registration details to copy into the new user
+     * @return        the saved user
+     */
     public User signUp(RegisterUserDto input) {
         User user = new User();
         user.setFullName(input.getFullName());
@@ -56,7 +69,15 @@ public class AuthenticationService {
         return userRepository.save(user);
     }
 
-    public User authenticate(LogInUserDto input) {
+    /**
+     * Authenticates a user and issues access and refresh tokens.
+     *
+     * @param input the login credentials
+     * @return an authentication response containing the access token, refresh token, and access token expiration time
+     * @throws ResourceNotFoundException if no user exists for the provided email
+     * @throws AccountNotVerifiedException if the user's account is not verified
+     */
+    public AuthResponse authenticate(LogInUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -71,9 +92,24 @@ public class AuthenticationService {
                 )
         );
 
-        return user;
+        String accessToken = jwtService.generateToken(user);
+
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(input.getEmail());
+        String refreshTokenString = refreshToken.getToken();
+
+        long expiresAt = jwtService.getExpirationTime();
+
+        return new AuthResponse(accessToken, refreshTokenString, expiresAt);
     }
 
+    /**
+     * Verifies a user's account with the provided code.
+     *
+     * @param input the email address and verification code to validate
+     * @throws ResourceNotFoundException if no user exists for the supplied email
+     * @throws VerificationCodeExpiredException if the stored verification code has expired
+     * @throws InvalidVerificationCodeException if the provided code does not match the stored code
+     */
     public void verifyUser(VerifyUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
