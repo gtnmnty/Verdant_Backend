@@ -9,6 +9,7 @@ import com.verdant.salon_ecomm.exceptions.AccountNotVerifiedException;
 import com.verdant.salon_ecomm.exceptions.InvalidVerificationCodeException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.exceptions.VerificationCodeExpiredException;
+import com.verdant.salon_ecomm.repositories.RefreshTokenRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.response.AuthResponse;
 import jakarta.mail.MessagingException;
@@ -31,6 +32,7 @@ public class AuthenticationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     /**
      * Creates an authentication service with its required dependencies.
@@ -40,13 +42,14 @@ public class AuthenticationService {
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
             EmailService emailService, JwtService jwtService,
-            RefreshTokenService refreshTokenService) {
+            RefreshTokenService refreshTokenService, RefreshTokenRepository refreshTokenRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.emailService = emailService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     /**
@@ -158,5 +161,9 @@ public class AuthenticationService {
     private String generateVerificationCode() {
         int code = SECURE_RANDOM.nextInt(900000) + 100000;
         return String.valueOf(code);
+    }
+
+    public AuthResponse refresh(String refreshToken) {
+        return refreshTokenService.rotateRefreshToken(refreshToken);
     }
 }

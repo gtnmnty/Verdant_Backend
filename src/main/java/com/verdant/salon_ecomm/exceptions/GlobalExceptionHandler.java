@@ -100,7 +100,7 @@ public class GlobalExceptionHandler {
      * @return a GraphQL error with code {@code ACCOUNT_NOT_VERIFIED} and status {@code 403}
      */
     @GraphQlExceptionHandler
-    public GraphQLError handleAccountNotVerified(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+    public GraphQLError handleAccountNotVerified(AccountNotVerifiedException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
                 .message(ex.getMessage())
                 .extensions(Map.of("code", "ACCOUNT_NOT_VERIFIED", "status", 403))
@@ -114,7 +114,7 @@ public class GlobalExceptionHandler {
      * @return     the GraphQL error response
      */
     @GraphQlExceptionHandler
-    public GraphQLError handleEmailDeliveryFailure(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+    public GraphQLError handleEmailDeliveryFailure(EmailDeliveryException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
                 .message(ex.getMessage())
                 .extensions(Map.of("code", "EMAIL_DELIVERY_FAILURE", "status", 409))
@@ -129,7 +129,7 @@ public class GlobalExceptionHandler {
      * @return the generated GraphQL error
      */
     @GraphQlExceptionHandler
-    public GraphQLError handleInvalidVerificationCode(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+    public GraphQLError handleInvalidVerificationCode(InvalidVerificationCodeException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
                 .message(ex.getMessage())
                 .extensions(Map.of("code", "INVALID_CREDENTIALS", "status", 400))
