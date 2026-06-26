@@ -78,13 +78,7 @@ public class GlobalExceptionHandler {
             .build();
     }
 
-    /**
-     * Converts an expired verification code exception into a GraphQL error.
-     *
-     * @param  ex   the exception that triggered the error
-     * @param  env  the GraphQL data fetching environment
-     * @return      the generated GraphQL error
-     */
+    // Verification Code Expired
     @GraphQlExceptionHandler
     public GraphQLError handleVerificationCodeExpired(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
@@ -93,56 +87,34 @@ public class GlobalExceptionHandler {
                 .build();
     }
 
-    /**
-     * Builds a GraphQL error for an account that has not been verified.
-     *
-     * @param ex the exception containing the error message
-     * @return a GraphQL error with code {@code ACCOUNT_NOT_VERIFIED} and status {@code 403}
-     */
+    // Account Not Verified
     @GraphQlExceptionHandler
-    public GraphQLError handleAccountNotVerified(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+    public GraphQLError handleAccountNotVerified(AccountNotVerifiedException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
                 .message(ex.getMessage())
                 .extensions(Map.of("code", "ACCOUNT_NOT_VERIFIED", "status", 403))
                 .build();
     }
 
-    /**
-     * Builds a GraphQL error for an email delivery failure.
-     *
-     * @param  ex  the exception containing the error message
-     * @return     the GraphQL error response
-     */
+    // Email Delivery Failure
     @GraphQlExceptionHandler
-    public GraphQLError handleEmailDeliveryFailure(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+    public GraphQLError handleEmailDeliveryFailure(EmailDeliveryException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
                 .message(ex.getMessage())
                 .extensions(Map.of("code", "EMAIL_DELIVERY_FAILURE", "status", 409))
                 .build();
     }
 
-    /**
-     * Maps an invalid verification code exception to a GraphQL error.
-     *
-     * @param ex  the exception to convert
-     * @param env the GraphQL data fetching environment
-     * @return the generated GraphQL error
-     */
+    // Invalid Code Expired
     @GraphQlExceptionHandler
-    public GraphQLError handleInvalidVerificationCode(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
+    public GraphQLError handleInvalidVerificationCode(InvalidVerificationCodeException ex, DataFetchingEnvironment env){
         return GraphqlErrorBuilder.newError(env)
                 .message(ex.getMessage())
                 .extensions(Map.of("code", "INVALID_CREDENTIALS", "status", 400))
                 .build();
     }
 
-
-
-    /**
-     * Builds a fallback GraphQL error for uncaught exceptions.
-     *
-     * @return a GraphQL error with an internal server error message, error type, and extensions
-     */
+    // Catch for all
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
