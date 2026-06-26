@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AuthenticationService {
@@ -34,9 +35,6 @@ public class AuthenticationService {
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenRepository refreshTokenRepository;
 
-    /**
-     * Creates an authentication service with its required dependencies.
-     */
     public AuthenticationService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
@@ -52,12 +50,6 @@ public class AuthenticationService {
         this.refreshTokenRepository = refreshTokenRepository;
     }
 
-    /**
-     * Registers a new user account and sends a verification code.
-     *
-     * @param  input  the registration details to copy into the new user
-     * @return        the saved user
-     */
     public User signUp(RegisterUserDto input) {
         User user = new User();
         user.setFullName(input.getFullName());
@@ -72,14 +64,6 @@ public class AuthenticationService {
         return userRepository.save(user);
     }
 
-    /**
-     * Authenticates a user and issues access and refresh tokens.
-     *
-     * @param input the login credentials
-     * @return an authentication response containing the access token, refresh token, and access token expiration time
-     * @throws ResourceNotFoundException if no user exists for the provided email
-     * @throws AccountNotVerifiedException if the user's account is not verified
-     */
     public AuthResponse authenticate(LogInUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -105,14 +89,6 @@ public class AuthenticationService {
         return new AuthResponse(accessToken, refreshTokenString, expiresAt);
     }
 
-    /**
-     * Verifies a user's account with the provided code.
-     *
-     * @param input the email address and verification code to validate
-     * @throws ResourceNotFoundException if no user exists for the supplied email
-     * @throws VerificationCodeExpiredException if the stored verification code has expired
-     * @throws InvalidVerificationCodeException if the provided code does not match the stored code
-     */
     public void verifyUser(VerifyUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -131,7 +107,7 @@ public class AuthenticationService {
         userRepository.save(user);
     }
 
-    public void resendVerifictionCode(String email){
+    public void resendVerificationCode(String email){
         Optional<User> optionalUser = userRepository.findByEmail(email);
         if(optionalUser.isPresent()){
             User user = optionalUser.get();
@@ -165,5 +141,10 @@ public class AuthenticationService {
 
     public AuthResponse refresh(String refreshToken) {
         return refreshTokenService.rotateRefreshToken(refreshToken);
+    }
+
+    public void logout(String refreshToken) {
+        RefreshToken token = refreshTokenService.findByToken(refreshToken);
+        refreshTokenService.deleteByUserId(token.getUser().getId());
     }
 }

@@ -7,6 +7,8 @@ import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.response.AuthResponse;
 import com.verdant.salon_ecomm.services.AuthenticationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,7 +44,24 @@ public class AuthController {
 
     @PostMapping("/resend")
     public ResponseEntity<?> resendVerificationCode(@RequestBody String email) {
-        authenticationService.resendVerifictionCode(email);
+        authenticationService.resendVerificationCode(email);
         return ResponseEntity.ok("Verification code resent");
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logoutUser(@CookieValue(name = "refreshToken") String refreshToken) {
+        authenticationService.logout(refreshToken);
+
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Strict")
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
     }
 }
