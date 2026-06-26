@@ -16,6 +16,7 @@ target/
 secrets*.yml
 secrets*.yaml
 application-local.properties
+application-dev.properties
 
 ### STS ###
 .apt_generated

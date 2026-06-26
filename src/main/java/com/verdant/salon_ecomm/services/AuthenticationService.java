@@ -5,15 +5,14 @@ import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
 import com.verdant.salon_ecomm.entities.RefreshToken;
 import com.verdant.salon_ecomm.entities.User;
-import com.verdant.salon_ecomm.exceptions.AccountNotVerifiedException;
-import com.verdant.salon_ecomm.exceptions.InvalidVerificationCodeException;
-import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
-import com.verdant.salon_ecomm.exceptions.VerificationCodeExpiredException;
-import com.verdant.salon_ecomm.repositories.RefreshTokenRepository;
+import com.verdant.salon_ecomm.exceptions.*;
+import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.AccountStatus;
 import com.verdant.salon_ecomm.repositories.UserRepository;
-import com.verdant.salon_ecomm.response.AuthResponse;
+import com.verdant.salon_ecomm.response.AuthResult;
 import jakarta.mail.MessagingException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 public class AuthenticationService {
@@ -33,38 +31,42 @@ public class AuthenticationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
-    private final RefreshTokenRepository refreshTokenRepository;
 
     public AuthenticationService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
             EmailService emailService, JwtService jwtService,
-            RefreshTokenService refreshTokenService, RefreshTokenRepository refreshTokenRepository) {
+            RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.emailService = emailService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
-        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     public User signUp(RegisterUserDto input) {
+
         User user = new User();
         user.setFullName(input.getFullName());
         user.setEmail(input.getEmail());
         user.setPhone(input.getPhoneNumber());
         user.setPasswordHash(passwordEncoder.encode(input.getPassword()));
+        user.setRole(AccountRole.CUSTOMER);
         user.setVerificationCode(generateVerificationCode());
         user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(5));
         user.setEnabled(false);
+
+        if(userRepository.existsByEmail(input.getEmail())) {
+            throw new DuplicateEmailException("Account with this email already exists!");
+        }
 
         sendVerificationEmail(user);
         return userRepository.save(user);
     }
 
-    public AuthResponse authenticate(LogInUserDto input) {
+    public AuthResult authenticate(LogInUserDto input) throws InvalidCrendetialsException {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -72,12 +74,16 @@ public class AuthenticationService {
             throw new AccountNotVerifiedException("Account is not verified. Please check your email.");
         }
 
-        authenticationManager.authenticate(
+        try {
+            authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        input.getEmail(),
-                        input.getPassword()
+                    input.getEmail(),
+                    input.getPassword()
                 )
-        );
+            );
+        } catch (BadCredentialsException e) {
+            throw new InvalidCrendetialsException("Invalid credentials.");
+        }
 
         String accessToken = jwtService.generateToken(user);
 
@@ -86,24 +92,27 @@ public class AuthenticationService {
 
         long expiresAt = jwtService.getExpirationTime();
 
-        return new AuthResponse(accessToken, refreshTokenString, expiresAt);
+        return new AuthResult(accessToken, refreshTokenString, expiresAt);
     }
 
     public void verifyUser(VerifyUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (user.getVerificationCodeExpiration().isBefore(OffsetDateTime.now())) {
-            throw new VerificationCodeExpiredException("Verification code has expired.");
-        }
-
         if (!user.getVerificationCode().equals(input.getVerificationCode())) {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 
+        if (user.getVerificationCodeExpiration().isBefore(OffsetDateTime.now())) {
+            throw new VerificationCodeExpiredException("Verification code has expired.");
+        }
+
         user.setEnabled(true);
+        user.setStatus(AccountStatus.ACTIVE);
         user.setVerificationCode(null);
         user.setVerificationCodeExpiration(null);
+        user.setEmailVerified(true);
+        user.setEmailVerifiedAt(OffsetDateTime.now());
         userRepository.save(user);
     }
 
@@ -112,7 +121,7 @@ public class AuthenticationService {
         if(optionalUser.isPresent()){
             User user = optionalUser.get();
             if(user.isEnabled()){
-                throw new RuntimeException("Already verified");
+                throw new AccountAlreadyVerifiedException("Already verified");
             }
 
             user.setVerificationCode(generateVerificationCode());
@@ -120,7 +129,7 @@ public class AuthenticationService {
             sendVerificationEmail(user);
             userRepository.save(user);
         } else {
-            throw new RuntimeException("User not found");
+            throw new ResourceNotFoundException("User not found");
         }
     }
 
@@ -129,8 +138,7 @@ public class AuthenticationService {
         try {
             emailService.sendVerificationEmail(user.getEmail(), user.getVerificationCode());
         } catch (MessagingException e) {
-            e.printStackTrace();
-            // Handles the message error if it didn't work
+            throw new EmailDeliveryException("Failed to send verification email to: " + user.getEmail(), e);
         }
     }
 
@@ -139,7 +147,7 @@ public class AuthenticationService {
         return String.valueOf(code);
     }
 
-    public AuthResponse refresh(String refreshToken) {
+    public AuthResult refresh(String refreshToken) {
         return refreshTokenService.rotateRefreshToken(refreshToken);
     }
 

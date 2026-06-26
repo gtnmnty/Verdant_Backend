@@ -40,11 +40,11 @@ public class User implements UserDetails {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private AccountRole role;
+    private AccountRole role = AccountRole.ADMIN;
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private AccountStatus status;
+    private AccountStatus status = AccountStatus.UNVERIFIED;
 
     @Column(name = "stripe_customer_id")
     private String stripeCustomerId;
