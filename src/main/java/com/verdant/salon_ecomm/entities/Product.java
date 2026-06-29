@@ -2,7 +2,6 @@ package com.verdant.salon_ecomm.entities;
 
 import com.verdant.salon_ecomm.StringListConverter;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
-import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -40,8 +39,8 @@ public class Product {
     private String description;
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(columnDefinition = "text[]")
-    private String[] imageUrls = {};
+    @Column(name = "image_urls", columnDefinition = "text[]")
+    private String[] images = {};
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]")
@@ -87,6 +86,12 @@ public class Product {
     @PrePersist
     protected void onCreate() {
         createdAt = OffsetDateTime.now();
+        updatedAt = OffsetDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = OffsetDateTime.now();
     }
 
 }

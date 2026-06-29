@@ -67,7 +67,7 @@ public class RefreshTokenService {
 
     @Transactional
     public AuthResult rotateRefreshToken(String incomingToken) {
-        RefreshToken  oldRefreshToken = refreshTokenRepository.findByToken(incomingToken)
+        RefreshToken  oldRefreshToken = refreshTokenRepository.findByTokenForUpdate(incomingToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Refresh token not found"));
 
         if(oldRefreshToken.getExpiresAt().isBefore(OffsetDateTime.now())) {

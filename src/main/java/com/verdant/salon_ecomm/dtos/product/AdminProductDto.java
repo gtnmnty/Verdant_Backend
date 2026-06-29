@@ -1,0 +1,27 @@
+package com.verdant.salon_ecomm.dtos.product;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+
+public record AdminProductDto(
+      String id,
+      String name,
+      String category,
+      String description,
+      BigDecimal price,
+      BigDecimal salePrice,
+      String sku,
+      List<String> images,
+      List<String> tags,
+      List<String> info,
+      String badge,
+      boolean isFeatured,
+      boolean isActive,
+      int stockQuantity,
+      int lowStockThreshold,
+      int reviewCount,
+      BigDecimal averageRating,
+      OffsetDateTime createdAt,
+      OffsetDateTime updatedAt
+) {}

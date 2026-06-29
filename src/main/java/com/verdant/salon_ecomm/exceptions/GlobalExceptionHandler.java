@@ -32,7 +32,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountAlreadyVerifiedException.class)
     public ResponseEntity<ErrorResponse> handleAccountAlreadyVerified(AccountAlreadyVerifiedException ex, HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ErrorResponse(
                         OffsetDateTime.now(),
                         409,
@@ -56,32 +56,39 @@ public class GlobalExceptionHandler {
 
 
     // Email is already registered
-    @GraphQlExceptionHandler
-    public GraphQLError handleBadRequest(DuplicateEmailException ex,  DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
-            .errorType(ErrorType.BAD_REQUEST)
-            .extensions(Map.of("code", "EMAIL_ALREADY_EXISTS", "status", 409))
-            .build();
+    @ExceptionHandler(DuplicateEmailException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateEmail(DuplicateEmailException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(OffsetDateTime.now(),
+                        409,
+                        "EMAIL_REGISTERED",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
     }
 
     // Wrong password or login credentials
-    @GraphQlExceptionHandler
-    public GraphQLError handleUnauthorized(InvalidCrendetialsException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
-            .errorType(ErrorType.UNAUTHORIZED)
-            .extensions(Map.of("code", "UNAUTHORIZED", "status", 401))
-            .build();
+    @ExceptionHandler(InvalidCrendetialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCrendetialsException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(OffsetDateTime.now(),
+                        401,
+                        "Unauthorized",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
     }
 
     // JWT Token is expired
-    @GraphQlExceptionHandler
-    public GraphQLError handleTokenExpired(TokenExpiredException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
-            .extensions(Map.of("code", "TOKEN_EXPIRED", "status", 401))
-            .build();
+    @ExceptionHandler(TokenExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleTokenExpired(TokenExpiredException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(OffsetDateTime.now(),
+                        401,
+                        "JWT Token expired",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
     }
 
     // Wrong role accessing endpoint
@@ -112,48 +119,39 @@ public class GlobalExceptionHandler {
     }
 
     // Verification Code Expired
-    @GraphQlExceptionHandler
-    public GraphQLError handleVerificationCodeExpired(VerificationCodeExpiredException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-                .message(ex.getMessage())
-                .extensions(Map.of("code", "VERFICATION_CODE_EXPIRED", "status", 400))
-                .build();
-    }
-
-    // Account Not Verified
-    @GraphQlExceptionHandler
-    public GraphQLError handleAccountNotVerified(AccountNotVerifiedException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-                .message(ex.getMessage())
-                .extensions(Map.of("code", "ACCOUNT_NOT_VERIFIED", "status", 403))
-                .build();
-    }
-
-    // Account Already Verified
-    @GraphQlExceptionHandler
-    public GraphQLError handleAccountAlreadyVerified(AccountAlreadyVerifiedException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-                .message(ex.getMessage())
-                .extensions(Map.of("code", "ALREADY_VERIFIED", "status", 409))
-                .build();
+    @ExceptionHandler(VerificationCodeExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleVerificationCodeExpired(VerificationCodeExpiredException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(OffsetDateTime.now(),
+                        400,
+                        "TOKEN_EXPIRED",
+                        ex.getMessage(),
+                        request.getRequestURI()));
     }
 
     // Email Delivery Failure
-    @GraphQlExceptionHandler
-    public GraphQLError handleEmailDeliveryFailure(EmailDeliveryException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-                .message(ex.getMessage())
-                .extensions(Map.of("code", "EMAIL_DELIVERY_FAILURE", "status", 409))
-                .build();
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse(OffsetDateTime.now(),
+                        503,
+                        "Service Unavailable",
+                        ex.getMessage(),
+                        request.getRequestURI()));
     }
 
     // Invalid Code Expired
-    @GraphQlExceptionHandler
-    public GraphQLError handleInvalidVerificationCode(InvalidVerificationCodeException ex, DataFetchingEnvironment env){
-        return GraphqlErrorBuilder.newError(env)
-                .message(ex.getMessage())
-                .extensions(Map.of("code", "INVALID_CREDENTIALS", "status", 400))
-                .build();
+    @ExceptionHandler(InvalidVerificationCodeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidVerificationCode(InvalidVerificationCodeException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", ex.getMessage(), request.getRequestURI()));
+    }
+
+    // RefreshToken Expired
+    @ExceptionHandler(RefreshTokenExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleRefreshTokenExpired(RefreshTokenExpiredException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", ex.getMessage(), request.getRequestURI()));
     }
 
     // Catch for all

@@ -83,7 +83,7 @@ public class AuthController {
     public ResponseEntity<Void> logoutUser(@CookieValue(name = "refreshToken") String refreshToken) {
         authenticationService.logout(refreshToken);
 
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
                 .httpOnly(true)
                 .secure(isProduction)
                 .path("/")

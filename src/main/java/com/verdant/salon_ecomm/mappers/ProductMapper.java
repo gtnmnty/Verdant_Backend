@@ -1,8 +1,5 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.dtos.product.CreateProductRequest;
-import com.verdant.salon_ecomm.dtos.product.ProductResponse;
-import com.verdant.salon_ecomm.dtos.product.UpdateProductRequest;
 import com.verdant.salon_ecomm.entities.Product;
 import jakarta.validation.Valid;
 import org.mapstruct.*;
