@@ -11,6 +11,7 @@ import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.specifications.ProductSpec;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ProductService {
 
   private final ProductRepository productRepository;
@@ -32,13 +34,13 @@ public class ProductService {
     Pageable pageable = PageRequest.of(page - 1, pageSize, toSort(sort));
 
     Page<Product> result = productRepository.findAll(
-            ProductSpec.filter(category, search, isActive),
-            pageable
+      ProductSpec.filter(category, search, isActive),
+      pageable
     );
 
     List<AdminProductDto> items = result.getContent().stream()
-            .map(this::toAdminDTO)
-            .toList();
+      .map(this::toAdminDTO)
+      .toList();
 
     return new ProductPage(items, page, pageSize, (int) result.getTotalElements(), result.getTotalPages());
   }
@@ -55,35 +57,35 @@ public class ProductService {
             .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.PRODUCT, product.getId());
 
     return new AdminProductDto(
-            product.getId().toString(),
-            product.getName(),
-            product.getItemCatalog().name(),
-            product.getDescription(),
-            product.getPrice(),
-            product.getSalePrice(),
-            product.getSku(),
-            images.stream().map(this::toImageDTO).toList(),
-            product.getTags() != null ? product.getTags() : List.of(),
-            product.getInfo() != null ? List.of(product.getInfo()) : List.of(),
-            product.getBadge(),
-            product.isFeatured(),
-            product.getIsActive(),
-            product.getStockQuantity(),
-            product.getLowStockThreshold(),
-            product.getReviewCount(),
-            product.getAverageRating(),
-            product.getCreatedAt(),
-            product.getUpdatedAt()
+      product.getId().toString(),
+      product.getName(),
+      product.getItemCatalog().name(),
+      product.getDescription(),
+      product.getPrice(),
+      product.getSalePrice(),
+      product.getSku(),
+      images.stream().map(this::toImageDTO).toList(),
+      product.getTags() != null ? product.getTags() : List.of(),
+      product.getInfo() != null ? List.of(product.getInfo()) : List.of(),
+      product.getBadge(),
+      product.isFeatured(),
+      product.getIsActive(),
+      product.getStockQuantity(),
+      product.getLowStockThreshold(),
+      product.getReviewCount(),
+      product.getAverageRating(),
+      product.getCreatedAt(),
+      product.getUpdatedAt()
     );
   }
 
   private MediaImageDto toImageDTO(MediaImage image) {
     return new MediaImageDto(
-            image.getId().toString(),
-            image.getUrl(),
-            image.getPublicId(),
-            image.isPrimary(),
-            image.getSortOrder()
+      image.getId().toString(),
+      image.getUrl(),
+      image.getPublicId(),
+      image.isPrimary(),
+      image.getSortOrder()
     );
   }
 

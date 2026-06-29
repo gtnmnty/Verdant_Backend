@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.dtos;
+package com.verdant.salon_ecomm.dtos.service;
 
 import com.verdant.salon_ecomm.dtos.product.AdminProductDto;
 
