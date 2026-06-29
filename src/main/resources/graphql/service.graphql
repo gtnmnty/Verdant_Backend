@@ -1,0 +1,44 @@
+extend type Query {
+    services(
+        category: String
+        sort: ServiceSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 6
+    ): ServicePage!
+    service(id: ID!): SalonService
+}
+
+enum ServiceSort {
+    NEWEST
+    PRICE_LOW_TO_HIGH
+    PRICE_HIGH_TO_LOW
+    DURATION_SHORT_TO_LONG
+}
+
+type SalonService implements CatalogItem {
+    id: ID!
+    name: String!
+    subName: String!
+    description: String
+    category: String!
+    price: BigDecimal!
+    durationMinutes: Int!
+    reviewCount: Int!
+    averageRating: Float!
+    isFeatured: Boolean!
+    isHomeService: Boolean!
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    images: [MediaImage!]!
+    isFavorited: Boolean!
+    stylists: [Stylist!]!
+}
+
+type ServicePage {
+    items: [SalonService!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}

@@ -36,7 +36,7 @@ type Product implements CatalogItem {
     info: [String!]!
     images: [MediaImage!]!
     isFavorited: Boolean!
-    sku: String!
+    sku: String
     salePrice: BigDecimal
     effectivePrice: BigDecimal!
     inStock: Boolean!

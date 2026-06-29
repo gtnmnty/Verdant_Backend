@@ -42,25 +42,6 @@ type Appointment {
     notes: String
 }
 
-type SalonService implements CatalogItem {
-    id: ID!
-    name: String!
-    description: String
-    category: String!
-    price: BigDecimal!
-    reviewCount: Int!
-    averageRating: Float!
-    isFeatured: Boolean!
-    badge: String
-    tags: [String!]!
-    info: [String!]!
-    images: [MediaImage!]!
-    isFavorited: Boolean!
-    durationMinutes: Int!
-    isHomeService: Boolean!
-    stylists: [Stylist!]!
-}
-
 type Stylist {
     id: ID!
     name: String!
