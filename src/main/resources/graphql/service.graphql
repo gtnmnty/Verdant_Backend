@@ -1,14 +1,14 @@
 extend type Query {
     services(
         category: String
-        sort: ServiceSort = NEWEST
+        sort: CollectionSort = NEWEST
         page: Int = 1
         pageSize: Int = 6
     ): ServicePage!
     service(id: ID!): SalonService
 }
 
-enum ServiceSort {
+enum CollectionSort {
     NEWEST
     PRICE_LOW_TO_HIGH
     PRICE_HIGH_TO_LOW

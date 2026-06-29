@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.dtos.product;
 
+import com.verdant.salon_ecomm.dtos.MediaImageDto;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -12,7 +14,7 @@ public record AdminProductDto(
       BigDecimal price,
       BigDecimal salePrice,
       String sku,
-      List<String> images,
+      List<MediaImageDto> images,
       List<String> tags,
       List<String> info,
       String badge,

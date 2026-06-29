@@ -2,7 +2,8 @@ extend type Query {
     products(
         category: String
         search: String
-        sort: ProductSort = NEWEST
+        sort: CollectionSort = NEWEST
+        isActive: Boolean
         page: Int = 1
         pageSize: Int = 6
     ): ProductPage!
@@ -15,7 +16,7 @@ extend type Mutation {
     addToCart(productId: ID!, quantity: Int = 1, deliveryOption: String = "standard"): Cart!
 }
 
-enum ProductSort {
+enum CollectionSort {
     NEWEST
     OLDEST
     PRICE_LOW_TO_HIGH
@@ -38,7 +39,6 @@ type Product implements CatalogItem {
     isFavorited: Boolean!
     sku: String
     salePrice: BigDecimal
-    effectivePrice: BigDecimal!
     inStock: Boolean!
 }
 
