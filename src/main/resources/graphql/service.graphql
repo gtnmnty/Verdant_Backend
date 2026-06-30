@@ -1,18 +1,20 @@
 extend type Query {
     services(
         category: String
-        sort: CollectionSort = NEWEST
+        sort: ServiceSort = NEWEST
         page: Int = 1
         pageSize: Int = 6
     ): ServicePage!
     service(id: ID!): SalonService
 }
 
-enum CollectionSort {
+enum ServiceSort {
     NEWEST
+    OLDEST
     PRICE_LOW_TO_HIGH
     PRICE_HIGH_TO_LOW
-    DURATION_SHORT_TO_LONG
+    DURATION_HIGH_TO_LOW
+    DURATION_LOW_TO_HIGH
 }
 
 type SalonService implements CatalogItem {

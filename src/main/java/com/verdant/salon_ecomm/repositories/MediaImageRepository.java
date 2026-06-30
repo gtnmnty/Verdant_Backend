@@ -4,6 +4,7 @@ import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,4 +14,8 @@ public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
     Optional<MediaImage> findByEntityTypeAndEntityIdAndIsPrimaryTrue(ItemType entityType, UUID entityId);
     void deleteByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
     List<MediaImage> findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType entityType, UUID entityId);
+
+    List<MediaImage> findByEntityTypeAndEntityIdInOrderBySortOrderAsc(
+            ItemType entityType, Collection<UUID> entityIds
+    );
 }

@@ -19,7 +19,6 @@ interface CatalogItem {
     price: BigDecimal!
     reviewCount: Int!
     averageRating: Float!
-    isFeatured: Boolean!
     badge: String
     tags: [String!]!
     info: [String!]!

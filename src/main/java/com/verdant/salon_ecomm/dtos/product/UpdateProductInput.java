@@ -12,6 +12,7 @@ public record UpdateProductInput(
     BigDecimal salePrice,
     String sku,
     String badge,
+    List<String> images,
     List<String> tags,
     List<String> info,
     Integer stockQuantity,
