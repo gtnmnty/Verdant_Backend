@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.dtos.product;
 
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -16,6 +18,6 @@ public record CreateProductInput(
     List<String> info,
     int stockQuantity,
     int lowStockThreshold,
-    boolean isActive,
+    CollectionStatus status,
     Boolean isFeatured
 ){}

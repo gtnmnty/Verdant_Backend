@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.dtos.product;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -19,7 +20,7 @@ public record AdminProductDto(
       List<String> info,
       String badge,
       boolean isFeatured,
-      boolean isActive,
+      CollectionStatus status,
       int stockQuantity,
       int lowStockThreshold,
       int reviewCount,

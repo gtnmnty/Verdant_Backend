@@ -14,7 +14,7 @@ extend type Query {
         category: String
         search: String
         sort: CollectionSort = NEWEST
-        isActive: Boolean
+        status: CollectionStatus
         page: Int = 1
         pageSize: Int = 6
     ): AdminProductPage!
@@ -42,7 +42,7 @@ type Product implements CatalogItem {
 }
 
 extend type Mutation {
-    toggleFavorite(targetId: ID!, targetType: CatalogItemType!): CatalogItem!
+    toggleFavorite(targetId: ID!, targetType: ItemType!): CatalogItem!
     addToCart(productId: ID!, quantity: Int = 1, deliveryOption: String = "standard"): Cart!
 }
 
@@ -94,7 +94,7 @@ type AdminProductDto {
     info: [String!]!
     badge: String
     isFeatured: Boolean!
-    isActive: Boolean!
+    status: CollectionStatus!
     stockQuantity: Int!
     lowStockThreshold: Int!
     reviewCount: Int!
@@ -116,7 +116,7 @@ input CreateProductInput {
     info: [String!]
     stockQuantity: Int!
     lowStockThreshold: Int
-    isActive: Boolean
+    status: CollectionStatus
     isFeatured: Boolean
 }
 
@@ -135,5 +135,5 @@ input UpdateProductInput {
     stockQuantity: Int
     lowStockThreshold: Int
     isFeatured: Boolean
-    isActive: Boolean
+    status: CollectionStatus
 }

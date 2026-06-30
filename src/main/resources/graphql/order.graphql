@@ -65,7 +65,7 @@ type Review {
 
 input SubmitReviewInput {
     targetId: ID!
-    targetType: CatalogItemType!
+    targetType: ItemType!
     rating: Int!
     comment: String
 }
