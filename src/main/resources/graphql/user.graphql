@@ -1,5 +1,3 @@
-scalar UUID
-
 extend type Query {
     me: User!
 }
