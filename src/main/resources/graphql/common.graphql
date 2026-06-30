@@ -6,7 +6,12 @@ type PageInfo {
     endCursor: String
 }
 
-enum CatalogItemType {
+enum CollectionStatus {
+    ACTIVE
+    INACTIVE
+}
+
+enum ItemType {
     PRODUCT
     SALON_SERVICE
 }

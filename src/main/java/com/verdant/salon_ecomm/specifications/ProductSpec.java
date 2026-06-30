@@ -1,24 +1,26 @@
 package com.verdant.salon_ecomm.specifications;
 
 import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
+import com.verdant.salon_ecomm.utils.EnumUtils;
 import org.springframework.data.jpa.domain.Specification;
 
 public class ProductSpec {
 
-  public static Specification<Product> filter(String category, String search, Boolean isActive) {
-    return Specification.allOf(hasCategory(category), hasSearch(search), hasStatus(isActive));
+  public static Specification<Product> filter(String category, String search, CollectionStatus status) {
+    return Specification.allOf(hasCategory(category), hasSearch(search), hasStatus(status));
   }
 
   private static Specification<Product> hasCategory(String category) {
     if (category == null || category.isBlank()) return null;
-    return (root, query, cb) ->
-            cb.equal(root.get("itemCatalog"), ItemCatalog.valueOf(category));
+    ItemCatalog parsed = EnumUtils.parseEnum(ItemCatalog.class, category, "category");
+    return (root, query, cb) -> cb.equal(root.get("itemCatalog"), parsed);
   }
 
-  private static Specification<Product> hasStatus(Boolean isActive) {
-    if (isActive == null) return null;
-    return (root, query, cb) -> cb.equal(root.get("isActive"), isActive);
+  private static Specification<Product> hasStatus(CollectionStatus status) {
+    if (status == null) return null;
+    return (root, query, cb) -> cb.equal(root.get("status"), status);
   }
 
   private static Specification<Product> hasSearch(String search) {
