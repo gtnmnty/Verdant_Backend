@@ -23,11 +23,6 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
 
-    // Manager or Owner only
-//    public Page<UserDto.Admin> getAllUsers(Pageable pageable) {
-//        return userRepository.findAll(pageable).map(userMapper::toAdmin);
-//    }
-
     public UserDto.Profile getUserById(UUID id) {
         return userRepository.findById(id)
             .map(userMapper::toProfile)

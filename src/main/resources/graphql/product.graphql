@@ -1,14 +1,44 @@
+type Query
+type Mutation
+
 extend type Query {
     products(
+        category: String
+        search: String
+        sort: CollectionSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 6
+    ): ProductPage!
+    product(id: ID!): Product
+    adminProducts(
         category: String
         search: String
         sort: CollectionSort = NEWEST
         isActive: Boolean
         page: Int = 1
         pageSize: Int = 6
-    ): ProductPage!
-    product(id: ID!): Product
+    ): AdminProductPage!
+    adminProduct(id: ID!): AdminProductDto
     favorites(first: Int = 10, after: String): CatalogItemConnection!
+}
+
+type Product implements CatalogItem {
+    id: ID!
+    name: String!
+    description: String
+    category: String!
+    price: BigDecimal!
+    salePrice: BigDecimal
+    sku: String
+    reviewCount: Int!
+    averageRating: Float!
+    isFeatured: Boolean!
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    images: [MediaImage!]!
+    isFavorited: Boolean!
+    inStock: Boolean!
 }
 
 extend type Mutation {
@@ -23,27 +53,16 @@ enum CollectionSort {
     PRICE_HIGH_TO_LOW
 }
 
-type Product implements CatalogItem {
-    id: ID!
-    name: String!
-    description: String
-    category: String!
-    price: BigDecimal!
-    reviewCount: Int!
-    averageRating: Float!
-    isFeatured: Boolean!
-    badge: String
-    tags: [String!]!
-    info: [String!]!
-    images: [MediaImage!]!
-    isFavorited: Boolean!
-    sku: String
-    salePrice: BigDecimal
-    inStock: Boolean!
-}
-
 type ProductPage {
     items: [Product!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type AdminProductPage {
+    items: [AdminProductDto!]!
     page: Int!
     pageSize: Int!
     totalItems: Int!
@@ -53,4 +72,68 @@ type ProductPage {
 type CatalogItemConnection {
     items: [CatalogItem!]!
     pageInfo: PageInfo!
+}
+
+extend type Mutation {
+    createProduct(input: CreateProductInput!): AdminProductDto!
+    updateProduct(input: UpdateProductInput!): AdminProductDto!
+    deleteProduct(id: ID!): Boolean!
+    toggleProductStatus(id: ID!): AdminProductDto!
+}
+
+type AdminProductDto {
+    id: ID!
+    name: String!
+    category: String!
+    description: String
+    price: BigDecimal!
+    salePrice: BigDecimal
+    sku: String
+    images: [MediaImage!]!
+    tags: [String!]!
+    info: [String!]!
+    badge: String
+    isFeatured: Boolean!
+    isActive: Boolean!
+    stockQuantity: Int!
+    lowStockThreshold: Int!
+    reviewCount: Int!
+    averageRating: Float!
+    createdAt: DateTime
+    updatedAt: DateTime
+}
+
+input CreateProductInput {
+    name: String!
+    category: String!
+    description: String
+    price: BigDecimal!
+    salePrice: BigDecimal
+    sku: String!
+    badge: String
+    images: [String!]
+    tags: [String!]
+    info: [String!]
+    stockQuantity: Int!
+    lowStockThreshold: Int
+    isActive: Boolean
+    isFeatured: Boolean
+}
+
+input UpdateProductInput {
+    id: ID!
+    name: String
+    category: String
+    description: String
+    price: BigDecimal
+    salePrice: BigDecimal
+    sku: String
+    badge: String
+    images: [String!]
+    tags: [String!]
+    info: [String!]
+    stockQuantity: Int
+    lowStockThreshold: Int
+    isFeatured: Boolean
+    isActive: Boolean
 }

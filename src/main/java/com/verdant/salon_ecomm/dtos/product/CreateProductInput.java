@@ -4,20 +4,18 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public record CreateProductInput(
-    String id,
     String name,
-    String subName,
     String category,
     String description,
     BigDecimal price,
-    int durationMinutes,
+    BigDecimal salePrice,
+    String sku,
+    String badge,
     List<String> images,
     List<String> tags,
     List<String> info,
-    String badge,
-    boolean isFeatured,
-    boolean isHomeService,
-    int reviewCount,
-    BigDecimal averageRating,
-    boolean isFavorited
+    int stockQuantity,
+    int lowStockThreshold,
+    boolean isActive,
+    Boolean isFeatured
 ){}
