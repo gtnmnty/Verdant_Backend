@@ -56,13 +56,6 @@ type OrderConnection {
     pageInfo: PageInfo!
 }
 
-type Review {
-    id: ID!
-    rating: Int!
-    comment: String
-    createdAt: DateTime!
-}
-
 input SubmitReviewInput {
     targetId: ID!
     targetType: ItemType!

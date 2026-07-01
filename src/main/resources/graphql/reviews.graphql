@@ -1,0 +1,27 @@
+extend type Query {
+    reviews(targetType: ItemType!, targetId: ID!, starsFilter: Int, page: Int = 0): ReviewConnection!
+}
+
+extend type Mutation {
+    upsertReview(targetType: ItemType!, targetId: ID!, stars: Int!, text: String): Review!
+}
+
+type ReviewUser {
+    id: ID!
+    fullName: String!
+}
+
+type Review {
+    id: ID!
+    user: ReviewUser!
+    stars: Int!
+    text: String
+    createdAt: DateTime!
+}
+
+type ReviewConnection {
+    items: [Review!]!
+    totalCount: Int!
+    totalPages: Int!
+    currentPage: Int!
+}

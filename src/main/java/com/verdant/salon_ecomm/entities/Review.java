@@ -29,7 +29,7 @@ public class Review {
 
     @Column(name = "target_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private ItemType targetType = ItemType.GENERAL;
+    private ItemType targetType;
 
     @Column(nullable = false)
     private Short stars;
