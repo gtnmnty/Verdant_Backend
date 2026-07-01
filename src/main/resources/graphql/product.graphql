@@ -1,6 +1,3 @@
-type Query
-type Mutation
-
 extend type Query {
     products(
         category: String

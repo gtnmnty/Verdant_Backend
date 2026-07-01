@@ -20,6 +20,9 @@ public class FavoriteResolver {
   @MutationMapping
   @PreAuthorize("isAuthenticated()")
   public Product toggleFavorite(@Argument String targetId, @Argument ItemType targetType) {
+    if (targetType != ItemType.PRODUCT) {
+      throw new IllegalArgumentException("Unsupported target type: " + targetType + ". Only PRODUCT is currently supported.");
+    }
     return favoriteService.toggleProduct(UUID.fromString(targetId));
   }
 }

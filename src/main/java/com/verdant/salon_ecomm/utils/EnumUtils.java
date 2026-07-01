@@ -2,6 +2,10 @@ package com.verdant.salon_ecomm.utils;
 
 public class EnumUtils {
   public static <E extends Enum<E>> E parseEnum(Class<E> enumClass, String value, String fieldName) {
+    if (value == null) {
+      throw new IllegalArgumentException("Missing " + fieldName);
+    }
+
     try {
       return Enum.valueOf(enumClass, value);
     } catch (IllegalArgumentException e) {
