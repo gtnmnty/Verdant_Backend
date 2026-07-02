@@ -4,7 +4,7 @@ import java.util.List;
 
 public record ReviewConnection(
         List<ReviewDto> items,
-        long totalCount,
+        int totalCount,
         int totalPages,
         int currentPage
 ) {}

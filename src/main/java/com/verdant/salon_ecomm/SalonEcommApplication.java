@@ -27,8 +27,8 @@ public class SalonEcommApplication {
 			protected GraphQLError resolveToSingleError(Throwable ex, DataFetchingEnvironment env) {
 				// This forces the backend to send the ACTUAL Java error message to Postman
 				return GraphqlErrorBuilder.newError(env)
-								.message(ex.getMessage() != null ? ex.getMessage() : ex.toString())
-								.build();
+						.message(ex.getMessage() != null ? ex.getMessage() : ex.toString())
+						.build();
 			}
 		};
 	}

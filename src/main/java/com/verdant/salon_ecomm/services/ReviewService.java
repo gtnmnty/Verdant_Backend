@@ -47,7 +47,7 @@ public class ReviewService {
 
     return new ReviewConnection(
         result.map(this::toDto).getContent(),
-        result.getTotalElements(),
+        (int) result.getTotalElements(),
         result.getTotalPages(),
         page
     );
@@ -57,6 +57,10 @@ public class ReviewService {
   public ReviewDto upsertReview(UUID userId, ItemType targetType, UUID targetId, short stars, String text) {
     if (targetType != ItemType.PRODUCT && targetType != ItemType.SALON_SERVICE) {
       throw new IllegalArgumentException("Reviews only support PRODUCT or SALON_SERVICE targets");
+    }
+
+    if (stars < 1 || stars > 5) {
+      throw new IllegalArgumentException("stars must be between 1 and 5");
     }
 
     Review review = reviewRepository
@@ -77,9 +81,9 @@ public class ReviewService {
   }
 
   private void updateAggregatesFor(ItemType targetType, UUID targetId) {
-    BigDecimal avg = reviewRepository.findAverageRatingByTargetId(targetId)
+    BigDecimal avg = reviewRepository.findAverageRatingByTargetId(targetType, targetId)
             .setScale(2, RoundingMode.HALF_UP);
-    int count = reviewRepository.countByTargetId(targetId);
+    int count = reviewRepository.countByTargetId(targetType, targetId);
 
     int rowsUpdated = switch (targetType) {
       case PRODUCT -> productRepository.updateReviewAggregates(targetId, count, avg);
