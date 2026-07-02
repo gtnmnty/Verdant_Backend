@@ -59,7 +59,7 @@ public class Product {
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
     private BigDecimal averageRating = BigDecimal.ZERO;
 
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private CollectionStatus status = CollectionStatus.ACTIVE;
 

@@ -15,9 +15,9 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
 
         Optional<Review> findByUser_IdAndTargetTypeAndTargetId(UUID userId, ItemType targetType, UUID targetId);
 
-        @Query("SELECT COALESCE(AVG(r.stars), 0) FROM Review r WHERE r.targetId = :targetId")
-        BigDecimal findAverageRatingByTargetId(@Param("targetId") UUID targetId);
+        @Query("SELECT COALESCE(AVG(r.stars), 0) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
+        BigDecimal findAverageRatingByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
 
-        @Query("SELECT COUNT(r) FROM Review r WHERE r.targetId = :targetId")
-        int countByTargetId(@Param("targetId") UUID targetId);
+        @Query("SELECT COUNT(r) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
+        int countByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
 }

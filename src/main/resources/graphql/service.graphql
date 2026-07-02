@@ -6,6 +6,16 @@ extend type Query {
         pageSize: Int = 6
     ): ServicePage!
     service(id: ID!): SalonService
+    adminServices(
+        category: String
+        search: String
+        sort: CollectionSort = NEWEST
+        status: CollectionStatus
+        page: Int = 1
+        pageSize: Int = 6
+    ): AdminServicePage!
+    adminService(id: ID!): AdminServiceDto
+    favorites(first: Int = 10, after: String): CatalogItemConnection!
 }
 
 enum ServiceSort {
@@ -15,6 +25,22 @@ enum ServiceSort {
     PRICE_HIGH_TO_LOW
     DURATION_HIGH_TO_LOW
     DURATION_LOW_TO_HIGH
+}
+
+type ServicePage{
+    items: [SalonService!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type AdminServicePage{
+    items: [AdminServicePage!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
 }
 
 type SalonService implements CatalogItem {
@@ -37,10 +63,25 @@ type SalonService implements CatalogItem {
     stylists: [Stylist!]!
 }
 
-type ServicePage {
-    items: [SalonService!]!
-    page: Int!
-    pageSize: Int!
-    totalItems: Int!
-    totalPages: Int!
+type AdminServiceDto{
+    id: ID!
+    name: String!
+    category: String!
+    description: String
+    price: BigDecimal!
+}
+
+input CreateServiceInput{
+    name: String!
+    category: String!
+    description: String
+    price: BigDecimal!
+}
+
+input UpdateServiceInput{
+    id: ID!
+    name: String!
+    category: String!
+    description: String
+    price: BigDecimal!
 }

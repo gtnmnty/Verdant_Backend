@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.entities;
 
 import com.verdant.salon_ecomm.StringListConverter;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
@@ -31,10 +32,6 @@ public class SalonService {
 
     @Column(nullable = false)
     private String subName;
-
-    @Column(nullable = false, length = 50)
-    @Enumerated(EnumType.STRING)
-    private ItemType itemType;
 
     @Column(name = "category", nullable = false, length = 100)
     @Enumerated(EnumType.STRING)
@@ -73,8 +70,9 @@ public class SalonService {
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
     private BigDecimal averageRating = BigDecimal.ZERO;
 
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    @Column(nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private CollectionStatus status = CollectionStatus.ACTIVE;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
