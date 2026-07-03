@@ -16,7 +16,7 @@ extend type Query {
         pageSize: Int = 6
     ): AdminProductPage!
     adminProduct(id: ID!): AdminProductDto
-    favorites(first: Int = 10, after: String): CatalogItemConnection!
+    productFavorites(first: Int = 10, after: String): CatalogItemConnection!
 }
 
 type Product implements CatalogItem {

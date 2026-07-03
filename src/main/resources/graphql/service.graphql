@@ -15,7 +15,7 @@ extend type Query {
         pageSize: Int = 6
     ): AdminServicePage!
     adminService(id: ID!): AdminServiceDto
-    favorites(first: Int = 10, after: String): CatalogItemConnection!
+    serviceFavorites(first: Int = 10, after: String): CatalogItemConnection!
 }
 
 enum ServiceSort {
@@ -27,7 +27,7 @@ enum ServiceSort {
     DURATION_LOW_TO_HIGH
 }
 
-type ServicePage{
+type ServicePage {
     items: [SalonService!]!
     page: Int!
     pageSize: Int!
@@ -35,8 +35,8 @@ type ServicePage{
     totalPages: Int!
 }
 
-type AdminServicePage{
-    items: [AdminServicePage!]!
+type AdminServicePage {
+    items: [AdminServiceDto!]!
     page: Int!
     pageSize: Int!
     totalItems: Int!
@@ -47,41 +47,77 @@ type SalonService implements CatalogItem {
     id: ID!
     name: String!
     subName: String!
-    description: String
     category: String!
     price: BigDecimal!
-    durationMinutes: Int!
-    reviewCount: Int!
-    averageRating: Float!
-    isFeatured: Boolean!
-    isHomeService: Boolean!
+    durationInMinutes: Int!
+    description: String
     badge: String
     tags: [String!]!
     info: [String!]!
+    reviewCount: Int!
+    averageRating: Float!
+    isHomeService: Boolean!
+    isFeatured: Boolean!
     images: [MediaImage!]!
-    isFavorited: Boolean!
     stylists: [Stylist!]!
+    isFavorited: Boolean!
+    createdAt: DateTime
+    updatedAt: DateTime
 }
 
-type AdminServiceDto{
+type AdminServiceDto {
     id: ID!
     name: String!
+    subName: String!
     category: String!
-    description: String
     price: BigDecimal!
+    durationInMinutes: Int!
+    status: CollectionStatus!
+    description: String
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    reviewCount: Int!
+    averageRating: Float!
+    isHomeService: Boolean!
+    isFeatured: Boolean!
+    images: [MediaImage!]!
+    stylists: [Stylist!]!
+    createdAt: DateTime
+    updatedAt: DateTime
 }
 
-input CreateServiceInput{
+input CreateServiceInput {
     name: String!
+    subName: String!
     category: String!
-    description: String
     price: BigDecimal!
+    durationInMinutes: Int!
+    status: CollectionStatus!
+    description: String
+    badge: String
+    tags: [String!]!
+    info: [String!]!
+    images: [String!]!
+    isHomeService: Boolean!
+    isFeatured: Boolean!
+    stylistIds: [ID!]!
 }
 
-input UpdateServiceInput{
+input UpdateServiceInput {
     id: ID!
-    name: String!
-    category: String!
+    name: String
+    subName: String
+    category: String
+    price: BigDecimal
+    durationInMinutes: Int
+    status: CollectionStatus
     description: String
-    price: BigDecimal!
+    badge: String
+    tags: [String!]
+    info: [String!]
+    images: [String!]
+    isHomeService: Boolean
+    isFeatured: Boolean
+    stylistIds: [ID!]
 }
