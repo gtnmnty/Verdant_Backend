@@ -3,7 +3,6 @@ package com.verdant.salon_ecomm.entities;
 import com.verdant.salon_ecomm.StringListConverter;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
-import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -37,11 +36,15 @@ public class SalonService {
     @Enumerated(EnumType.STRING)
     private ItemCatalog itemCatalog;
 
+    @Column(name = "duration_minutes", nullable = false)
+    private Integer durationMinutes;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "duration_minutes", nullable = false)
-    private Integer durationMinutes;
+    @Column(nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private CollectionStatus status = CollectionStatus.ACTIVE;
 
     @Column(columnDefinition = "text")
     private String description;
@@ -54,15 +57,12 @@ public class SalonService {
     @Column(columnDefinition = "text[]")
     private String[] info = {};
 
-    @Column(length = 50)
-    private String badge;
-
-    @Column(columnDefinition = "jsonb")
-    @Convert(converter = StringListConverter.class)
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(columnDefinition = "text[]")
     private List<String> tags;
 
-    @Column(name = "is_home_service", nullable = false)
-    private Boolean isHomeService = false;
+    @Column(length = 50)
+    private String badge;
 
     @Column(name = "review_count", nullable = false)
     private Integer reviewCount = 0;
@@ -70,24 +70,23 @@ public class SalonService {
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
     private BigDecimal averageRating = BigDecimal.ZERO;
 
-    @Column(nullable = false, length = 20)
-    @Enumerated(EnumType.STRING)
-    private CollectionStatus status = CollectionStatus.ACTIVE;
-
-    @Column(name = "created_at")
-    private OffsetDateTime createdAt;
+    @Column(name = "is_home_service", nullable = false)
+    private Boolean isHomeService = false;
 
     @Column(name = "is_featured")
     private boolean isFeatured = false;
+
+    @Column(name = "created_at")
+    private OffsetDateTime createdAt;
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
     @ManyToMany
     @JoinTable(
-            name = "stylist_services",
-            joinColumns = @JoinColumn(name = "service_id"),
-            inverseJoinColumns = @JoinColumn(name = "stylist_id")
+        name = "stylist_services",
+        joinColumns = @JoinColumn(name = "service_id"),
+        inverseJoinColumns = @JoinColumn(name = "stylist_id")
     )
     private List<Stylist> stylists;
 

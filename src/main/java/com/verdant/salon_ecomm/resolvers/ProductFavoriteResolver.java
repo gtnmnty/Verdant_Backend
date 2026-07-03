@@ -19,26 +19,26 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProductFavoriteResolver {
 
-  private final FavoriteRepository favoriteRepository;
+    private final FavoriteRepository favoriteRepository;
 
-  @BatchMapping(typeName = "Product")
-  public Map<Product, Boolean> isFavorited(List<Product> products, GraphQLContext context) {
-    UUID userId = context.get("userId");
+    @BatchMapping(typeName = "Product")
+    public Map<Product, Boolean> isFavorited(List<Product> products, GraphQLContext context) {
+        UUID userId = context.get("userId");
 
-    if (userId == null) {
-      return products.stream().collect(Collectors.toMap(p -> p, p -> false));
-    }
+        if (userId == null) {
+            return products.stream().collect(Collectors.toMap(p -> p, p -> false));
+        }
 
-    List<UUID> productIds = products.stream().map(Product::getId).toList();
+        List<UUID> productIds = products.stream().map(Product::getId).toList();
 
-    List<Favorite> favorites = favoriteRepository
+        List<Favorite> favorites = favoriteRepository
             .findByUserIdAndTargetIdInAndTargetType(userId, productIds, ItemType.PRODUCT);
 
-    Set<UUID> favoritedIds = favorites.stream()
+        Set<UUID> favoritedIds = favorites.stream()
             .map(Favorite::getTargetId)
             .collect(Collectors.toSet());
 
-    return products.stream()
+        return products.stream()
             .collect(Collectors.toMap(p -> p, p -> favoritedIds.contains(p.getId())));
-  }
+    }
 }
