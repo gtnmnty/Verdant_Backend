@@ -11,12 +11,31 @@ import graphql.GraphqlErrorBuilder;
 import graphql.schema.DataFetchingEnvironment;
 import org.springframework.graphql.data.method.annotation.GraphQlExceptionHandler;
 import org.springframework.graphql.execution.ErrorType;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
+import java.nio.file.AccessDeniedException;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleIllegalArgument(IllegalArgumentException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())   // whatever the actual exception says
+            .errorType(ErrorType.BAD_REQUEST)
+            .build();
+    }
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleNotFoundGraphQL(ResourceNotFoundException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.NOT_FOUND)
+            .extensions(Map.of("code", "NOT_FOUND", "status", 404))
+            .build();
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
@@ -33,13 +52,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountAlreadyVerifiedException.class)
     public ResponseEntity<ErrorResponse> handleAccountAlreadyVerified(AccountAlreadyVerifiedException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(
-                        OffsetDateTime.now(),
-                        409,
-                        "Account already verified",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                409,
+                "Account already verified",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
     }
 
     @ExceptionHandler(AccountNotVerifiedException.class)
@@ -59,41 +78,41 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateEmail(DuplicateEmailException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(OffsetDateTime.now(),
-                        409,
-                        "EMAIL_REGISTERED",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                409,
+                "EMAIL_REGISTERED",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
     }
 
     // Wrong password or login credentials
     @ExceptionHandler(InvalidCrendetialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCrendetialsException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse(OffsetDateTime.now(),
-                        401,
-                        "Unauthorized",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                401,
+                "Unauthorized",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
     }
 
     // JWT Token is expired
     @ExceptionHandler(TokenExpiredException.class)
     public ResponseEntity<ErrorResponse> handleTokenExpired(TokenExpiredException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse(OffsetDateTime.now(),
-                        401,
-                        "JWT Token expired",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                401,
+                "JWT Token expired",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
     }
 
     // Wrong role accessing endpoint
     @GraphQlExceptionHandler
-    public GraphQLError handleAccessPoint(ForbiddenException ex, DataFetchingEnvironment env){
+    public GraphQLError handleAccessPoint(ForbiddenException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
             .message(ex.getMessage())
             .extensions(Map.of("code", "FORBIDDEN", "status", 403))
@@ -102,7 +121,7 @@ public class GlobalExceptionHandler {
 
     // Payment Failure
     @GraphQlExceptionHandler
-    public GraphQLError handlePaymentFailure(PaymentException ex, DataFetchingEnvironment env){
+    public GraphQLError handlePaymentFailure(PaymentException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
             .message(ex.getMessage())
             .extensions(Map.of("code", "PAYMENT_FAILED", "status", 402))
@@ -111,7 +130,7 @@ public class GlobalExceptionHandler {
 
     // Appointment Slot already booked
     @GraphQlExceptionHandler
-    public GraphQLError handleAppointmentConflict(AppointmentConflictException ex, DataFetchingEnvironment env){
+    public GraphQLError handleAppointmentConflict(AppointmentConflictException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
             .message(ex.getMessage())
             .extensions(Map.of("code", "APPOINTMENT_CONFLICT", "status", 409))
@@ -122,48 +141,48 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(VerificationCodeExpiredException.class)
     public ResponseEntity<ErrorResponse> handleVerificationCodeExpired(VerificationCodeExpiredException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(OffsetDateTime.now(),
-                        400,
-                        "TOKEN_EXPIRED",
-                        ex.getMessage(),
-                        request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                400,
+                "TOKEN_EXPIRED",
+                ex.getMessage(),
+                request.getRequestURI()));
     }
 
     // Email Delivery Failure
     @ExceptionHandler(EmailDeliveryException.class)
     public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(new ErrorResponse(OffsetDateTime.now(),
-                        503,
-                        "Service Unavailable",
-                        ex.getMessage(),
-                        request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                503,
+                "Service Unavailable",
+                ex.getMessage(),
+                request.getRequestURI()));
     }
 
     // Invalid Code Expired
     @ExceptionHandler(InvalidVerificationCodeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidVerificationCode(InvalidVerificationCodeException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", ex.getMessage(), request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", ex.getMessage(), request.getRequestURI()));
     }
 
     // RefreshToken Expired
     @ExceptionHandler(RefreshTokenExpiredException.class)
     public ResponseEntity<ErrorResponse> handleRefreshTokenExpired(RefreshTokenExpiredException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", ex.getMessage(), request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", ex.getMessage(), request.getRequestURI()));
     }
 
     // Catch for all
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse(OffsetDateTime.now(),
-                        500,
-                        "Internal Server Error",
-                        "Something went wrong on our server.",
-                        request.getRequestURI()
-                ));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                500,
+                "Internal Server Error",
+                "Something went wrong on our server.",
+                request.getRequestURI()
+            ));
     }
 
     @GraphQlExceptionHandler
@@ -175,5 +194,13 @@ public class GlobalExceptionHandler {
             .build();
     }
 
+    @GraphQlExceptionHandler
+    public GraphQLError handleAccessDenied(AccessDeniedException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message("You do not have permission to perform this action.")
+            .errorType(ErrorType.FORBIDDEN)
+            .extensions(Map.of("code", "FORBIDDEN", "status", 403))
+            .build();
+    }
 
 }

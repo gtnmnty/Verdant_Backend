@@ -6,14 +6,24 @@ import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.utils.EnumUtils;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.ArrayList;
+import java.util.List;
+import jakarta.persistence.criteria.Predicate;
+
 public class ServiceSpec {
 
     public static Specification<SalonService> filterSalonService(
         String category, String search, CollectionStatus status
     ){
-        return Specification.allOf(
-            hasCategory(category), hasSearch(search), hasStatus(status)
-        );
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (category != null) predicates.add(cb.equal(root.get("itemCatalog"), category));
+            if (search != null) predicates.add(cb.like(cb.lower(root.get("name")), "%" + search.toLowerCase() + "%"));
+            if (status != null) predicates.add(cb.equal(root.get("status"), status));
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     public static Specification<SalonService> hasCategory(String category){
@@ -29,7 +39,7 @@ public class ServiceSpec {
         return (root, query, cb) ->
             cb.or(
                 cb.like(cb.lower(root.get("name")), pattern),
-                cb.like(cb.lower(root.get("category")), pattern)
+                cb.like(cb.lower(root.get("itemCatalog").as(String.class)), pattern)
             );
     }
 

@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.dtos.service;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
+import com.verdant.salon_ecomm.dtos.stylists.StylistSummaryDto;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 
 import java.math.BigDecimal;
@@ -24,7 +25,7 @@ public record AdminServiceDto(
     boolean isHomeService,
     boolean isFeatured,
     List<MediaImageDto> images,
-    List<String> stylistIds,
+    List<StylistSummaryDto> stylistIds,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
 ) {}

@@ -1,6 +1,8 @@
 package com.verdant.salon_ecomm.dtos.service;
 
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -12,8 +14,12 @@ public record UpdateServiceInput(
     String name,
     String subName,
     String category,
+
+    @PositiveOrZero(message = "Price can never be lower than 0")
     BigDecimal price,
+    @Positive(message = "Duration must be greater than 0")
     Integer durationInMinutes,
+
     CollectionStatus status,
     String description,
     String badge,
