@@ -41,7 +41,7 @@ public class SalonServicesService {
        String category, String search, ServiceSort sort,
        int page, int pageSize
     ){
-        Pageable pageable = PageRequest.of(page - 1, pageSize, toSort(sort));
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.max(pageSize, 1), toSort(sort));
 
         Page<SalonService> result = serviceRepository.findAll(
             ServiceSpec.filterSalonService(category, search, CollectionStatus.ACTIVE),
@@ -196,6 +196,8 @@ public class SalonServicesService {
         if (input.name() != null) service.setName(input.name());
         if (input.subName() != null) service.setSubName(input.subName());
         if (input.category() != null) service.setItemCatalog(ItemCatalog.valueOf(input.category()));
+        if (input.price() != null) service.setPrice(input.price());
+        if (input.durationInMinutes() != null) service.setDurationMinutes(input.durationInMinutes());
         if (input.description() != null) service.setDescription(input.description());
         if (input.status() != null) service.setStatus(input.status());
         if (input.info() != null) service.setInfo(input.info());
@@ -203,6 +205,7 @@ public class SalonServicesService {
         if (input.badge() != null) service.setBadge(input.badge());
         if (input.isHomeService() != null) service.setIsHomeService(input.isHomeService());
         if (input.isFeatured() != null) service.setFeatured(input.isFeatured());
+        if (input.stylistIds() != null) service.setStylists(resolveStylists(input.stylistIds()));
 
         return  toAdminDto(serviceRepository.save(service));
     }

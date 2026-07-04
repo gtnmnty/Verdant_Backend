@@ -9,6 +9,7 @@ import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @Controller
@@ -18,13 +19,13 @@ public class MediaImageResolver {
     private final MediaImageService mediaImageService;
 
     @MutationMapping
-    public MediaImageDto addImage(
+    public List<MediaImageDto> addImage(
         @Argument ItemType entityType,
         @Argument UUID entityId,
-        @Argument MultipartFile image,
+        @Argument List<MultipartFile> image,
         @Argument Boolean isPrimary
     ) {
-        return mediaImageService.addImage(entityType, entityId, image, isPrimary);
+        return mediaImageService.addImages(entityType, entityId, image, isPrimary);
     }
 
     @MutationMapping

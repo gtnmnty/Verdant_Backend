@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -23,31 +25,41 @@ public class MediaImageService {
     private final CloudinaryService cloudinaryService;
 
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
-    public MediaImageDto addImage(ItemType entityType, UUID entityId, MultipartFile file, Boolean isPrimary) {
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public List<MediaImageDto> addImages(ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary) {
+
         long currentCount = mediaImageRepository.countByEntityTypeAndEntityId(entityType, entityId);
 
-        if (currentCount >= MAX_IMAGES) {
+        if (currentCount + files.size() > MAX_IMAGES) {
             throw new IllegalStateException("Maximum of " + MAX_IMAGES + " images allowed.");
         }
 
-        CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
         boolean primary = Boolean.TRUE.equals(isPrimary);
-
         if (primary) {
             mediaImageRepository.clearPrimaryFlag(entityType, entityId);
         }
 
-        MediaImage image = MediaImage.builder()
-            .entityType(entityType)
-            .entityId(entityId)
-            .url(uploaded.url())
-            .publicId(uploaded.publicId())
-            .isPrimary(primary)
-            .sortOrder((int) currentCount)
-            .build();
+        List<MediaImageDto> results = new ArrayList<>();
+        int sortOrder = (int) currentCount;
 
-        return toImageDTO(mediaImageRepository.save(image));
+        for (MultipartFile file : files) {
+            CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
+
+            // Makes the first file in the batch gets marked primary, if requested
+            boolean isThisPrimary = primary && results.isEmpty();
+
+            MediaImage image = MediaImage.builder()
+                .entityType(entityType)
+                .entityId(entityId)
+                .url(uploaded.url())
+                .publicId(uploaded.publicId())
+                .isPrimary(isThisPrimary)
+                .sortOrder(sortOrder++)
+                .build();
+
+            results.add(toImageDTO(mediaImageRepository.save(image)));
+        }
+        return results;
     }
 
     @Transactional
@@ -62,6 +74,7 @@ public class MediaImageService {
     }
 
     @Transactional
+
     public MediaImageDto setPrimary(UUID imageId) {
         MediaImage image = mediaImageRepository.findById(imageId)
             .orElseThrow(() -> new ResourceNotFoundException("Image not found"));

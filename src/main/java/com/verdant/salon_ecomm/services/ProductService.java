@@ -188,7 +188,7 @@ public class ProductService {
     @Transactional
     public boolean deleteProduct(UUID id) {
         Product product = productRepository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.PRODUCT, id);
         productRepository.delete(product);
