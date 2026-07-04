@@ -41,7 +41,10 @@ public class SalonServicesService {
        String category, String search, ServiceSort sort,
        int page, int pageSize
     ){
-        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.max(pageSize, 1), toSort(sort));
+        int normalizePage = Math.max(page - 1, 0) + 1;
+        int normalizePageSize = Math.max(pageSize, 1);
+
+        Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
         Page<SalonService> result = serviceRepository.findAll(
             ServiceSpec.filterSalonService(category, search, CollectionStatus.ACTIVE),
@@ -50,8 +53,8 @@ public class SalonServicesService {
 
         return new ServicePage(
             result.getContent(),
-            page,
-            pageSize,
+            normalizePage,
+            normalizePageSize,
             (int) result.getTotalElements(),
             result.getTotalPages()
         );

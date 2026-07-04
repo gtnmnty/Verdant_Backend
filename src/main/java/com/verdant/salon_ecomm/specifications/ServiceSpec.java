@@ -19,7 +19,7 @@ public class ServiceSpec {
             List<Predicate> predicates = new ArrayList<>();
 
             if (category != null && !category.isBlank()) {
-                ItemCatalog catalogEnum = EnumUtils.parseEnum(ItemCatalog.class, category, search);
+                ItemCatalog catalogEnum = EnumUtils.parseEnum(ItemCatalog.class, category, "category");
                 predicates.add(cb.equal(root.get("itemCatalog"), catalogEnum));
             }
             if (search != null) predicates.add(cb.like(cb.lower(root.get("name")), "%" + search.toLowerCase() + "%"));

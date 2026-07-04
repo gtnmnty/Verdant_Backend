@@ -29,12 +29,12 @@ public class MediaImageResolver {
     }
 
     @MutationMapping
-    public boolean removeImage(@Argument UUID imageId) {
-        return mediaImageService.removeImage(imageId);
+    public boolean removeImage(@Argument ItemType itemType, @Argument UUID imageId,  @Argument UUID serviceId) {
+        return mediaImageService.removeImage(itemType ,imageId, serviceId);
     }
 
     @MutationMapping
-    public MediaImageDto setImagePrimary(@Argument UUID imageId) {
-        return mediaImageService.setPrimary(imageId);
+    public MediaImageDto setImagePrimary(@Argument ItemType itemType, @Argument UUID imageId,  @Argument UUID serviceId) {
+        return mediaImageService.setPrimary(itemType ,imageId, serviceId);
     }
 }

@@ -12,4 +12,5 @@ type MediaImageDto {
     url: String!
     publicId: String!
     isPrimary: Boolean!
+    sortOrder: Int!
 }
