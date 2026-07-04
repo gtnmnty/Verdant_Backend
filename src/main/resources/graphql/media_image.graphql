@@ -1,8 +1,15 @@
 # media-image.graphqls
-scalar Upload
+#scalar Upload
+#
+#extend type Mutation {
+#    addImage(entityType: ItemType!, entityId: ID!, image: Upload!, isPrimary: Boolean): MediaImageDto!
+#    removeImage(imageId: ID!): Boolean!
+#    setImagePrimary(imageId: ID!): MediaImageDto!
+#}
 
-extend type Mutation {
-    addImage(entityType: ItemType!, entityId: ID!, image: Upload!, isPrimary: Boolean): MediaImageDto!
-    removeImage(imageId: ID!): Boolean!
-    setImagePrimary(imageId: ID!): MediaImageDto!
+type MediaImageDto {
+    id: ID!
+    url: String!
+    publicId: String!
+    isPrimary: Boolean!
 }

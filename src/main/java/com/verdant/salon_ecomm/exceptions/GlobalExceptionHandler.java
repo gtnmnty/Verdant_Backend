@@ -11,9 +11,11 @@ import graphql.GraphqlErrorBuilder;
 import graphql.schema.DataFetchingEnvironment;
 import org.springframework.graphql.data.method.annotation.GraphQlExceptionHandler;
 import org.springframework.graphql.execution.ErrorType;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
-import java.nio.file.AccessDeniedException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
@@ -201,6 +203,24 @@ public class GlobalExceptionHandler {
             .errorType(ErrorType.FORBIDDEN)
             .extensions(Map.of("code", "FORBIDDEN", "status", 403))
             .build();
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        ErrorResponse error = new ErrorResponse(
+            OffsetDateTime.now(), 413, "Payload Too Large",
+            "Uploaded file(s) exceed the maximum allowed size.", request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
+        ErrorResponse error = new ErrorResponse(
+            OffsetDateTime.now(), 409, "Conflict",
+            ex.getMessage(), request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
 }
