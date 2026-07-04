@@ -2,20 +2,28 @@ package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.models.enums.ItemType;
+import io.lettuce.core.dynamic.annotation.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
-    List<MediaImage> findByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
-    Optional<MediaImage> findByEntityTypeAndEntityIdAndIsPrimaryTrue(ItemType entityType, UUID entityId);
-    void deleteByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
+
     List<MediaImage> findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType entityType, UUID entityId);
 
     List<MediaImage> findByEntityTypeAndEntityIdInOrderBySortOrderAsc(
-            ItemType entityType, Collection<UUID> entityIds
+        ItemType entityType, Collection<UUID> entityIds
     );
+
+    long countByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
+
+    void deleteByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
+
+    @Modifying
+    @Query("UPDATE MediaImage m SET m.isPrimary = false WHERE m.entityType = :entityType AND m.entityId = :entityId")
+    void clearPrimaryFlag(@Param("entityType") ItemType entityType, @Param("entityId") UUID entityId);
 }

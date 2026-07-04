@@ -14,18 +14,18 @@ import java.util.UUID;
 @Component
 public class GraphQLAuthContextInterceptor implements WebGraphQlInterceptor {
 
-  @Override
-  public Mono<WebGraphQlResponse> intercept(WebGraphQlRequest request, Chain chain) {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    @Override
+    public Mono<WebGraphQlResponse> intercept(WebGraphQlRequest request, Chain chain) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-    if (authentication != null && authentication.isAuthenticated()
+        if (authentication != null && authentication.isAuthenticated()
             && authentication.getPrincipal() instanceof User user) {
-      UUID userId = user.getId();
-      request.configureExecutionInput((executionInput, builder) ->
-              builder.graphQLContext(ctx -> ctx.put("userId", userId)).build()
-      );
-    }
+            UUID userId = user.getId();
+            request.configureExecutionInput((executionInput, builder) ->
+                builder.graphQLContext(ctx -> ctx.put("userId", userId)).build()
+            );
+        }
 
-    return chain.next(request);
-  }
+        return chain.next(request);
+    }
 }

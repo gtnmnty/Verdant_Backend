@@ -55,7 +55,7 @@ public class SalonService {
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]")
-    private String[] info = {};
+    private List<String> info;
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]")
@@ -73,7 +73,7 @@ public class SalonService {
     @Column(name = "is_home_service", nullable = false)
     private Boolean isHomeService = false;
 
-    @Column(name = "is_featured")
+    @Column(name = "is_featured", nullable = false)
     private boolean isFeatured = false;
 
     @Column(name = "created_at")

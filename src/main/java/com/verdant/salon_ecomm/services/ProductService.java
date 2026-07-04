@@ -4,6 +4,7 @@ import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.CollectionSort;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemType;
@@ -116,7 +117,7 @@ public class ProductService {
 
     public AdminProductDto getAdminProduct(UUID id) {
         Product product = productRepository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         return toAdminDTO(product);
     }
@@ -164,7 +165,7 @@ public class ProductService {
     @Transactional
     public AdminProductDto updateProduct(UpdateProductInput input) {
         Product product = productRepository.findById(UUID.fromString(input.id()))
-            .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (input.name() != null) product.setName(input.name());
         if (input.category() != null)
