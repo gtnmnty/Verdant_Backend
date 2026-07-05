@@ -7,10 +7,7 @@ import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.Stylist;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
-import com.verdant.salon_ecomm.models.enums.ItemCatalog;
-import com.verdant.salon_ecomm.models.enums.ServiceSort;
-import com.verdant.salon_ecomm.models.enums.CollectionStatus;
-import com.verdant.salon_ecomm.models.enums.ItemType;
+import com.verdant.salon_ecomm.models.enums.*;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.StylistRepository;
@@ -94,6 +91,13 @@ public class SalonServicesService {
         );
     }
 
+    public AdminServiceDto getAdminServiceDto(UUID id){
+        SalonService service = serviceRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
+
+        return toAdminDto(service);
+    }
+
     public AdminServiceDto toAdminDto(SalonService service){
         List<MediaImage> images = mediaImageRepository
             .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
@@ -121,13 +125,6 @@ public class SalonServicesService {
             service.getCreatedAt(),
             service.getUpdatedAt()
         );
-    }
-
-    public AdminServiceDto getAdminServiceDto(UUID id){
-        SalonService service = serviceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
-
-        return toAdminDto(service);
     }
 
     private MediaImageDto toImageDTO(MediaImage image){

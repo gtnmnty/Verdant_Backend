@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.entities.Appointment;
-import com.verdant.salon_ecomm.models.enums.AppointmentStatusType;
+import com.verdant.salon_ecomm.models.enums.AppointmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,7 +19,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     List<Appointment> findByStylist_Id(UUID stylistId);
 
     // status is an enum, not a String
-    List<Appointment> findByStatus(AppointmentStatusType status);
+    List<Appointment> findByStatus(AppointmentStatus status);
 
     // order by scheduledAt (the actual field name), traverse user relation
     List<Appointment> findByUser_IdOrderByScheduledAtDesc(UUID userId);
