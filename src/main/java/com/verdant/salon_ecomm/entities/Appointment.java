@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
-import com.verdant.salon_ecomm.models.enums.AppointmentStatusType;
+import com.verdant.salon_ecomm.models.enums.AppointmentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -63,7 +63,7 @@ public class Appointment {
 
     @Column(nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
-    private AppointmentStatusType status;
+    private AppointmentStatus status;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

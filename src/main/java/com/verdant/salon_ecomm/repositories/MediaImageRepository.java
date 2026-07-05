@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
@@ -26,4 +27,6 @@ public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
     @Modifying
     @Query("UPDATE MediaImage m SET m.isPrimary = false WHERE m.entityType = :entityType AND m.entityId = :entityId")
     void clearPrimaryFlag(@Param("entityType") ItemType entityType, @Param("entityId") UUID entityId);
+
+    Optional<MediaImage> findByIdAndServiceIdAndItemType(UUID id, UUID serviceId, ItemType ownerType);
 }

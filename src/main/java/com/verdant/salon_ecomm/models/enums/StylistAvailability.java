@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.models.enums;
 
-public enum StylistAvailableType {
+public enum StylistAvailability {
     AVAILABLE,
     UNAVAILABLE,
     CONFIRMED,

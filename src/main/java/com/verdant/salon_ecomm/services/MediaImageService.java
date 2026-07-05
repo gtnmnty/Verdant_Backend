@@ -40,32 +40,44 @@ public class MediaImageService {
         }
 
         List<MediaImageDto> results = new ArrayList<>();
+        List<String> uploadedPublicIds = new ArrayList<>();
         int sortOrder = (int) currentCount;
 
-        for (MultipartFile file : files) {
-            CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
+        try{
+            for (MultipartFile file : files) {
+                CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
+                uploadedPublicIds.add(uploaded.publicId());
 
-            // Makes the first file in the batch gets marked primary, if requested
-            boolean isThisPrimary = primary && results.isEmpty();
+                // Makes the first file in the batch gets marked primary, if requested
+                boolean isThisPrimary = primary && results.isEmpty();
 
-            MediaImage image = MediaImage.builder()
-                .entityType(entityType)
-                .entityId(entityId)
-                .url(uploaded.url())
-                .publicId(uploaded.publicId())
-                .isPrimary(isThisPrimary)
-                .sortOrder(sortOrder++)
-                .build();
+                MediaImage image = MediaImage.builder()
+                    .entityType(entityType)
+                    .entityId(entityId)
+                    .url(uploaded.url())
+                    .publicId(uploaded.publicId())
+                    .isPrimary(isThisPrimary)
+                    .sortOrder(sortOrder++)
+                    .build();
 
-            results.add(toImageDTO(mediaImageRepository.save(image)));
+                results.add(toImageDTO(mediaImageRepository.save(image)));
+            }
+        } catch (RuntimeException ex) {
+            uploadedPublicIds.forEach(cloudinaryService::delete);
+            throw ex;
         }
+
         return results;
     }
 
     @Transactional
-    public boolean removeImage(UUID imageId) {
-        MediaImage image = mediaImageRepository.findById(imageId)
-            .orElseThrow(() -> new ResourceNotFoundException("Image not found"));
+    public boolean removeImage(ItemType itemType ,UUID imageId, UUID serviceId) {
+        MediaImage image = mediaImageRepository.findByIdAndServiceIdAndItemType(
+            imageId, serviceId, itemType
+            ).orElseThrow(() -> new ResourceNotFoundException(
+                "Image not found for this service specification"
+            )
+        );
 
         cloudinaryService.delete(image.getPublicId());
         mediaImageRepository.deleteById(imageId);
@@ -74,10 +86,10 @@ public class MediaImageService {
     }
 
     @Transactional
-
-    public MediaImageDto setPrimary(UUID imageId) {
-        MediaImage image = mediaImageRepository.findById(imageId)
-            .orElseThrow(() -> new ResourceNotFoundException("Image not found"));
+    public MediaImageDto setPrimary(ItemType itemType ,UUID imageId, UUID serviceId) {
+        MediaImage image = mediaImageRepository.findByIdAndServiceIdAndItemType(
+            imageId, serviceId, itemType
+            ).orElseThrow(() -> new ResourceNotFoundException("Image not found"));
 
         mediaImageRepository.clearPrimaryFlag(image.getEntityType(), image.getEntityId());
         image.setPrimary(true);
