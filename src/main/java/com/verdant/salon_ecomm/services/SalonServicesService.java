@@ -73,7 +73,10 @@ public class SalonServicesService {
         CollectionStatus status,
         int page, int pageSize
     ){
-        Pageable pageable = PageRequest.of(page - 1, pageSize, toSort(sort));
+        int normalizePage = Math.max(page - 1, 0) + 1;
+        int normalizePageSize = Math.max(pageSize, 1);
+
+        Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
         Page<SalonService> result = serviceRepository.findAll(
             ServiceSpec.filterSalonService(category, search, status),
@@ -85,7 +88,7 @@ public class SalonServicesService {
             .toList();
 
         return new AdminServicePage(
-            services, page, pageSize,
+            services, normalizePage, normalizePageSize,
             (int) result.getTotalElements(),
             result.getTotalPages()
         );
@@ -151,7 +154,9 @@ public class SalonServicesService {
     private StylistSummaryDto toStylistSummaryDto(Stylist stylist) {
         return new StylistSummaryDto(
             stylist.getId().toString(),
-            stylist.getName()
+            stylist.getName(),
+            stylist.getAvatarUrl(),
+            stylist.getStatus()
         );
     }
 

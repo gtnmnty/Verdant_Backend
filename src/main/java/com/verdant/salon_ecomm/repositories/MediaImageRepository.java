@@ -28,5 +28,5 @@ public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
     @Query("UPDATE MediaImage m SET m.isPrimary = false WHERE m.entityType = :entityType AND m.entityId = :entityId")
     void clearPrimaryFlag(@Param("entityType") ItemType entityType, @Param("entityId") UUID entityId);
 
-    Optional<MediaImage> findByIdAndServiceIdAndItemType(UUID id, UUID serviceId, ItemType ownerType);
+    Optional<MediaImage> findByIdAndEntityIdAndEntityType(UUID id, UUID entityId, ItemType entityType);
 }
