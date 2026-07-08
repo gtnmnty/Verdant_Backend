@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.entities;
 
 import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.StylistAccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,12 +31,9 @@ public class Stylist {
     @Column(length = 20)
     private String phone;
 
-    @Column(nullable = false, length = 50)
-    @Enumerated(EnumType.STRING)
-    private AccountRole role = AccountRole.STYLIST;
-
     @Column(nullable = false, length = 20)
-    private String status = "active";
+    @Enumerated(EnumType.STRING)
+    private StylistAccountStatus status = StylistAccountStatus.ACTIVE;
 
     @Column(columnDefinition = "text")
     private String bio;
@@ -43,8 +41,12 @@ public class Stylist {
     @Column(name = "avatar_url", columnDefinition = "text")
     private String avatarUrl;
 
-    @Column(length = 100)
-    private String branch;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
+
+    @Column(name = "branch_location", length = 100)
+    private String branchLegacy;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

@@ -21,7 +21,8 @@ extend type Mutation {
 
 enum AppointmentStatus {
     PENDING
-    UPCOMING
+    CONFIRMED
+    ONGOING
     COMPLETED
     CANCELLED
 }
@@ -40,15 +41,6 @@ type Appointment {
     guests: Int!
     homeAddress: Address
     notes: String
-}
-
-type Stylist {
-    id: ID!
-    name: String!
-    bio: String
-    avatarUrl: String
-    branch: String
-    services: [SalonService!]!
 }
 
 type AppointmentPage {

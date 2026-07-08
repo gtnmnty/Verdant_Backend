@@ -29,7 +29,7 @@ public class SalonServiceResolver {
         return salonService.getSalonServices(category, search, sort, page, pageSize);
     }
 
-    @SchemaMapping(typeName = "Salon_Service", field = "category")
+    @SchemaMapping(typeName = "SalonService", field = "category")
     public String category(SalonService service){
         return service.getItemCatalog().name();
     }

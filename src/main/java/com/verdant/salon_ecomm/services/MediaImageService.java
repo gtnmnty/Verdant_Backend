@@ -63,7 +63,13 @@ public class MediaImageService {
                 results.add(toImageDTO(mediaImageRepository.save(image)));
             }
         } catch (RuntimeException ex) {
-            uploadedPublicIds.forEach(cloudinaryService::delete);
+            for (String publicId : uploadedPublicIds) {
+                try {
+                    cloudinaryService.delete(publicId);
+                } catch (RuntimeException cleanupEx) {
+                    ex.addSuppressed(cleanupEx);
+                }
+            }
             throw ex;
         }
 
@@ -72,7 +78,7 @@ public class MediaImageService {
 
     @Transactional
     public boolean removeImage(ItemType itemType ,UUID imageId, UUID serviceId) {
-        MediaImage image = mediaImageRepository.findByIdAndServiceIdAndItemType(
+        MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
             imageId, serviceId, itemType
             ).orElseThrow(() -> new ResourceNotFoundException(
                 "Image not found for this service specification"
@@ -87,7 +93,7 @@ public class MediaImageService {
 
     @Transactional
     public MediaImageDto setPrimary(ItemType itemType ,UUID imageId, UUID serviceId) {
-        MediaImage image = mediaImageRepository.findByIdAndServiceIdAndItemType(
+        MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
             imageId, serviceId, itemType
             ).orElseThrow(() -> new ResourceNotFoundException("Image not found"));
 

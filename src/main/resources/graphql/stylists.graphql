@@ -1,0 +1,94 @@
+extend type Query {
+    stylist(id: ID!): Stylist
+    stylists(
+        status: StylistAccountStatus
+        branchId: ID
+        search: String
+        serviceId: ID
+        page: Int = 1
+        pageSize: Int = 10
+    ): StylistConnection!
+}
+
+extend type Mutation {
+    createStylist(input: CreateStylistInput!): Stylist!
+    updateStylist(id: ID!, input: UpdateStylistInput!): Stylist!
+    deleteStylist(id: ID!): Boolean!
+    updateStylistStatus(id: ID!, status: StylistAccountStatus!): Stylist!
+    assignStylistToServices(stylistId: ID!, serviceIds: [ID!]!): Stylist!
+}
+
+type Branch {
+    id: ID!
+    name: String!
+    location: String
+}
+
+type StylistConnection {
+    content: [Stylist!]!
+    totalElements: Int!
+    totalPages: Int!
+    pageNumber: Int!
+    pageSize: Int!
+}
+
+type AdminStylistsPage{
+    items: [AdminStylistsDto!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+enum StylistAccountStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+    PENDING
+}
+
+type Stylist {
+    id: ID!
+    name: String!
+    email: String
+    phone: String
+    status: StylistAccountStatus!
+    bio: String
+    avatarUrl: String
+    branch: Branch
+    services: [SalonService!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type AdminStylistsDto{
+    id: ID!
+    name: String!
+    email: String!
+    phone: String
+    status: StylistAccountStatus!
+    bio: String
+    avatarUrl: String
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    branch: Branch
+}
+
+input CreateStylistInput {
+    name: String!
+    email: String
+    phone: String
+    bio: String
+    avatarUrl: String
+    branchId: ID!
+    serviceIds: [ID!]
+}
+
+input UpdateStylistInput {
+    name: String
+    email: String
+    phone: String
+    bio: String
+    avatarUrl: String
+    branchId: ID
+}
