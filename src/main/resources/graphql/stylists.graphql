@@ -13,7 +13,7 @@ extend type Query {
 extend type Mutation {
     createStylist(input: CreateStylistInput!): Stylist!
     updateStylist(id: ID!, input: UpdateStylistInput!): Stylist!
-    deleteStylist(id: ID!): Boolean!
+    deleteStylist(id: ID!): AdminStylistsDto!
     updateStylistStatus(id: ID!, status: StylistAccountStatus!): Stylist!
     assignStylistToServices(stylistId: ID!, serviceIds: [ID!]!): Stylist!
 }
@@ -38,6 +38,12 @@ type AdminStylistsPage{
     pageSize: Int!
     totalItems: Int!
     totalPages: Int!
+}
+
+enum StylistSort{
+    AVAILABLE
+    UNAVAILABLE
+    ON_LEAVE
 }
 
 enum StylistAccountStatus {

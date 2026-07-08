@@ -1,6 +1,5 @@
 package com.verdant.salon_ecomm.resolvers;
 
-import com.verdant.salon_ecomm.dtos.product.CreateProductInput;
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;

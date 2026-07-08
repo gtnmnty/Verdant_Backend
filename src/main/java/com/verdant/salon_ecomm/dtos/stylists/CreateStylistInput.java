@@ -7,11 +7,11 @@ import java.util.List;
 
 public record CreateStylistInput(
     String avatarUrl,
-    String fullName,
+    String name,
     String email,
-    String phoneNumber,
+    String phone,
     String bio,
-    String branch,
-    List<SalonService> offeredServices,
+    String branchId,
+    List<String> serviceIds,
     StylistAccountStatus status
 ) {}

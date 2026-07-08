@@ -22,23 +22,8 @@ public class Branch {
     @Column(nullable = false, unique = true, length = 100)
     private String name;
 
-    @Column(name = "address_line1", length = 255)
-    private String addressLine1;
-
-    @Column(name = "address_line2", length = 255)
-    private String addressLine2;
-
-    @Column(name = "address_city", length = 100)
-    private String addressCity;
-
-    @Column(name = "address_state", length = 100)
-    private String addressState;
-
-    @Column(name = "address_postal", length = 20)
-    private String addressPostal;
-
-    @Column(name = "address_country", length = 2)
-    private String addressCountry;
+    @Embedded
+    private Address address;
 
     @Column(length = 20)
     private String phone;
@@ -66,4 +51,5 @@ public class Branch {
     protected void onUpdate() {
         updatedAt = OffsetDateTime.now();
     }
+
 }
