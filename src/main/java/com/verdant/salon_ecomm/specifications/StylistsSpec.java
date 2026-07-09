@@ -3,12 +3,11 @@ package com.verdant.salon_ecomm.specifications;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.Stylist;
 import com.verdant.salon_ecomm.models.enums.StylistAccountStatus;
-import com.verdant.salon_ecomm.models.enums.StylistAvailability;
 import jakarta.persistence.criteria.Join;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 public class StylistsSpec {
 
@@ -30,13 +29,13 @@ public class StylistsSpec {
             cb.equal(root.get("status"), status);
     }
 
-    public static Specification<Stylist> hasBranch(String branch) {
-        if (branch == null || branch.isBlank()) {
+    public static Specification<Stylist> hasBranch(String branchId) {
+        if (branchId == null || branchId.isBlank()) {
             return null;
         }
 
         return (root, query, cb) ->
-            cb.equal(root.get("branch"), branch);
+            cb.equal(root.get("branch").get("id"), UUID.fromString(branchId));
     }
 
     public static Specification<Stylist> hasSearch(String search) {

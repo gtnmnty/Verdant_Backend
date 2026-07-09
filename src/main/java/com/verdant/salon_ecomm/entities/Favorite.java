@@ -13,7 +13,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "favorites")
+@Table(name = "favorites",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uq_favorites_user_target",
+        columnNames = {"user_id", "target_type", "target_id"}
+    ))
 public class Favorite {
 
     @Id
@@ -29,7 +33,7 @@ public class Favorite {
 
     @Column(name = "target_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private ItemType targetType =  null;
+    private ItemType targetType;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

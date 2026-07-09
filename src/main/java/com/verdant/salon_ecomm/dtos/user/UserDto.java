@@ -17,7 +17,7 @@ public class UserDto {
         UUID id,
         String fullName,
         String email,
-        String phoneNumber,
+        String phone,
         String role,
         boolean emailVerified,
         Instant createdAt,

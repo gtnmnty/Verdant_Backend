@@ -97,9 +97,13 @@ public class AuthenticationService {
 
     public void verifyUser(VerifyUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (!user.getVerificationCode().equals(input.getVerificationCode())) {
+        if (user.isEmailVerified()) {
+            throw new IllegalStateException("Account is already verified.");
+        }
+
+        if (!input.getVerificationCode().equals(user.getVerificationCode())) {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 

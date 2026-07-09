@@ -12,7 +12,6 @@ import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.StylistRepository;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +19,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -28,11 +29,13 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Validated
 public class SalonServicesService {
 
     private final SalonServiceRepository serviceRepository;
     private final MediaImageRepository mediaImageRepository;
     private final StylistRepository stylistRepository;
+    private final CloudinaryService cloudinaryService;
 
     public ServicePage getSalonServices(
        String category, String search, ServiceSort sort,
@@ -188,6 +191,8 @@ public class SalonServicesService {
             .isHomeService(input.isHomeService())
             .isFeatured(input.isFeatured())
             .stylists(stylists)
+            .reviewCount(0)
+            .averageRating(BigDecimal.ZERO)
             .build();
 
         return toAdminDto(serviceRepository.save(service));
@@ -219,6 +224,12 @@ public class SalonServicesService {
     public AdminServiceDto deleteService(UUID id) {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
+
+        List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.PRODUCT, id);
+
+        for (MediaImage image : images) {
+            cloudinaryService.delete(image.getPublicId());
+        }
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
         serviceRepository.deleteById(id);

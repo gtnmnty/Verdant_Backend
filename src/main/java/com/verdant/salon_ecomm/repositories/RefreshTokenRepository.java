@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.entities.RefreshToken;
-import io.lettuce.core.dynamic.annotation.Param;
+import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
