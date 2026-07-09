@@ -5,12 +5,13 @@ import com.verdant.salon_ecomm.dtos.stylists.AdminStylistsPage;
 import com.verdant.salon_ecomm.dtos.stylists.CreateStylistInput;
 import com.verdant.salon_ecomm.dtos.stylists.UpdateStylistInput;
 import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.entities.Stylist;
 import com.verdant.salon_ecomm.models.enums.StylistAccountStatus;
 import com.verdant.salon_ecomm.models.enums.StylistSort;
-import com.verdant.salon_ecomm.repositories.BranchRepository;
 import com.verdant.salon_ecomm.services.StylistsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
+import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
@@ -22,7 +23,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StylistResolver {
 
-    private final BranchRepository branchRepository;
     private final StylistsService stylistsService;
 
     @QueryMapping
@@ -39,22 +39,34 @@ public class StylistResolver {
         return stylistsService.getAdminStylistDetail(id);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public AdminStylistsDto createStylist(@Argument CreateStylistInput input){
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public Stylist createStylist(@Argument CreateStylistInput input) {
         return stylistsService.createStylist(input);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public AdminStylistsDto updateStylist(@Argument UpdateStylistInput input){
-        return stylistsService.updateStylist(input);
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public Stylist updateStylist(@Argument UUID id, @Argument UpdateStylistInput input) {
+        return stylistsService.updateStylist(id, input);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public AdminStylistsDto deleteStylist(@Argument UUID id){
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public AdminStylistsDto deleteStylist(@Argument UUID id) {
         return stylistsService.deleteStylist(id);
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public Stylist updateStylistStatus(@Argument UUID id, @Argument StylistAccountStatus status) {
+        return stylistsService.updateStylistStatus(id, status);
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public Stylist assignStylistToServices(@Argument UUID stylistId, @Argument List<UUID> serviceIds) {
+        return stylistsService.assignStylistToServices(stylistId, serviceIds);
     }
 
 

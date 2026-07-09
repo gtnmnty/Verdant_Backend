@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.dtos.service;
 
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
@@ -10,6 +11,7 @@ import java.util.UUID;
 
 public record CreateServiceInput(
     @NotBlank(message = "Service name is required")
+    @Valid
     String name,
 
     @NotBlank(message = "Sub name is required")

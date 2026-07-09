@@ -59,26 +59,6 @@ public class StylistsService {
         );
     }
 
-    private AdminStylistsDto toAdminDto(Stylist stylist) {
-        Branch branch = stylist.getBranch();
-        BranchDto branchDto = branch == null ? null :
-            new BranchDto(branch.getId().toString(), branch.getName(), branch.getAddress().toString());
-
-        return new AdminStylistsDto(
-            stylist.getId().toString(),
-            stylist.getName(),
-            stylist.getEmail(),
-            stylist.getPhone(),
-            stylist.getAvatarUrl(),
-            stylist.getBio(),
-            branchDto,
-            stylist.getServices(),
-            stylist.getStatus(),
-            stylist.getCreatedAt(),
-            stylist.getUpdatedAt()
-        );
-    }
-
     public AdminStylistsDto getAdminStylistDetail(UUID id) {
         Stylist stylist = stylistRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist Not Found"));
@@ -86,17 +66,13 @@ public class StylistsService {
         return toAdminDto(stylist);
     }
 
-    private Sort toSort(StylistSort sort) {
-        return switch (sort) {
-            case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
-            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
-            case A_TO_Z -> Sort.by(Sort.Direction.ASC, "name");
-            case Z_TO_A -> Sort.by(Sort.Direction.DESC, "name");
-        };
+    public Stylist getStylistById(UUID id) {
+        return stylistRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
     }
 
     @Transactional
-    public AdminStylistsDto createStylist(CreateStylistInput input) {
+    public Stylist createStylist(CreateStylistInput input) {
         Branch branch = branchRepository.findById(UUID.fromString(input.branchId()))
             .orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
 
@@ -117,12 +93,12 @@ public class StylistsService {
             .status(StylistAccountStatus.ACTIVE)
             .build();
 
-        return toAdminDto(stylistRepository.save(stylist));
+        return stylistRepository.save(stylist);
     }
 
     @Transactional
-    public AdminStylistsDto updateStylist(UpdateStylistInput input) {
-        Stylist stylist = stylistRepository.findById(input.id())
+    public Stylist updateStylist(UUID id, UpdateStylistInput input) {
+        Stylist stylist = stylistRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
 
         if (input.name() != null) stylist.setName(input.name());
@@ -136,7 +112,7 @@ public class StylistsService {
             stylist.setBranch(branch);
         }
 
-        return toAdminDto(stylistRepository.save(stylist));
+        return stylistRepository.save(stylist);
     }
 
     @Transactional
@@ -149,24 +125,52 @@ public class StylistsService {
     }
 
     @Transactional
-    public AdminStylistsDto updateStylistStatus(UUID id, StylistAccountStatus status) {
+    public Stylist updateStylistStatus(UUID id, StylistAccountStatus status) {
         Stylist stylist = stylistRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
 
         stylist.setStatus(status);
 
-        return toAdminDto(stylistRepository.save(stylist));
+        return stylistRepository.save(stylist);
     }
 
     @Transactional
-    public AdminStylistsDto assignStylistToServices(UUID stylistId, List<UUID> serviceIds) {
+    public Stylist assignStylistToServices(UUID stylistId, List<UUID> serviceIds) {
         Stylist stylist = stylistRepository.findById(stylistId)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
 
         List<SalonService> services = salonServiceRepository.findAllById(serviceIds);
         stylist.setServices(services);
 
-        return toAdminDto(stylistRepository.save(stylist));
+        return stylistRepository.save(stylist);
     }
 
+    private AdminStylistsDto toAdminDto(Stylist stylist) {
+        Branch branch = stylist.getBranch();
+        BranchDto branchDto = branch == null ? null :
+            new BranchDto(branch.getId().toString(), branch.getName(), branch.getAddress().toString());
+
+        return new AdminStylistsDto(
+            stylist.getId().toString(),
+            stylist.getName(),
+            stylist.getEmail(),
+            stylist.getPhone(),
+            stylist.getAvatarUrl(),
+            stylist.getBio(),
+            branchDto,
+            stylist.getServices(),
+            stylist.getStatus(),
+            stylist.getCreatedAt(),
+            stylist.getUpdatedAt()
+        );
+    }
+
+    private Sort toSort(StylistSort sort) {
+        return switch (sort) {
+            case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case A_TO_Z -> Sort.by(Sort.Direction.ASC, "name");
+            case Z_TO_A -> Sort.by(Sort.Direction.DESC, "name");
+        };
+    }
 }

@@ -37,7 +37,7 @@ public class MediaImageController {
         @PathVariable UUID serviceId,
         @PathVariable UUID imageId
     ) {
-        mediaImageService.removeImage(ItemType.SALON_SERVICE, serviceId, imageId);
+        mediaImageService.removeImage(ItemType.SALON_SERVICE, imageId, serviceId);
         return ResponseEntity.noContent().build();
     }
 
@@ -47,7 +47,7 @@ public class MediaImageController {
         @PathVariable UUID serviceId,
         @PathVariable UUID imageId
     ) {
-        MediaImageDto result = mediaImageService.setPrimary(ItemType.SALON_SERVICE, serviceId, imageId);
+        MediaImageDto result = mediaImageService.setPrimary(ItemType.SALON_SERVICE, imageId, serviceId);
         return ResponseEntity.ok(result);
     }
 }

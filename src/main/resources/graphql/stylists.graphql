@@ -1,13 +1,14 @@
 extend type Query {
-    stylist(id: ID!): Stylist
-    stylists(
+    adminStylists(
         status: StylistAccountStatus
         branchId: ID
         search: String
         serviceId: ID
+        sort: StylistSort
         page: Int = 1
         pageSize: Int = 10
-    ): StylistConnection!
+    ): AdminStylistsPage!
+    adminStylist(id: ID!): AdminStylistsDto
 }
 
 extend type Mutation {

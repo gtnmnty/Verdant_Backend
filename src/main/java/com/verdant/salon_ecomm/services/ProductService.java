@@ -22,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -33,12 +34,16 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final MediaImageRepository mediaImageRepository;
+    private final CloudinaryService cloudinaryService;
 
     public ProductPage getProducts(
         String category, String search,
         CollectionSort sort, int page, int pageSize
     ) {
-        Pageable pageable = PageRequest.of(page - 1, pageSize, toSort(sort));
+        int normalizePage = Math.max(page - 1, 0) + 1;
+        int normalizePageSize = Math.max(pageSize, 1);
+
+        Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
         Page<Product> result = productRepository.findAll(
             ProductSpec.filter(category, search, CollectionStatus.ACTIVE),
@@ -47,8 +52,8 @@ public class ProductService {
 
         return new ProductPage(
             result.getContent(),
-            page,
-            pageSize,
+            normalizePage,
+            normalizePageSize,
             (int) result.getTotalElements(),
             result.getTotalPages()
         );
@@ -97,7 +102,10 @@ public class ProductService {
         CollectionSort sort,
         CollectionStatus status, int page, int pageSize
     ) {
-        Pageable pageable = PageRequest.of(page - 1, pageSize, toSort(sort));
+        int normalizePage = Math.max(page - 1, 0) + 1;
+        int normalizePageSize = Math.max(pageSize, 1);
+
+        Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
         Page<Product> result = productRepository.findAll(
             ProductSpec.filter(category, search, status),
@@ -109,7 +117,7 @@ public class ProductService {
             .toList();
 
         return new AdminProductPage(
-            items, page, pageSize,
+            items, normalizePage, normalizePageSize,
             (int) result.getTotalElements(),
             result.getTotalPages()
         );
@@ -133,7 +141,9 @@ public class ProductService {
     }
 
     private Sort toSort(CollectionSort sort) {
-        return switch (sort) {
+        CollectionSort safeSort = sort != null ? sort : CollectionSort.NEWEST;
+
+        return switch (safeSort) {
             case NEWEST -> Sort.by("createdAt").descending();
             case OLDEST -> Sort.by("createdAt").ascending();
             case PRICE_LOW_TO_HIGH -> Sort.by("price").ascending();
@@ -157,6 +167,8 @@ public class ProductService {
             .lowStockThreshold(input.lowStockThreshold())
             .isFeatured(input.isFeatured() != null ? input.isFeatured() : false)
             .status(input.status() != null ? input.status() : CollectionStatus.ACTIVE)
+            .reviewCount(0)
+            .averageRating(BigDecimal.ZERO)
             .build();
 
         return toAdminDTO(productRepository.save(product));
@@ -189,6 +201,12 @@ public class ProductService {
     public boolean deleteProduct(UUID id) {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.PRODUCT, id);
+
+        for (MediaImage image : images) {
+            cloudinaryService.delete(image.getPublicId());
+        }
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.PRODUCT, id);
         productRepository.delete(product);

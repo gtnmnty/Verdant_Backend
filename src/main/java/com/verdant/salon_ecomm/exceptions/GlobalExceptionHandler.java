@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.exceptions;
 
 import com.verdant.salon_ecomm.dtos.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -74,7 +75,6 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
             ));
     }
-
 
     // Email is already registered
     @ExceptionHandler(DuplicateEmailException.class)
@@ -185,6 +185,28 @@ public class GlobalExceptionHandler {
                 "Something went wrong on our server.",
                 request.getRequestURI()
             ));
+    }
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleConstraintViolation(ConstraintViolationException ex, DataFetchingEnvironment env) {
+        String message = ex.getConstraintViolations().stream()
+            .map(v -> v.getMessage())
+            .collect(java.util.stream.Collectors.joining("; "));
+
+        return GraphqlErrorBuilder.newError(env)
+            .message(message)
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "VALIDATION_ERROR", "status", 400))
+            .build();
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolationRest(ConstraintViolationException ex, HttpServletRequest request) {
+        String message = ex.getConstraintViolations().stream()
+            .map(v -> v.getMessage())
+            .collect(java.util.stream.Collectors.joining("; "));
+        return ResponseEntity.badRequest()
+            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", message, request.getRequestURI()));
     }
 
     @GraphQlExceptionHandler

@@ -7,6 +7,7 @@ import com.verdant.salon_ecomm.models.enums.ServiceSort;
 import com.verdant.salon_ecomm.services.SalonServicesService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
+import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,26 +39,26 @@ public class SalonServiceResolver {
         return salonService.getServiceDetail(id);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServiceDto create(@Argument CreateServiceInput input){
         return salonService.createServiceInput(input);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServiceDto update(@Argument UpdateServiceInput input){
         return salonService.updateServiceInput(input);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServiceDto deleteService(@Argument UUID id){
         return salonService.deleteService(id);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServicePage adminServices(
         @Argument String category, @Argument String search,
         @Argument ServiceSort sort, @Argument CollectionStatus status,
@@ -66,8 +67,8 @@ public class SalonServiceResolver {
         return salonService.getAdminServices(category, search, sort, status, page, pageSize);
     }
 
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServiceDto adminServiceDetail(@Argument UUID id){
         return salonService.getAdminServiceDto(id);
     }

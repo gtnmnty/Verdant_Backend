@@ -29,4 +29,6 @@ public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
     void clearPrimaryFlag(@Param("entityType") ItemType entityType, @Param("entityId") UUID entityId);
 
     Optional<MediaImage> findByIdAndEntityIdAndEntityType(UUID id, UUID entityId, ItemType entityType);
+
+    List<MediaImage> findByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
 }
