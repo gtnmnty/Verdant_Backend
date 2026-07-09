@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -103,7 +104,7 @@ public class AuthenticationService {
             throw new IllegalStateException("Account is already verified.");
         }
 
-        if (!input.getVerificationCode().equals(user.getVerificationCode())) {
+        if (!Objects.equals(input.getVerificationCode(), user.getVerificationCode())) {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 

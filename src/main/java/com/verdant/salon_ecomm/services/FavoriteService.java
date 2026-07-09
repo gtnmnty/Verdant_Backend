@@ -34,7 +34,7 @@ public class FavoriteService {
         UUID userId = getCurrentUserId();
 
         Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         Optional<Favorite> existing = favoriteRepository
             .findByUserIdAndTargetIdAndTargetType(userId, productId, ItemType.PRODUCT);
