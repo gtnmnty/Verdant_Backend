@@ -29,7 +29,7 @@ public class StylistResolver {
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminStylistsPage adminStylists(
         @Argument StylistAccountStatus status, @Argument String branchId, @Argument String search,
-        @Argument List<SalonService> serviceIds, @Argument StylistSort sort,
+        @Argument List<UUID> serviceIds, @Argument StylistSort sort,
         @Argument int page, @Argument int pageSize
     ) {
         return stylistsService.getStylists(status, branchId, search, serviceIds, sort, page, pageSize);

@@ -29,12 +29,12 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     List<Appointment> findByStylistIdAndDate(@Param("stylistId") UUID stylistId, @Param("date") LocalDate date);
 
     @Query("""
-        SELECT COUNT(a) > 0 FROM Appointment a
-        WHERE a.stylist.id = :stylistId
-        AND a.status <> 'CANCELLED'
-        AND a.scheduledAt < :endTime
-        AND FUNCTION('TIMESTAMPADD', MINUTE, a.durationMinutes, a.scheduledAt) > :startTime
-    """)
+            SELECT COUNT(a) > 0 FROM Appointment a
+            WHERE a.stylist.id = :stylistId
+            AND a.status <> 'CANCELLED'
+            AND a.scheduledAt < :endTime
+            AND TIMESTAMPADD(MINUTE, a.durationMinutes, a.scheduledAt) > :startTime
+        """)
     boolean existsOverlappingAppointment(
         @Param("stylistId") UUID stylistId,
         @Param("startTime") OffsetDateTime startTime,
@@ -47,10 +47,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         UUID userId, OffsetDateTime windowStart, OffsetDateTime windowEnd, Pageable pageable);
 
     @Query("""
-        SELECT a FROM Appointment a
-        WHERE a.user.id = :userId
-        AND (a.scheduledAt < :windowStart OR a.scheduledAt > :windowEnd)
-    """)
+            SELECT a FROM Appointment a
+            WHERE a.user.id = :userId
+            AND (a.scheduledAt < :windowStart OR a.scheduledAt > :windowEnd)
+        """)
     Page<Appointment> findByUserIdOutsideWindow(
         @Param("userId") UUID userId,
         @Param("windowStart") OffsetDateTime windowStart,

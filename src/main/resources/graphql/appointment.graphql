@@ -1,6 +1,6 @@
 extend type Query {
     myAppointments(
-        status: AppointmentStatus = ALL
+        status: AppointmentClientFilter = ALL
         timeframe: AppointmentTimeframe = RECENT
         search: String
         sort: AppointmentClientSort = DATE_SOONEST
@@ -94,13 +94,20 @@ type AdminAppointmentPage {
     totalPages: Int!
 }
 
+type AppointmentStatusCounts {
+    all: Int!
+    pending: Int!
+    upcoming: Int!
+    completed: Int!
+    cancelled: Int!
+}
+
 type Appointment {
     id: ID!
     appointmentCode: String!
     user: User!
     service: SalonService
     serviceName: String!
-    serviceType: AppointmentServiceType!
     priceSnapshot: BigDecimal!
     stylist: Stylist
     branch: String
@@ -110,8 +117,6 @@ type Appointment {
     guests: Int!
     homeAddress: Address
     notes: String
-    createdAt: DateTime!
-    updatedAt: DateTime!
 }
 
 type AdminAppointmentDto {
@@ -132,14 +137,6 @@ type AdminAppointmentDto {
     notes: String
     createdAt: DateTime!
     updatedAt: DateTime!
-}
-
-type AppointmentStatusCounts {
-    all: Int!
-    pending: Int!
-    upcoming: Int!
-    completed: Int!
-    cancelled: Int!
 }
 
 input CreateAppointmentInput {

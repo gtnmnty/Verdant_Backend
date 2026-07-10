@@ -108,6 +108,10 @@ public class AuthenticationService {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 
+        if (user.getVerificationCode() == null || user.getVerificationCode().isBlank()) {
+            throw new InvalidVerificationCodeException("Invalid verification code.");
+        }
+
         if (user.getVerificationCodeExpiration().isBefore(OffsetDateTime.now())) {
             throw new VerificationCodeExpiredException("Verification code has expired.");
         }

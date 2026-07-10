@@ -18,7 +18,7 @@ public record AdminAppointmentDto(
     AppointmentServiceType serviceType,
     BigDecimal priceSnapshot,
     Stylist stylist,
-    Branch branchId,
+    Branch branch,
     OffsetDateTime scheduledAt,
     Integer durationMinutes,
     AppointmentStatus status,

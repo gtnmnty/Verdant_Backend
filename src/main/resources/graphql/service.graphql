@@ -59,6 +59,7 @@ type SalonService implements CatalogItem {
     isHomeService: Boolean!
     isFeatured: Boolean!
     images: [MediaImage!]!
+    primaryImage: MediaImageDto
     stylists: [Stylist!]!
     isFavorited: Boolean!
     createdAt: DateTime
