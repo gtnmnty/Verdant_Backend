@@ -1,12 +1,13 @@
 package com.verdant.salon_ecomm.entities;
 
-import com.verdant.salon_ecomm.models.enums.AppointmentStatus;
+import com.verdant.salon_ecomm.models.enums.appointments.AppointmentServiceType;
+import com.verdant.salon_ecomm.models.enums.appointments.AppointmentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.OffsetDateTime;
+import java.math.BigDecimal;import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,7 +17,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "appointments")
+@Table(
+    name = "appointments",
+    indexes = {
+        @Index(name = "idx_appointments_stylist_scheduled", columnList = "stylist_id, scheduled_at"),
+        @Index(name = "idx_appointments_user", columnList = "user_id"),
+        @Index(name = "idx_appointments_status", columnList = "status")
+    }
+)
 public class Appointment {
 
     @Id
@@ -32,14 +40,15 @@ public class Appointment {
     private Stylist stylist;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id")
+    @JoinColumn(name = "service_id", nullable = false)
     private SalonService service;
 
     @Column(name = "service_name", nullable = false, length = 200)
     private String serviceName;
 
     @Column(name = "service_type", nullable = false, length = 20)
-    private String serviceType;
+    @Enumerated(EnumType.STRING)
+    private AppointmentServiceType serviceType;
 
     @Column(name = "scheduled_at", nullable = false)
     private OffsetDateTime scheduledAt;
@@ -47,8 +56,9 @@ public class Appointment {
     @Column(name = "duration_minutes", nullable = false)
     private Integer durationMinutes;
 
-    @Column(length = 100)
-    private String branch;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "home_address", columnDefinition = "jsonb")
@@ -68,8 +78,21 @@ public class Appointment {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
+    @Column(name = "price_snapshot", nullable = false)
+    private BigDecimal priceSnapshot;
+
+    @Column(name = "appointment_code", length = 20, nullable = false, unique = true)
+    private String appointmentCode;
+
     @PrePersist
     protected void onCreate() {
         createdAt = OffsetDateTime.now();
+        updatedAt = OffsetDateTime.now();
     }
+
+    @PreUpdate
+    protected void onUpdate() { updatedAt = OffsetDateTime.now(); }
 }

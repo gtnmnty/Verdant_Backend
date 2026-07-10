@@ -2,8 +2,11 @@ package com.verdant.salon_ecomm.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Setter
@@ -28,8 +31,9 @@ public class Branch {
     @Column(length = 20)
     private String phone;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "opening_hours", columnDefinition = "jsonb")
-    private String openingHours;
+    private Map<String, Object> openingHours;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default

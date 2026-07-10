@@ -21,7 +21,7 @@ public class MediaImageController {
     private final MediaImageService mediaImageService;
 
     @PostMapping(consumes = "multipart/form-data")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
     public ResponseEntity<List<MediaImageDto>> addImages(
         @PathVariable UUID serviceId,
         @RequestParam("files") List<MultipartFile> files,
@@ -32,7 +32,7 @@ public class MediaImageController {
     }
 
     @DeleteMapping("/{imageId}")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
     public ResponseEntity<Void> removeImage(
         @PathVariable UUID serviceId,
         @PathVariable UUID imageId
@@ -42,7 +42,7 @@ public class MediaImageController {
     }
 
     @PatchMapping("/{imageId}/primary")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
     public ResponseEntity<MediaImageDto> setImagePrimary(
         @PathVariable UUID serviceId,
         @PathVariable UUID imageId

@@ -3,7 +3,7 @@ extend type Query {
         status: StylistAccountStatus
         branchId: ID
         search: String
-        serviceId: ID
+        serviceId: [ID!]
         sort: StylistSort
         page: Int = 1
         pageSize: Int = 10
@@ -42,9 +42,10 @@ type AdminStylistsPage{
 }
 
 enum StylistSort{
-    AVAILABLE
-    UNAVAILABLE
-    ON_LEAVE
+    NEWEST
+    OLDEST
+    A_TO_Z
+    Z_TO_A
 }
 
 enum StylistAccountStatus {

@@ -144,6 +144,10 @@ public class SalonServicesService {
     }
 
     private Sort toSort(ServiceSort sort){
+        if (sort == null) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
         return switch (sort) {
             case NEWEST ->  Sort.by(Sort.Direction.DESC, "createdAt");
             case OLDEST ->  Sort.by(Sort.Direction.ASC, "createdAt");
@@ -225,7 +229,7 @@ public class SalonServicesService {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
-        List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.PRODUCT, id);
+        List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
 
         for (MediaImage image : images) {
             cloudinaryService.delete(image.getPublicId());

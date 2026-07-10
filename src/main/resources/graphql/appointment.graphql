@@ -1,46 +1,81 @@
-# appointment.graphqls
-#
-# Rebuilt against the real `appointments` table. Requires a new
-# `price_snapshot numeric` column on appointments (decided in chat) -
-# see migration note alongside this file.
-#
-# Still deliberately missing: a human-readable code like "#APT-8821" -
-# only a raw uuid `id` exists right now; orders have the same gap.
-
 extend type Query {
-    appointments(status: AppointmentStatus, first: Int = 10, after: String): AppointmentPage!
+    myAppointments(
+        status: AppointmentStatus = ALL
+        timeframe: AppointmentTimeframe = RECENT
+        search: String
+        sort: AppointmentClientSort = DATE_SOONEST
+        page: Int = 1
+        pageSize: Int = 10
+    ): AppointmentPage!
     appointment(id: ID!): Appointment
+
+    adminAppointments(
+        status: AppointmentStatus
+        stylistId: ID
+        branch: String
+        serviceType: AppointmentServiceType
+        search: String
+        sort: AdminAppointmentSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminAppointmentPage!
+
+    adminAppointment(id: ID!): AdminAppointmentDto
     appointmentStatusCounts: AppointmentStatusCounts!
 }
 
 extend type Mutation {
-    bookAppointment(input: BookAppointmentInput!): Appointment!
-    rescheduleAppointment(id: ID!, newScheduledAt: DateTime!): Appointment!
+    bookAppointment(input: CreateAppointmentInput!): Appointment!
     cancelAppointment(id: ID!): Appointment!
+    completeAppointment(id: ID!): Appointment!
+    updateAppointmentRequest(id: ID!, input: UpdateAppointmentInput!): Appointment!
+    rescheduleAppointment(id: ID!, newScheduledAt: DateTime!): Appointment!
+    cancelAppointments(ids: [ID!]!): [Appointment!]!
+    deleteAppointment(id: ID!): Appointment!
+    deleteAppointments(ids: [ID!]!): [Appointment!]!
+}
+
+enum AppointmentServiceType {
+    IN_SALON
+    HOME_SERVICE
 }
 
 enum AppointmentStatus {
     PENDING
-    CONFIRMED
-    ONGOING
+    UPCOMING
     COMPLETED
     CANCELLED
 }
 
-type Appointment {
-    id: ID!
-    service: SalonService
-    serviceName: String!
-    serviceType: String!
-    priceSnapshot: BigDecimal!
-    stylist: Stylist
-    branch: String
-    scheduledAt: DateTime!
-    durationMinutes: Int!
-    status: AppointmentStatus!
-    guests: Int!
-    homeAddress: Address
-    notes: String
+enum AppointmentTimeframe {
+    RECENT
+    ARCHIVED
+}
+
+enum AppointmentClientFilter {
+    ALL
+    PENDING
+    UPCOMING
+    COMPLETED
+    CANCELLED
+}
+
+enum AppointmentClientSort {
+    NEWEST
+    OLDEST
+    PRICE_LOW_TO_HIGH
+    PRICE_HIGH_TO_LOW
+    DATE_SOONEST
+    DATE_LATEST
+}
+
+enum AdminAppointmentSort {
+    NEWEST
+    OLDEST
+    CLIENT_NAME_ASC
+    CLIENT_NAME_DESC
+    SCHEDULED_SOONEST
+    SCHEDULED_LATEST
 }
 
 type AppointmentPage {
@@ -51,6 +86,54 @@ type AppointmentPage {
     totalPages: Int!
 }
 
+type AdminAppointmentPage {
+    items: [AdminAppointmentDto!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type Appointment {
+    id: ID!
+    appointmentCode: String!
+    user: User!
+    service: SalonService
+    serviceName: String!
+    serviceType: AppointmentServiceType!
+    priceSnapshot: BigDecimal!
+    stylist: Stylist
+    branch: String
+    scheduledAt: DateTime!
+    durationMinutes: Int!
+    status: AppointmentStatus!
+    guests: Int!
+    homeAddress: Address
+    notes: String
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type AdminAppointmentDto {
+    id: ID!
+    appointmentCode: String!
+    user: User!
+    service: SalonService
+    serviceName: String!
+    serviceType: AppointmentServiceType!
+    priceSnapshot: BigDecimal!
+    stylist: Stylist
+    branch: String
+    scheduledAt: DateTime!
+    durationMinutes: Int!
+    status: AppointmentStatus!
+    guests: Int!
+    homeAddress: Address
+    notes: String
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
 type AppointmentStatusCounts {
     all: Int!
     pending: Int!
@@ -59,12 +142,26 @@ type AppointmentStatusCounts {
     cancelled: Int!
 }
 
-input BookAppointmentInput {
+input CreateAppointmentInput {
+    userId: ID!
     serviceId: ID!
-    stylistId: ID
-    branch: String
+    stylistId: ID!
+    serviceType: AppointmentServiceType!
+    branchId: ID
     scheduledAt: DateTime!
     guests: Int = 1
+    homeAddress: AddressInput
+    notes: String
+}
+
+input UpdateAppointmentInput {
+    userId: ID
+    serviceId: ID
+    stylistId: ID
+    serviceType: AppointmentServiceType
+    branchId: ID
+    scheduledAt: DateTime
+    guests: Int
     homeAddress: AddressInput
     notes: String
 }

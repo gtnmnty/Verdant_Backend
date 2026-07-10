@@ -26,15 +26,17 @@ public class StylistResolver {
     private final StylistsService stylistsService;
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminStylistsPage adminStylists(
-        @Argument StylistAccountStatus status, @Argument String branch, @Argument String search,
-        @Argument List<SalonService> services, @Argument StylistSort sort,
+        @Argument StylistAccountStatus status, @Argument String branchId, @Argument String search,
+        @Argument List<SalonService> serviceIds, @Argument StylistSort sort,
         @Argument int page, @Argument int pageSize
     ) {
-        return stylistsService.getStylists(status, branch, search, services, sort, page, pageSize);
+        return stylistsService.getStylists(status, branchId, search, serviceIds, sort, page, pageSize);
     }
 
-    @QueryMapping
+    @QueryMapping("adminStylist")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminStylistsDto adminStylistsDetails(@Argument UUID id){
         return stylistsService.getAdminStylistDetail(id);
     }

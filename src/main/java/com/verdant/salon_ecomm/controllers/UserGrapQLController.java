@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.dtos.user.UserDto;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.services.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -22,11 +23,13 @@ public class UserGrapQLController {
     private final UserService userService;
 
     @QueryMapping
+    @PreAuthorize("isAuthenticated()")
     public UserDto.Profile me(@AuthenticationPrincipal User principal) {
         return userService.getUserById(principal.getId());
     }
 
     @MutationMapping
+    @PreAuthorize("isAuthenticated()")
     public UserDto.Profile updateProfile(
         @Argument UpdateUserRequest input,
         @AuthenticationPrincipal User principal
