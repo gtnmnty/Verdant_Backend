@@ -31,4 +31,6 @@ public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
     Optional<MediaImage> findByIdAndEntityIdAndEntityType(UUID id, UUID entityId, ItemType entityType);
 
     List<MediaImage> findByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
+
+    List<MediaImage> findByEntityTypeAndEntityIdInAndIsPrimaryTrue(ItemType entityType, Collection<UUID> entityIds);
 }

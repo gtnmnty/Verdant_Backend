@@ -36,7 +36,7 @@ public class StylistsService {
 
     public AdminStylistsPage getStylists(
         StylistAccountStatus status, String branch, String search,
-        List<SalonService> services, StylistSort sort,
+        List<UUID> services, StylistSort sort,
         int page, int pageSize
     ) {
         int normalizePage = Math.max(page - 1, 0) + 1;

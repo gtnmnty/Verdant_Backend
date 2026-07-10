@@ -3,7 +3,7 @@ extend type Query {
         status: StylistAccountStatus
         branchId: ID
         search: String
-        serviceId: [ID!]
+        serviceIds: [ID!]
         sort: StylistSort
         page: Int = 1
         pageSize: Int = 10

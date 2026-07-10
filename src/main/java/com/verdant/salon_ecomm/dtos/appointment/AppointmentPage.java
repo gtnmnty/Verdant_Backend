@@ -8,6 +8,6 @@ public record AppointmentPage(
     List<Appointment> items,
     int page,
     int pageSize,
-    int totalElements,
+    int totalItems,
     int totalPages
 ) {}

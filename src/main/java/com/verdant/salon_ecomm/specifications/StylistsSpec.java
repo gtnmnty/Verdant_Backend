@@ -12,7 +12,7 @@ import java.util.UUID;
 public class StylistsSpec {
 
     public static Specification<Stylist> filter(
-        StylistAccountStatus status, String branch, String search, List<SalonService> services
+        StylistAccountStatus status, String branch, String search, List<UUID> services
     ) {
         return Specification.allOf(
             hasBranch(branch), hasSearch(search),
