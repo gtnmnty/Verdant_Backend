@@ -17,14 +17,6 @@ import java.util.UUID;
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     JpaSpecificationExecutor<Appointment> {
 
-    List<Appointment> findByUser_Id(UUID userId);
-
-    List<Appointment> findByStylist_Id(UUID stylistId);
-
-    List<Appointment> findByStatus(AppointmentStatus status);
-
-    List<Appointment> findByUser_IdOrderByScheduledAtDesc(UUID userId);
-
     @Query(value = "SELECT nextval('appointment_code_seq')", nativeQuery = true)
     Long getNextAppointmentCodeSequenceValue();
 
@@ -42,7 +34,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     boolean existsOverlappingAppointment(
         @Param("stylistId") UUID stylistId,
         @Param("startTime") OffsetDateTime startTime,
-        @Param("durationMinutes") OffsetDateTime durationMinutes,
+        @Param("durationMinutes") Integer durationMinutes,
         @Param("excludeId") UUID excludeId
     );
 

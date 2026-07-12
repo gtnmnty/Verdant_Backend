@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.mappers;
 
 import com.verdant.salon_ecomm.dtos.AddressInput;
+import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.dtos.appointment.AdminAppointmentDto;
 import com.verdant.salon_ecomm.dtos.appointment.CreateAppointmentInput;
 import com.verdant.salon_ecomm.entities.*;
@@ -28,7 +29,7 @@ public class AppointmentMapper {
             appointment.getDurationMinutes(),
             appointment.getStatus(),
             appointment.getGuests(),
-            appointment.getHomeAddress(),
+            fromHomeAddressMap(appointment.getHomeAddress()),
             appointment.getNotes(),
             appointment.getCreatedAt(),
             appointment.getUpdatedAt()
@@ -62,7 +63,19 @@ public class AppointmentMapper {
         // appointmentCode is generated and set by the service, not here
     }
 
-    private Map<String, Object> toHomeAddressMap(AddressInput input) {
+    public Address fromHomeAddressMap(Map<String, Object> map) {
+        if (map == null) return null;
+        return new Address(
+            (String) map.get("line1"),
+            (String) map.get("line2"),
+            (String) map.get("city"),
+            (String) map.get("state"),
+            (String) map.get("postal"),
+            (String) map.get("country")
+        );
+    }
+
+    public Map<String, Object> toHomeAddressMap(AddressInput input) {
         if (input == null) return null;
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("line1", input.line1());

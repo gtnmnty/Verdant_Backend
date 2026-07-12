@@ -23,7 +23,7 @@ public record AdminAppointmentDto(
     Integer durationMinutes,
     AppointmentStatus status,
     Short guests,
-    Map<String, Object> homeAddress,
+    Address homeAddress,
     String notes,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
