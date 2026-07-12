@@ -141,6 +141,8 @@ public class AppointmentService {
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found: " + input.stylistId()))
             : null;
 
+        validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
+
         Branch branch = branchRepository.findById(input.branchId())
             .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.branchId()));
 
@@ -148,8 +150,6 @@ public class AppointmentService {
             OffsetDateTime start = input.scheduledAt();
             validateNoOverlap(stylist.getId(), start, service.getDurationMinutes(), null);
         }
-
-        validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
 
         Appointment appointment = appointmentMapper.toEntity(input, user, service, stylist, branch);
         appointment.setAppointmentCode(generateAppointmentCode());
