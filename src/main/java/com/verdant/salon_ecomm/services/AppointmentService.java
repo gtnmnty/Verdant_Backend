@@ -66,9 +66,12 @@ public class AppointmentService {
         );
     }
 
-    public Appointment getAppointmentById(UUID id) {
-        return appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + id));
+    public Appointment getAppointmentById(UUID id, UUID currentUserId, boolean isAdmin) {
+        Appointment appointment = findAppointmentOrThrow(id);
+        if (!isAdmin && !appointment.getUser().getId().equals(currentUserId)) {
+            throw new AccessDeniedException("Not your appointment");
+        }
+        return appointment;
     }
 
     public AdminAppointmentPage getAdminAppointments(
@@ -98,15 +101,15 @@ public class AppointmentService {
         );
     }
 
-    public AdminAppointmentDto getAdminAppointmentById(UUID id) {
-        return appointmentMapper.toAdminDto(getAppointmentById(id));
+    public AdminAppointmentDto getAdminAppointmentById(UUID id,  UUID currentUserId, boolean isAdmin) {
+        return appointmentMapper.toAdminDto(getAppointmentById(id, currentUserId, isAdmin));
     }
 
     public AppointmentStatusCounts getAppointmentStatusCounts(UUID userId) {
         if (userId != null) {
             return new AppointmentStatusCounts(
-                (int) appointmentRepository.countByUser_Id(userId),
-                (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.PENDING),
+                appointmentRepository.countByUser_Id(userId),
+                appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.PENDING),
                 (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.UPCOMING),
                 (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.COMPLETED),
                 (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.CANCELLED)
@@ -143,9 +146,6 @@ public class AppointmentService {
             OffsetDateTime start = input.scheduledAt();
             OffsetDateTime end = start.plusMinutes(service.getDurationMinutes());
             validateNoOverlap(stylist.getId(), start, end, null);
-            if (appointmentRepository.existsOverlappingAppointment(stylist.getId(), start, end, null)) {
-                throw new IllegalStateException("Stylist is already booked in that time slot");
-            }
         }
 
         Appointment appointment = appointmentMapper.toEntity(input, user, service, stylist, branch);
@@ -158,17 +158,13 @@ public class AppointmentService {
     public Appointment rescheduleAppointment(
         UUID id, OffsetDateTime newScheduledAt, UUID currentUserId, boolean isAdmin
     ) {
-        Appointment appointment = getAppointmentById(id);
+        Appointment appointment = getAppointmentById(id, currentUserId, isAdmin);
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
 
         if (appointment.getStylist() != null) {
             OffsetDateTime end = newScheduledAt.plusMinutes(appointment.getDurationMinutes());
             validateNoOverlap(appointment.getStylist().getId(), newScheduledAt, end, appointment.getId());
-            if (appointmentRepository.existsOverlappingAppointment(
-                appointment.getStylist().getId(), newScheduledAt, end, appointment.getId())) {
-                throw new IllegalStateException("Stylist is already booked in that time slot");
-            }
         }
 
         appointment.setScheduledAt(newScheduledAt);
@@ -177,7 +173,7 @@ public class AppointmentService {
 
     @Transactional
     public Appointment cancelAppointment(UUID id, UUID currentUserId, boolean isAdmin) {
-        Appointment appointment = getAppointmentById(id);
+        Appointment appointment = getAppointmentById(id, currentUserId,  isAdmin);
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
         appointment.setStatus(AppointmentStatus.CANCELLED);
@@ -185,8 +181,8 @@ public class AppointmentService {
     }
 
     @Transactional
-    public Appointment completeAppointment(UUID id) {
-        Appointment appointment = getAppointmentById(id);
+    public Appointment completeAppointment(UUID id, UUID currentUserId, boolean isAdmin) {
+        Appointment appointment = getAppointmentById(id, currentUserId,  isAdmin);
         requireNotTerminal(appointment);
         appointment.setStatus(AppointmentStatus.COMPLETED);
         return appointmentRepository.save(appointment);
@@ -202,8 +198,11 @@ public class AppointmentService {
     }
 
     @Transactional
-    public Appointment updateAppointmentRequest(UUID id, UpdateAppointmentInput input) {
-        Appointment appointment = getAppointmentById(id);
+    public Appointment updateAppointmentRequest(
+        UUID id, UpdateAppointmentInput input,
+        UUID currentUserId, boolean isAdmin
+    ) {
+        Appointment appointment = getAppointmentById(id, currentUserId, isAdmin);
 
         if (input.userId() != null) {
             User user = userRepository.findById(input.userId())
@@ -259,6 +258,11 @@ public class AppointmentService {
         return appointments;
     }
 
+    private Appointment findAppointmentOrThrow(UUID id) {
+        return appointmentRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + id));
+    }
+
     private void requireOwnerOrAdmin(Appointment appointment, UUID currentUserId, boolean isAdmin) {
         if (isAdmin) return;
         if (currentUserId == null || appointment.getUser() == null
@@ -307,11 +311,14 @@ public class AppointmentService {
     }
 
     private String generateAppointmentCode() {
-        // Placeholder — replace with your real generation/uniqueness strategy.
-        return "AP-" + String.format("%04d", (int) (Math.random() * 10000));
+        Long sequenceValue = appointmentRepository.getNextAppointmentCodeSequenceValue();
+        return "AP-" + String.format("%06d", sequenceValue);
     }
 
     private void validateNoOverlap(UUID stylistId, OffsetDateTime start, OffsetDateTime end, UUID excludeId) {
-
+        if (stylistId == null) return;
+        if (appointmentRepository.existsOverlappingAppointment(stylistId, start, end, excludeId)) {
+            throw new IllegalStateException("Stylist is already booked in that time slot");
+        }
     }
 }

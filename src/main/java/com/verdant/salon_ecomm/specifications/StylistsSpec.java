@@ -59,7 +59,7 @@ public class StylistsSpec {
         return (root, query, cb) -> {
             query.distinct(true);
             Join<Stylist, SalonService> join = root.join("services");
-            return join.in(services);
+            return join.get("id").in(services);
         };
     }
 

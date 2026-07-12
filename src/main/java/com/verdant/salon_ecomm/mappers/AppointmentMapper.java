@@ -36,8 +36,14 @@ public class AppointmentMapper {
     }
 
     public Appointment toEntity(
-        CreateAppointmentInput input, User user, SalonService service, Stylist stylist, Branch branch
+        CreateAppointmentInput input, User user,
+        SalonService service, Stylist stylist, Branch branch
     ) {
+        Integer guests = input.guests();
+        if ((guests != null && (guests < 1 || guests > Short.MAX_VALUE))) {
+            throw new IllegalArgumentException("Guests must be between 1 and " + Short.MAX_VALUE);
+        }
+
         return Appointment.builder()
             .user(user)
             .service(service)
@@ -48,7 +54,7 @@ public class AppointmentMapper {
             .branch(branch)
             .scheduledAt(input.scheduledAt())
             .durationMinutes(service.getDurationMinutes())
-            .guests(input.guests() != null ? input.guests().shortValue() : (short) 1)
+            .guests(guests != null ? guests.shortValue() : (short) 1)
             .notes(input.notes())
             .status(AppointmentStatus.PENDING)
             .homeAddress(toHomeAddressMap(input.homeAddress()))
