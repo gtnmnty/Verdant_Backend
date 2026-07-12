@@ -1,7 +1,9 @@
 package com.verdant.salon_ecomm.dtos.appointment;
 
+import com.verdant.salon_ecomm.dtos.AddressInput;
+import jakarta.validation.Valid;
+
 import java.time.OffsetDateTime;
-import java.util.Map;
 import java.util.UUID;
 
 public record UpdateAppointmentInput(
@@ -10,6 +12,6 @@ public record UpdateAppointmentInput(
     UUID stylistId,
     OffsetDateTime scheduledAt,
     Integer guests,
-    Map<String, Object> homeAddress,
+    @Valid AddressInput homeAddress,
     String notes
 ) {}

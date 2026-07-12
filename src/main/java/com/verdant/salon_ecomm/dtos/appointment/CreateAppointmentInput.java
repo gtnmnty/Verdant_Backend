@@ -1,12 +1,12 @@
 package com.verdant.salon_ecomm.dtos.appointment;
 
+import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentServiceType;
+import jakarta.validation.Valid;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-// homeAddress: replace `Object` with your project's actual AddressInput DTO class
-// (the same one already backing `AddressInput` elsewhere in the schema).
 public record CreateAppointmentInput(
     UUID userId,
     UUID serviceId,
@@ -15,6 +15,6 @@ public record CreateAppointmentInput(
     UUID branchId,
     OffsetDateTime scheduledAt,
     Integer guests,
-    Object homeAddress,
+    @Valid AddressInput homeAddress,
     String notes
 ) {}

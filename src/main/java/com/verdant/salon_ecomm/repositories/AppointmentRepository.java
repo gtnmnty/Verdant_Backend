@@ -28,17 +28,17 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @Query("SELECT a FROM Appointment a WHERE a.stylist.id = :stylistId AND CAST(a.scheduledAt AS date) = :date")
     List<Appointment> findByStylistIdAndDate(@Param("stylistId") UUID stylistId, @Param("date") LocalDate date);
 
-    @Query("""
-            SELECT COUNT(a) > 0 FROM Appointment a
-            WHERE a.stylist.id = :stylistId
-            AND a.status <> 'CANCELLED'
-            AND a.scheduledAt < :endTime
-            AND TIMESTAMPADD(MINUTE, a.durationMinutes, a.scheduledAt) > :startTime
-        """)
+    @Query(value = """
+    SELECT COUNT(*) > 0 FROM appointments a
+    WHERE a.stylist_id = :stylistId
+    AND a.status <> 'CANCELLED'
+    AND appointment_time_range(a.scheduled_at, a.duration_minutes) && appointment_time_range(CAST(:startTime AS timestamptz), :durationMinutes)
+    """, nativeQuery = true)
     boolean existsOverlappingAppointment(
         @Param("stylistId") UUID stylistId,
         @Param("startTime") OffsetDateTime startTime,
-        @Param("endTime") OffsetDateTime endTime
+        @Param("durationMinutes") OffsetDateTime durationMinutes,
+        @Param("excludeId") UUID excludeId
     );
 
     // --- myAppointments: RECENT (within 30 days) vs ARCHIVED (outside 30 days) ---
@@ -47,10 +47,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         UUID userId, OffsetDateTime windowStart, OffsetDateTime windowEnd, Pageable pageable);
 
     @Query("""
-            SELECT a FROM Appointment a
-            WHERE a.user.id = :userId
-            AND (a.scheduledAt < :windowStart OR a.scheduledAt > :windowEnd)
-        """)
+        SELECT a FROM Appointment a
+        WHERE a.user.id = :userId
+        AND (a.scheduledAt < :windowStart OR a.scheduledAt > :windowEnd)
+    """)
     Page<Appointment> findByUserIdOutsideWindow(
         @Param("userId") UUID userId,
         @Param("windowStart") OffsetDateTime windowStart,
