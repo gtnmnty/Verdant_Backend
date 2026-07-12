@@ -50,7 +50,7 @@ public class Appointment {
     @Column(name = "service_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private AppointmentServiceType serviceType;
-    
+
     @Column(name = "price_snapshot", nullable = false, precision = 10, scale = 2)
     private BigDecimal priceSnapshot;
 
@@ -85,7 +85,7 @@ public class Appointment {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
-    @Column(name = "appointment_code", length = 20, nullable = false, unique = true)
+    @Column(name = "appointment_code", nullable = false, updatable = false, unique = true)
     private String appointmentCode;
 
     @PrePersist

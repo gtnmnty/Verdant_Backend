@@ -17,27 +17,24 @@ import java.util.UUID;
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     JpaSpecificationExecutor<Appointment> {
 
-    List<Appointment> findByUser_Id(UUID userId);
-
-    List<Appointment> findByStylist_Id(UUID stylistId);
-
-    List<Appointment> findByStatus(AppointmentStatus status);
-
-    List<Appointment> findByUser_IdOrderByScheduledAtDesc(UUID userId);
+    @Query(value = "SELECT nextval('appointment_code_seq')", nativeQuery = true)
+    Long getNextAppointmentCodeSequenceValue();
 
     @Query("SELECT a FROM Appointment a WHERE a.stylist.id = :stylistId AND CAST(a.scheduledAt AS date) = :date")
     List<Appointment> findByStylistIdAndDate(@Param("stylistId") UUID stylistId, @Param("date") LocalDate date);
 
     @Query(value = """
-    SELECT COUNT(*) > 0 FROM appointments a
-    WHERE a.stylist_id = :stylistId
-    AND a.status <> 'CANCELLED'
-    AND appointment_time_range(a.scheduled_at, a.duration_minutes) && appointment_time_range(CAST(:startTime AS timestamptz), :durationMinutes)
-    """, nativeQuery = true)
+        SELECT COUNT(*) > 0 FROM appointments a
+        WHERE a.stylist_id = :stylistId
+        AND a.status <> 'CANCELLED'
+        AND (:excludeId IS NULL OR a.id <> :excludeId)
+        AND appointment_time_range(a.scheduled_at, a.duration_minutes)
+            && appointment_time_range(CAST(:startTime AS timestamptz), :durationMinutes)
+        """, nativeQuery = true)
     boolean existsOverlappingAppointment(
         @Param("stylistId") UUID stylistId,
         @Param("startTime") OffsetDateTime startTime,
-        @Param("durationMinutes") OffsetDateTime durationMinutes,
+        @Param("durationMinutes") Integer durationMinutes,
         @Param("excludeId") UUID excludeId
     );
 
@@ -47,10 +44,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         UUID userId, OffsetDateTime windowStart, OffsetDateTime windowEnd, Pageable pageable);
 
     @Query("""
-        SELECT a FROM Appointment a
-        WHERE a.user.id = :userId
-        AND (a.scheduledAt < :windowStart OR a.scheduledAt > :windowEnd)
-    """)
+            SELECT a FROM Appointment a
+            WHERE a.user.id = :userId
+            AND (a.scheduledAt < :windowStart OR a.scheduledAt > :windowEnd)
+        """)
     Page<Appointment> findByUserIdOutsideWindow(
         @Param("userId") UUID userId,
         @Param("windowStart") OffsetDateTime windowStart,

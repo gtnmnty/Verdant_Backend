@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.resolvers;
 import com.verdant.salon_ecomm.dtos.appointment.*;
 import com.verdant.salon_ecomm.dtos.Address;
 import com.verdant.salon_ecomm.entities.Appointment;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.services.AppointmentService;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,8 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
 import java.time.OffsetDateTime;
@@ -23,10 +26,9 @@ public class AppointmentResolver {
 
     private final AppointmentService appointmentService;
 
-    // NOTE: every method below that needs "the current user" uses a placeholder
-    // getCurrentUserId()/isAdmin() — wire these to your actual auth/security
-    // context (Spring Security principal, JWT claims, whatever you're using).
+    // ---------- Queries ----------
 
+    @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public AppointmentPage myAppointments(
         @Argument AppointmentClientFilter status,
@@ -34,17 +36,20 @@ public class AppointmentResolver {
         @Argument String search,
         @Argument AppointmentClientSort sort,
         @Argument int page,
-        @Argument int pageSize
+        @Argument int pageSize,
+        @AuthenticationPrincipal User principal
     ) {
-        UUID userId = getCurrentUserId();
-        return appointmentService.getMyAppointments(userId, status, timeframe, search, sort, page, pageSize);
+        return appointmentService.getMyAppointments(principal.getId(), status, timeframe, search, sort, page, pageSize);
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @QueryMapping
-    public Appointment appointment(@Argument UUID id) {
-        return appointmentService.getAppointmentById(id);
+    public Appointment appointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
+        boolean isAdmin = hasAdminRole(principal);
+        return appointmentService.getAppointmentById(id, principal.getId(), isAdmin);
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @QueryMapping
     public AdminAppointmentPage adminAppointments(
         @Argument AppointmentStatus status,
@@ -59,79 +64,88 @@ public class AppointmentResolver {
         return appointmentService.getAdminAppointments(status, stylistId, branch, serviceType, search, sort, page, pageSize);
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @QueryMapping
-    public AdminAppointmentDto adminAppointment(@Argument UUID id) {
-        return appointmentService.getAdminAppointmentById(id);
+    public AdminAppointmentDto adminAppointment(
+        @Argument UUID id, @Argument UUID currentUserId, @Argument boolean isAdmin
+    ) {
+        return appointmentService.getAdminAppointmentById(id,  currentUserId, isAdmin);
     }
 
+    @PreAuthorize("isAuthenticated()")
     @QueryMapping
-    public AppointmentStatusCounts appointmentStatusCounts() {
-        UUID userId = isCurrentUserAdmin() ? null : getCurrentUserId();
+    public AppointmentStatusCounts appointmentStatusCounts(@AuthenticationPrincipal User principal) {
+        UUID userId = hasAdminRole(principal) ? null : principal.getId();
         return appointmentService.getAppointmentStatusCounts(userId);
     }
 
+    // ---------- Mutations ----------
+
+    @PreAuthorize("isAuthenticated()")
     @MutationMapping
     public Appointment bookAppointment(
         @Argument("input") CreateAppointmentInput input,
-        @Argument UUID currentUserId
+        @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.bookAppointment(input, currentUserId);
+        return appointmentService.bookAppointment(input, principal.getId());
     }
 
+    @PreAuthorize("isAuthenticated()")
     @MutationMapping
     public Appointment rescheduleAppointment(
-        @Argument UUID id, @Argument OffsetDateTime newScheduledAt,
-        @Argument UUID currentUserId, @Argument boolean isAdmin
+        @Argument UUID id,
+        @Argument OffsetDateTime newScheduledAt,
+        @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.rescheduleAppointment(id, newScheduledAt, currentUserId, isAdmin);
+        return appointmentService.rescheduleAppointment(id, newScheduledAt, principal.getId(), hasAdminRole(principal));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @MutationMapping
-    public Appointment cancelAppointment(
+    public Appointment cancelAppointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
+        return appointmentService.cancelAppointment(id, principal.getId(), hasAdminRole(principal));
+    }
+
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
+    @MutationMapping
+    public Appointment completeAppointment(
         @Argument UUID id, @Argument UUID currentUserId, @Argument boolean isAdmin
     ) {
-        return appointmentService.cancelAppointment(id, currentUserId, isAdmin);
+        return appointmentService.completeAppointment(id, currentUserId, isAdmin);
     }
 
-    @MutationMapping
-    public Appointment completeAppointment(@Argument UUID id) {
-        return appointmentService.completeAppointment(id);
-    }
-
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
     public List<Appointment> cancelAppointments(@Argument List<UUID> ids) {
         return appointmentService.cancelAppointments(ids);
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public Appointment updateAppointmentRequest(@Argument UUID id, @Argument("input") UpdateAppointmentInput input) {
-        return appointmentService.updateAppointmentRequest(id, input);
+    public Appointment updateAppointmentRequest(
+        @Argument UUID id, @Argument("input")  UpdateAppointmentInput input,
+        @Argument UUID currentUserId, @Argument boolean isAdmin
+    ) {
+        return appointmentService.updateAppointmentRequest(id, input, currentUserId, isAdmin);
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
     public Appointment deleteAppointment(@Argument UUID id) {
         return appointmentService.deleteAppointment(id);
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
     public List<Appointment> deleteAppointments(@Argument List<UUID> ids) {
         return appointmentService.deleteAppointments(ids);
     }
 
-    // Appointment.branch is a Branch relation on the entity, but the schema
-    // field is `branch: String` — this flattens it for the client-facing type.
-    // (AdminAppointmentDto already does this same flattening inside the mapper.)
+    // ---------- Field resolvers ----------
+
     @SchemaMapping(typeName = "Appointment", field = "branch")
     public String branch(Appointment appointment) {
         return appointment.getBranch() != null ? appointment.getBranch().getName() : null;
-    }
-
-    private UUID getCurrentUserId() {
-        throw new UnsupportedOperationException("TODO: pull the authenticated user's ID from your security context");
-    }
-
-    private boolean isCurrentUserAdmin() {
-        throw new UnsupportedOperationException("TODO: check the authenticated user's role from your security context");
     }
 
     @SchemaMapping(typeName = "Appointment", field = "homeAddress")
@@ -146,5 +160,12 @@ public class AppointmentResolver {
             (String) map.get("postal"),
             (String) map.get("country")
         );
+    }
+
+    // ---------- Helpers ----------
+
+    private boolean hasAdminRole(User principal) {
+        return principal.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 }

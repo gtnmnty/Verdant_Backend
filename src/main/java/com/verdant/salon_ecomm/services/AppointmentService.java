@@ -1,7 +1,9 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.appointment.*;
 import com.verdant.salon_ecomm.entities.*;
+import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
@@ -66,9 +68,12 @@ public class AppointmentService {
         );
     }
 
-    public Appointment getAppointmentById(UUID id) {
-        return appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + id));
+    public Appointment getAppointmentById(UUID id, UUID currentUserId, boolean isAdmin) {
+        Appointment appointment = findAppointmentOrThrow(id);
+        if (!isAdmin && !appointment.getUser().getId().equals(currentUserId)) {
+            throw new AccessDeniedException("Not your appointment");
+        }
+        return appointment;
     }
 
     public AdminAppointmentPage getAdminAppointments(
@@ -98,15 +103,15 @@ public class AppointmentService {
         );
     }
 
-    public AdminAppointmentDto getAdminAppointmentById(UUID id) {
-        return appointmentMapper.toAdminDto(getAppointmentById(id));
+    public AdminAppointmentDto getAdminAppointmentById(UUID id,  UUID currentUserId, boolean isAdmin) {
+        return appointmentMapper.toAdminDto(getAppointmentById(id, currentUserId, isAdmin));
     }
 
     public AppointmentStatusCounts getAppointmentStatusCounts(UUID userId) {
         if (userId != null) {
             return new AppointmentStatusCounts(
-                (int) appointmentRepository.countByUser_Id(userId),
-                (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.PENDING),
+                appointmentRepository.countByUser_Id(userId),
+                appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.PENDING),
                 (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.UPCOMING),
                 (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.COMPLETED),
                 (int) appointmentRepository.countByUser_IdAndStatus(userId, AppointmentStatus.CANCELLED)
@@ -141,12 +146,10 @@ public class AppointmentService {
 
         if (stylist != null) {
             OffsetDateTime start = input.scheduledAt();
-            OffsetDateTime end = start.plusMinutes(service.getDurationMinutes());
-            validateNoOverlap(stylist.getId(), start, end, null);
-            if (appointmentRepository.existsOverlappingAppointment(stylist.getId(), start, end, null)) {
-                throw new IllegalStateException("Stylist is already booked in that time slot");
-            }
+            validateNoOverlap(stylist.getId(), start, service.getDurationMinutes(), null);
         }
+
+        validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
 
         Appointment appointment = appointmentMapper.toEntity(input, user, service, stylist, branch);
         appointment.setAppointmentCode(generateAppointmentCode());
@@ -158,17 +161,17 @@ public class AppointmentService {
     public Appointment rescheduleAppointment(
         UUID id, OffsetDateTime newScheduledAt, UUID currentUserId, boolean isAdmin
     ) {
-        Appointment appointment = getAppointmentById(id);
+        Appointment appointment = getAppointmentById(id, currentUserId, isAdmin);
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
 
         if (appointment.getStylist() != null) {
-            OffsetDateTime end = newScheduledAt.plusMinutes(appointment.getDurationMinutes());
-            validateNoOverlap(appointment.getStylist().getId(), newScheduledAt, end, appointment.getId());
-            if (appointmentRepository.existsOverlappingAppointment(
-                appointment.getStylist().getId(), newScheduledAt, end, appointment.getId())) {
-                throw new IllegalStateException("Stylist is already booked in that time slot");
-            }
+            validateNoOverlap(
+                appointment.getStylist().getId(),
+                newScheduledAt,
+                appointment.getDurationMinutes(),
+                appointment.getId()
+            );
         }
 
         appointment.setScheduledAt(newScheduledAt);
@@ -177,7 +180,7 @@ public class AppointmentService {
 
     @Transactional
     public Appointment cancelAppointment(UUID id, UUID currentUserId, boolean isAdmin) {
-        Appointment appointment = getAppointmentById(id);
+        Appointment appointment = getAppointmentById(id, currentUserId,  isAdmin);
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
         appointment.setStatus(AppointmentStatus.CANCELLED);
@@ -185,8 +188,8 @@ public class AppointmentService {
     }
 
     @Transactional
-    public Appointment completeAppointment(UUID id) {
-        Appointment appointment = getAppointmentById(id);
+    public Appointment completeAppointment(UUID id, UUID currentUserId, boolean isAdmin) {
+        Appointment appointment = getAppointmentById(id, currentUserId,  isAdmin);
         requireNotTerminal(appointment);
         appointment.setStatus(AppointmentStatus.COMPLETED);
         return appointmentRepository.save(appointment);
@@ -202,8 +205,11 @@ public class AppointmentService {
     }
 
     @Transactional
-    public Appointment updateAppointmentRequest(UUID id, UpdateAppointmentInput input) {
-        Appointment appointment = getAppointmentById(id);
+    public Appointment updateAppointmentRequest(
+        UUID id, UpdateAppointmentInput input,
+        UUID currentUserId, boolean isAdmin
+    ) {
+        Appointment appointment = getAppointmentById(id, currentUserId, isAdmin);
 
         if (input.userId() != null) {
             User user = userRepository.findById(input.userId())
@@ -233,11 +239,39 @@ public class AppointmentService {
             appointment.setNotes(input.notes());
         }
 
-        // homeAddress: wire up once the real AddressInput -> Map<String,Object> conversion exists
+        // ---- resolve final service-location state (patch fields override existing) ----
+        AppointmentServiceType finalServiceType = input.serviceType() != null
+            ? input.serviceType()
+            : appointment.getServiceType();
+
+        UUID finalBranchId = input.branchId() != null
+            ? input.branchId()
+            : (appointment.getBranch() != null ? appointment.getBranch().getId() : null);
+
+        boolean hasHomeAddress = input.homeAddress() != null || appointment.getHomeAddress() != null;
+
+        validateServiceLocation(finalServiceType, finalBranchId, hasHomeAddress);
+
+        if (input.serviceType() != null) {
+            appointment.setServiceType(finalServiceType);
+        }
+        if (input.branchId() != null) {
+            Branch branch = branchRepository.findById(input.branchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.branchId()));
+            appointment.setBranch(branch);
+        }
+
+        if (input.homeAddress() != null) {
+            appointment.setHomeAddress(appointmentMapper.toHomeAddressMap(input.homeAddress()));
+        }
 
         if (appointment.getStylist() != null) {
-            OffsetDateTime end = appointment.getScheduledAt().plusMinutes(appointment.getDurationMinutes());
-            validateNoOverlap(appointment.getStylist().getId(), appointment.getScheduledAt(), end, appointment.getId());
+            validateNoOverlap(
+                appointment.getStylist().getId(),
+                appointment.getScheduledAt(),
+                appointment.getDurationMinutes(),
+                appointment.getId()
+            );
         }
 
         return saveAppointmentSafely(appointment);
@@ -259,9 +293,14 @@ public class AppointmentService {
         return appointments;
     }
 
+    private Appointment findAppointmentOrThrow(UUID id) {
+        return appointmentRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + id));
+    }
+
     private void requireOwnerOrAdmin(Appointment appointment, UUID currentUserId, boolean isAdmin) {
         if (isAdmin) return;
-        if (currentUserId == null || appointment.getUser() == null
+        if (appointment.getUser() == null
             || !appointment.getUser().getId().equals(currentUserId)) {
             throw new AccessDeniedException("You do not have permission to modify this appointment");
         }
@@ -307,11 +346,31 @@ public class AppointmentService {
     }
 
     private String generateAppointmentCode() {
-        // Placeholder — replace with your real generation/uniqueness strategy.
-        return "AP-" + String.format("%04d", (int) (Math.random() * 10000));
+        Long sequenceValue = appointmentRepository.getNextAppointmentCodeSequenceValue();
+        return "AP-" + String.format("%06d", sequenceValue);
     }
 
-    private void validateNoOverlap(UUID stylistId, OffsetDateTime start, OffsetDateTime end, UUID excludeId) {
+    private void validateNoOverlap(UUID stylistId, OffsetDateTime start, Integer end, UUID excludeId) {
+        if (stylistId == null) return;
+        if (appointmentRepository.existsOverlappingAppointment(stylistId, start, end, excludeId)) {
+            throw new IllegalStateException("Stylist is already booked in that time slot");
+        }
+    }
 
+    private void validateServiceLocation(
+        AppointmentServiceType serviceType, UUID branchId, AddressInput homeAddress
+    ) {
+        validateServiceLocation(serviceType, branchId, homeAddress != null);
+    }
+
+    private void validateServiceLocation(
+        AppointmentServiceType serviceType, UUID branchId, boolean hasHomeAddress
+    ) {
+        if (serviceType == AppointmentServiceType.IN_SALON && branchId == null) {
+            throw new InvalidAppointmentException("branchId is required for in-salon appointments");
+        }
+        if (serviceType == AppointmentServiceType.HOME_SERVICE && !hasHomeAddress) {
+            throw new InvalidAppointmentException("homeAddress is required for home service appointments");
+        }
     }
 }

@@ -245,4 +245,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
+    @GraphQlExceptionHandler(InvalidAppointmentException.class)
+    public GraphQLError handleInvalidAppointment(InvalidAppointmentException ex) {
+        return GraphQLError.newError()
+            .errorType(ErrorType.BAD_REQUEST)
+            .message(ex.getMessage())
+            .build();
+    }
+
 }
