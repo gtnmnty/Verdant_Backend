@@ -104,11 +104,11 @@ public class AuthenticationService {
             throw new IllegalStateException("Account is already verified.");
         }
 
-        if (!Objects.equals(input.getVerificationCode(), user.getVerificationCode())) {
+        if (user.getVerificationCode() == null || user.getVerificationCode().isBlank()) {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 
-        if (user.getVerificationCode() == null || user.getVerificationCode().isBlank()) {
+        if (!Objects.equals(input.getVerificationCode(), user.getVerificationCode())) {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 

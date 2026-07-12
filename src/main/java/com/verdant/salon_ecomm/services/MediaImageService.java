@@ -115,6 +115,7 @@ public class MediaImageService {
         return toImageDTO(mediaImageRepository.save(image));
     }
 
+    @Transactional(readOnly = true)
     public Map<UUID, MediaImageDto> getPrimaryImagesByEntityIds(ItemType entityType, List<UUID> entityIds) {
         List<MediaImage> primaryImages = mediaImageRepository
             .findByEntityTypeAndEntityIdInAndIsPrimaryTrue(entityType, entityIds);

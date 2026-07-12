@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.BatchMapping;
 import org.springframework.stereotype.Controller;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,7 +27,11 @@ public class ProductMediaResolver {
         Map<UUID, MediaImageDto> byProductId =
             mediaImageService.getPrimaryImagesByEntityIds(ItemType.PRODUCT, productIds);
 
-        return products.stream()
-            .collect(Collectors.toMap(p -> p, p -> byProductId.get(p.getId())));
+        Map<Product, MediaImageDto> result = new HashMap<>();
+        for(Product product : products) {
+            result.put(product, byProductId.get(product.getId()));
+        }
+
+        return result;
     }
 }

@@ -22,7 +22,7 @@ public class ProductFavoriteResolver {
     private final FavoriteRepository favoriteRepository;
 
     @BatchMapping(typeName = "Product")
-    public Map<Product, Boolean> isFavorite(List<Product> products, GraphQLContext context) {
+    public Map<Product, Boolean> isFavorited(List<Product> products, GraphQLContext context) {
         UUID userId = context.get("userId");
 
         if (userId == null) {

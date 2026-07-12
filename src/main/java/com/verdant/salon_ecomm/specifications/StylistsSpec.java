@@ -51,7 +51,7 @@ public class StylistsSpec {
             );
     }
 
-    public static Specification<Stylist> hasServiceOf(List<SalonService> services) {
+    public static Specification<Stylist> hasServiceOf(List<UUID> services) {
         if (services == null || services.isEmpty()) {
             return null;
         }

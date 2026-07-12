@@ -7,7 +7,8 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.math.BigDecimal;import java.time.OffsetDateTime;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 
@@ -49,6 +50,9 @@ public class Appointment {
     @Column(name = "service_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private AppointmentServiceType serviceType;
+    
+    @Column(name = "price_snapshot", nullable = false, precision = 10, scale = 2)
+    private BigDecimal priceSnapshot;
 
     @Column(name = "scheduled_at", nullable = false)
     private OffsetDateTime scheduledAt;
@@ -80,9 +84,6 @@ public class Appointment {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
-
-    @Column(name = "price_snapshot", nullable = false)
-    private BigDecimal priceSnapshot;
 
     @Column(name = "appointment_code", length = 20, nullable = false, unique = true)
     private String appointmentCode;

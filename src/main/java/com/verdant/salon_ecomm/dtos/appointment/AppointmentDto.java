@@ -9,7 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 
-public record AdminAppointmentDto(
+public record AppointmentDto(
     UUID id,
     String appointmentCode,
     User user,
@@ -24,7 +24,5 @@ public record AdminAppointmentDto(
     AppointmentStatus status,
     Short guests,
     Map<String, Object> homeAddress,
-    String notes,
-    OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    String notes
 ) {}
