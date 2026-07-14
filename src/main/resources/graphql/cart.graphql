@@ -1,0 +1,54 @@
+extend type Query {
+    myCart: Cart!
+    selectedCart(input: SelectedCartItemsInput!): Cart!
+}
+
+extend type Mutation {
+    addToCart(input: AddToCartInput!): Cart!
+    updateCartItemQuantity(input: UpdateQuantityInput!): CartItem!
+    updateCartItemDeliveryOption(input: UpdateDeliveryOptionInput!): CartItem!
+    removeCartItems(input: RemoveCartItemsInput!): [ID!]!
+}
+
+type Cart {
+    items: [CartItem!]!
+    totalItems: Int!
+    subtotal: BigDecimal!
+}
+
+type CartItem {
+    id: ID!
+    product: Product!
+    quantity: Int!
+    deliveryOption: String!
+}
+
+input AddToCartInput {
+    productId: ID!
+    quantity: Int = 1
+    deliveryOption: DeliveryOption!
+}
+
+input UpdateQuantityInput {
+    cartItemId: ID!
+    quantity: Int!
+}
+
+input UpdateDeliveryOptionInput {
+    cartItemId: ID!
+    deliveryOption: DeliveryOption!
+}
+
+input RemoveCartItemsInput {
+    cartItemIds: [ID!]!
+}
+
+input SelectedCartItemsInput {
+    cartItemIds: [ID!]!
+}
+
+enum DeliveryOption {
+    STANDARD
+    EXPRESS
+    SAME_DAY
+}

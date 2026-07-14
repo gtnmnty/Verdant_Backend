@@ -1,5 +1,11 @@
 extend type Query {
-    reviews(targetType: ItemType!, targetId: ID!, starsFilter: Int, page: Int = 0): ReviewConnection!
+    reviews(
+        targetType: ItemType!,
+        targetId: ID!,
+        starsFilter: Int,
+        page: Int = 0,
+        pageSize: Int = 3
+    ): ReviewConnection!
 }
 
 extend type Mutation {
