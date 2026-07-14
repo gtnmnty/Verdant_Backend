@@ -1,9 +1,10 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.appointment.*;
-import com.verdant.salon_ecomm.dtos.Address;
+import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Appointment;
 import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.mappers.AppointmentMapper;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.services.AppointmentService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Controller;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Controller
@@ -25,6 +25,7 @@ import java.util.UUID;
 public class AppointmentResolver {
 
     private final AppointmentService appointmentService;
+    private final AppointmentMapper appointmentMapper;
 
     // ---------- Queries ----------
 
@@ -42,7 +43,7 @@ public class AppointmentResolver {
         return appointmentService.getMyAppointments(principal.getId(), status, timeframe, search, sort, page, pageSize);
     }
 
-    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
+    @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public Appointment appointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
         boolean isAdmin = hasAdminRole(principal);
@@ -67,9 +68,11 @@ public class AppointmentResolver {
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @QueryMapping
     public AdminAppointmentDto adminAppointment(
-        @Argument UUID id, @Argument UUID currentUserId, @Argument boolean isAdmin
+        @Argument UUID id, @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.getAdminAppointmentById(id,  currentUserId, isAdmin);
+        return appointmentService.getAdminAppointmentById(
+            id, principal.getId(), hasAdminRole(principal)
+        );
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -109,9 +112,11 @@ public class AppointmentResolver {
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
     public Appointment completeAppointment(
-        @Argument UUID id, @Argument UUID currentUserId, @Argument boolean isAdmin
+        @Argument UUID id, @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.completeAppointment(id, currentUserId, isAdmin);
+        return appointmentService.completeAppointment(
+            id, principal.getId(), hasAdminRole(principal)
+        );
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -124,9 +129,11 @@ public class AppointmentResolver {
     @MutationMapping
     public Appointment updateAppointmentRequest(
         @Argument UUID id, @Argument("input")  UpdateAppointmentInput input,
-        @Argument UUID currentUserId, @Argument boolean isAdmin
+        @AuthenticationPrincipal User principal, @Argument boolean isAdmin
     ) {
-        return appointmentService.updateAppointmentRequest(id, input, currentUserId, isAdmin);
+        return appointmentService.updateAppointmentRequest(
+            id, input, principal.getId(), isAdmin
+        );
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -149,20 +156,9 @@ public class AppointmentResolver {
     }
 
     @SchemaMapping(typeName = "Appointment", field = "homeAddress")
-    public Address homeAddress(Appointment appointment) {
-        Map<String, Object> map = appointment.getHomeAddress();
-        if (map == null) return null;
-        return new Address(
-            (String) map.get("line1"),
-            (String) map.get("line2"),
-            (String) map.get("city"),
-            (String) map.get("state"),
-            (String) map.get("postal"),
-            (String) map.get("country")
-        );
+    public Address homeAddressMap(Appointment appointment) {
+        return appointmentMapper.fromHomeAddressMap(appointment.getHomeAddress());
     }
-
-    // ---------- Helpers ----------
 
     private boolean hasAdminRole(User principal) {
         return principal.getAuthorities().stream()

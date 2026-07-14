@@ -29,16 +29,3 @@ input UpdateProfileInput {
     email: String
     shippingAddress: AddressInput
 }
-
-type Cart {
-    items: [CartItem!]!
-    totalItems: Int!
-    subtotal: BigDecimal!
-}
-
-type CartItem {
-    id: ID!
-    product: Product!
-    quantity: Int!
-    deliveryOption: String!
-}

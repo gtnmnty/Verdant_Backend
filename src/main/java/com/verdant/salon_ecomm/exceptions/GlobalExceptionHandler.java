@@ -16,18 +16,36 @@ import org.springframework.graphql.execution.ErrorType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    // =========================================================================
+    // GraphQL exception handlers (@GraphQlExceptionHandler)
+    // Ordered most-specific first; catchAllException is the fallback.
+    // =========================================================================
+
     @GraphQlExceptionHandler
     public GraphQLError handleIllegalArgument(IllegalArgumentException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())   // whatever the actual exception says
+            .message(ex.getMessage())
             .errorType(ErrorType.BAD_REQUEST)
+            .build();
+    }
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleConstraintViolation(ConstraintViolationException ex, DataFetchingEnvironment env) {
+        String message = ex.getConstraintViolations().stream()
+            .map(v -> v.getMessage())
+            .collect(Collectors.joining("; "));
+
+        return GraphqlErrorBuilder.newError(env)
+            .message(message)
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "VALIDATION_ERROR", "status", 400))
             .build();
     }
 
@@ -39,6 +57,84 @@ public class GlobalExceptionHandler {
             .extensions(Map.of("code", "NOT_FOUND", "status", 404))
             .build();
     }
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleAccessDenied(AccessDeniedException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message("You do not have permission to perform this action.")
+            .errorType(ErrorType.FORBIDDEN)
+            .extensions(Map.of("code", "FORBIDDEN", "status", 403))
+            .build();
+    }
+
+    // Wrong role accessing endpoint
+    @GraphQlExceptionHandler
+    public GraphQLError handleAccessPoint(ForbiddenException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "FORBIDDEN", "status", 403))
+            .build();
+    }
+
+    // Payment Failure
+    @GraphQlExceptionHandler
+    public GraphQLError handlePaymentFailure(PaymentException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "PAYMENT_FAILED", "status", 402))
+            .build();
+    }
+
+    // Appointment Slot already booked
+    @GraphQlExceptionHandler
+    public GraphQLError handleAppointmentConflict(AppointmentConflictException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "APPOINTMENT_CONFLICT", "status", 409))
+            .build();
+    }
+
+    @GraphQlExceptionHandler(InvalidAppointmentException.class)
+    public GraphQLError handleInvalidAppointment(InvalidAppointmentException ex) {
+        return GraphQLError.newError()
+            .errorType(ErrorType.BAD_REQUEST)
+            .message(ex.getMessage())
+            .build();
+    }
+
+    // Cart item not found (e.g. removeCartItems / getSelectedCart referencing an id
+    // that isn't in the user's cart)
+    @GraphQlExceptionHandler(CartItemNotFoundException.class)
+    public GraphQLError handleCartItemNotFound(CartItemNotFoundException ex) {
+        return GraphQLError.newError()
+            .errorType(ErrorType.BAD_REQUEST)
+            .message(ex.getMessage())
+            .build();
+    }
+
+    // Invalid cart item quantity (e.g. addToCart / updateCartItemQuantity with qty < 1)
+    @GraphQlExceptionHandler(InvalidQuantityException.class)
+    public GraphQLError handleInvalidQuantity(InvalidQuantityException ex) {
+        return GraphQLError.newError()
+            .errorType(ErrorType.BAD_REQUEST)
+            .message(ex.getMessage())
+            .build();
+    }
+
+    // Catch-all fallback: keep this last among the GraphQL handlers
+    @GraphQlExceptionHandler
+    public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message("Something went wrong on our server.")
+            .errorType(ErrorType.INTERNAL_ERROR)
+            .extensions(Map.of("code", "INTERNAL_ERROR", "status", 500))
+            .build();
+    }
+
+    // =========================================================================
+    // REST exception handlers (@ExceptionHandler)
+    // Ordered most-specific first; handleGeneric is the fallback.
+    // =========================================================================
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
@@ -112,33 +208,6 @@ public class GlobalExceptionHandler {
             ));
     }
 
-    // Wrong role accessing endpoint
-    @GraphQlExceptionHandler
-    public GraphQLError handleAccessPoint(ForbiddenException ex, DataFetchingEnvironment env) {
-        return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
-            .extensions(Map.of("code", "FORBIDDEN", "status", 403))
-            .build();
-    }
-
-    // Payment Failure
-    @GraphQlExceptionHandler
-    public GraphQLError handlePaymentFailure(PaymentException ex, DataFetchingEnvironment env) {
-        return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
-            .extensions(Map.of("code", "PAYMENT_FAILED", "status", 402))
-            .build();
-    }
-
-    // Appointment Slot already booked
-    @GraphQlExceptionHandler
-    public GraphQLError handleAppointmentConflict(AppointmentConflictException ex, DataFetchingEnvironment env) {
-        return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
-            .extensions(Map.of("code", "APPOINTMENT_CONFLICT", "status", 409))
-            .build();
-    }
-
     // Verification Code Expired
     @ExceptionHandler(VerificationCodeExpiredException.class)
     public ResponseEntity<ErrorResponse> handleVerificationCodeExpired(VerificationCodeExpiredException ex, HttpServletRequest request) {
@@ -150,18 +219,7 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()));
     }
 
-    // Email Delivery Failure
-    @ExceptionHandler(EmailDeliveryException.class)
-    public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException ex, HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .body(new ErrorResponse(OffsetDateTime.now(),
-                503,
-                "Service Unavailable",
-                ex.getMessage(),
-                request.getRequestURI()));
-    }
-
-    // Invalid Code Expired
+    // Invalid Verification Code
     @ExceptionHandler(InvalidVerificationCodeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidVerificationCode(InvalidVerificationCodeException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -175,56 +233,24 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", ex.getMessage(), request.getRequestURI()));
     }
 
-    // Catch for all
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+    // Email Delivery Failure
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
             .body(new ErrorResponse(OffsetDateTime.now(),
-                500,
-                "Internal Server Error",
-                "Something went wrong on our server.",
-                request.getRequestURI()
-            ));
-    }
-
-    @GraphQlExceptionHandler
-    public GraphQLError handleConstraintViolation(ConstraintViolationException ex, DataFetchingEnvironment env) {
-        String message = ex.getConstraintViolations().stream()
-            .map(v -> v.getMessage())
-            .collect(java.util.stream.Collectors.joining("; "));
-
-        return GraphqlErrorBuilder.newError(env)
-            .message(message)
-            .errorType(ErrorType.BAD_REQUEST)
-            .extensions(Map.of("code", "VALIDATION_ERROR", "status", 400))
-            .build();
+                503,
+                "Service Unavailable",
+                ex.getMessage(),
+                request.getRequestURI()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationRest(ConstraintViolationException ex, HttpServletRequest request) {
         String message = ex.getConstraintViolations().stream()
             .map(v -> v.getMessage())
-            .collect(java.util.stream.Collectors.joining("; "));
+            .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
             .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", message, request.getRequestURI()));
-    }
-
-    @GraphQlExceptionHandler
-    public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
-        return GraphqlErrorBuilder.newError(env)
-            .message("Something went wrong on our server.")
-            .errorType(ErrorType.INTERNAL_ERROR)
-            .extensions(Map.of("code", "INTERNAL_ERROR", "status", 500))
-            .build();
-    }
-
-    @GraphQlExceptionHandler
-    public GraphQLError handleAccessDenied(AccessDeniedException ex, DataFetchingEnvironment env) {
-        return GraphqlErrorBuilder.newError(env)
-            .message("You do not have permission to perform this action.")
-            .errorType(ErrorType.FORBIDDEN)
-            .extensions(Map.of("code", "FORBIDDEN", "status", 403))
-            .build();
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -245,12 +271,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
-    @GraphQlExceptionHandler(InvalidAppointmentException.class)
-    public GraphQLError handleInvalidAppointment(InvalidAppointmentException ex) {
-        return GraphQLError.newError()
-            .errorType(ErrorType.BAD_REQUEST)
-            .message(ex.getMessage())
-            .build();
+    // Catch-all fallback: keep this last among the REST handlers
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                500,
+                "Internal Server Error",
+                "Something went wrong on our server.",
+                request.getRequestURI()
+            ));
     }
-
 }

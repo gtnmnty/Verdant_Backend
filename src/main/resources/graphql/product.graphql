@@ -41,7 +41,6 @@ type Product implements CatalogItem {
 
 extend type Mutation {
     toggleFavorite(targetId: ID!, targetType: ItemType!): CatalogItem!
-    addToCart(productId: ID!, quantity: Int = 1, deliveryOption: String = "standard"): Cart!
 }
 
 enum CollectionSort {

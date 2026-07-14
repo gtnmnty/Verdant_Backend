@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.services;
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.appointment.*;
 import com.verdant.salon_ecomm.entities.*;
+import com.verdant.salon_ecomm.exceptions.AppointmentConflictException;
 import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
@@ -141,6 +142,8 @@ public class AppointmentService {
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found: " + input.stylistId()))
             : null;
 
+        validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
+
         Branch branch = branchRepository.findById(input.branchId())
             .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.branchId()));
 
@@ -148,8 +151,6 @@ public class AppointmentService {
             OffsetDateTime start = input.scheduledAt();
             validateNoOverlap(stylist.getId(), start, service.getDurationMinutes(), null);
         }
-
-        validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
 
         Appointment appointment = appointmentMapper.toEntity(input, user, service, stylist, branch);
         appointment.setAppointmentCode(generateAppointmentCode());
@@ -353,7 +354,7 @@ public class AppointmentService {
     private void validateNoOverlap(UUID stylistId, OffsetDateTime start, Integer end, UUID excludeId) {
         if (stylistId == null) return;
         if (appointmentRepository.existsOverlappingAppointment(stylistId, start, end, excludeId)) {
-            throw new IllegalStateException("Stylist is already booked in that time slot");
+            throw new AppointmentConflictException("Stylist is already booked in that time slot");
         }
     }
 
