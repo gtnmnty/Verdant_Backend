@@ -94,8 +94,22 @@ public class CartService {
         CartItem cartItem = cartItemRepository.findByIdAndUser_Id(input.getCartItemId(), userId)
             .orElseThrow(() -> new CartItemNotFoundException("Cart item not found: " + input.getCartItemId()));
 
-        cartItem.setDeliveryOption(input.getDeliveryOption());
-        CartItem saved = cartItemRepository.save(cartItem);
+        if (cartItem.getDeliveryOption() == input.getDeliveryOption()) {
+            return cartMapper.toDto(cartItem);
+        }
+
+        CartItem saved = cartItemRepository
+            .findByUser_IdAndProduct_IdAndDeliveryOption(userId, cartItem.getProduct().getId(), input.getDeliveryOption())
+            .map(existingTarget -> {
+                existingTarget.setQuantity(existingTarget.getQuantity() + cartItem.getQuantity());
+                cartItemRepository.delete(cartItem);
+                return cartItemRepository.save(existingTarget);
+            })
+            .orElseGet(() -> {
+                cartItem.setDeliveryOption(input.getDeliveryOption());
+                return cartItemRepository.save(cartItem);
+            });
+
         return cartMapper.toDto(saved);
     }
 

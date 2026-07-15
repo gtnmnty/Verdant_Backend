@@ -105,19 +105,21 @@ public class GlobalExceptionHandler {
     // Cart item not found (e.g. removeCartItems / getSelectedCart referencing an id
     // that isn't in the user's cart)
     @GraphQlExceptionHandler(CartItemNotFoundException.class)
-    public GraphQLError handleCartItemNotFound(CartItemNotFoundException ex) {
-        return GraphQLError.newError()
+    public GraphQLError handleCartItemNotFound(CartItemNotFoundException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
             .errorType(ErrorType.BAD_REQUEST)
             .message(ex.getMessage())
+            .extensions(Map.of("code", "CART_ITEM_NOT_FOUND", "status", 400))
             .build();
     }
 
     // Invalid cart item quantity (e.g. addToCart / updateCartItemQuantity with qty < 1)
     @GraphQlExceptionHandler(InvalidQuantityException.class)
-    public GraphQLError handleInvalidQuantity(InvalidQuantityException ex) {
-        return GraphQLError.newError()
+    public GraphQLError handleInvalidQuantity(InvalidQuantityException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
             .errorType(ErrorType.BAD_REQUEST)
             .message(ex.getMessage())
+            .extensions(Map.of("code", "INVALID_QUANTITY", "status", 400))
             .build();
     }
 

@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Appointment;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
+import com.verdant.salon_ecomm.models.enums.AccountRole;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.services.AppointmentService;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +47,7 @@ public class AppointmentResolver {
     @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public Appointment appointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        boolean isAdmin = hasAdminRole(principal);
+        boolean isAdmin = hasElevatedRole(principal);
         return appointmentService.getAppointmentById(id, principal.getId(), isAdmin);
     }
 
@@ -71,7 +72,7 @@ public class AppointmentResolver {
         @Argument UUID id, @AuthenticationPrincipal User principal
     ) {
         return appointmentService.getAdminAppointmentById(
-            id, principal.getId(), hasAdminRole(principal)
+            id, principal.getId(), hasElevatedRole(principal)
         );
     }
 
@@ -115,7 +116,7 @@ public class AppointmentResolver {
         @Argument UUID id, @AuthenticationPrincipal User principal
     ) {
         return appointmentService.completeAppointment(
-            id, principal.getId(), hasAdminRole(principal)
+            id, principal.getId(), hasElevatedRole(principal)
         );
     }
 
@@ -132,7 +133,7 @@ public class AppointmentResolver {
         @AuthenticationPrincipal User principal, @Argument boolean isAdmin
     ) {
         return appointmentService.updateAppointmentRequest(
-            id, input, principal.getId(), isAdmin
+            id, input, principal.getId(), hasElevatedRole(principal)
         );
     }
 
@@ -163,5 +164,13 @@ public class AppointmentResolver {
     private boolean hasAdminRole(User principal) {
         return principal.getAuthorities().stream()
             .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+    private boolean hasElevatedRole(User principal) {
+        AccountRole role = principal.getRole();
+        return role == AccountRole.RECEPTIONIST
+            || role == AccountRole.MANAGER
+            || role == AccountRole.OWNER
+            || role == AccountRole.ADMIN;
     }
 }

@@ -2,14 +2,51 @@ extend type Query {
     reviews(
         targetType: ItemType!,
         targetId: ID!,
-        starsFilter: Int,
+        filter: ReviewsClientFilter,
+        sort: ReviewClientSort = MOST_RECENT,
         page: Int = 0,
         pageSize: Int = 3
     ): ReviewConnection!
+
+    adminReviews(
+        itemType: ItemType
+        filter: ReviewsClientFilter
+        search: String
+        sort: AdminReviewSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminReviewPage!
+
+    adminReview(id: ID!): AdminReviewDto
 }
 
 extend type Mutation {
     upsertReview(targetType: ItemType!, targetId: ID!, stars: Int!, text: String): Review!
+    setReviewFeatured(id: ID!, featured: Boolean!): Review!
+}
+
+enum ReviewClientSort {
+    MOST_RECENT
+    OLDEST
+    HIGHEST_RATED
+    LOWEST_RATED
+}
+
+enum ReviewsClientFilter {
+    FIVE_STARS
+    FOUR_STARS
+    THREE_STARS
+    TWO_STARS
+    ONE_STARS
+}
+
+enum AdminReviewSort {
+    NEWEST
+    OLDEST
+    CUSTOMER_NAME_ASC
+    CUSTOMER_NAME_DESC
+    RATING_HIGH_TO_LOW
+    RATING_LOW_TO_HIGH
 }
 
 type ReviewUser {
@@ -30,4 +67,25 @@ type ReviewConnection {
     totalCount: Int!
     totalPages: Int!
     currentPage: Int!
+}
+
+type AdminReviewDto {
+    id: ID!
+    user: ReviewUser!
+    itemType: ItemType!
+    itemName: String!
+    serviceType: AppointmentServiceType
+    serviceName: String
+    stars: Int!
+    text: String
+    featured: Boolean!
+    createdAt: DateTime!
+}
+
+type AdminReviewPage {
+    items: [AdminReviewDto!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
 }

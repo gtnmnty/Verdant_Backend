@@ -2,6 +2,8 @@ package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.entities.CartItem;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -19,6 +21,10 @@ public interface CartItemRepository extends JpaRepository<CartItem, UUID>, JpaSp
 
     // Used to merge quantities when the same product + delivery option is added again
     Optional<CartItem> findByUser_IdAndProduct_IdAndDeliveryOption(UUID userId, UUID productId, DeliveryOption deliveryOption);
+
+    @Override
+    @EntityGraph(attributePaths = "product")
+    List<CartItem> findAll(Specification<CartItem> spec);
 
     long countByUser_Id(UUID userId);
 
