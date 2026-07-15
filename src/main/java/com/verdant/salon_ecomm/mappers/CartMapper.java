@@ -17,7 +17,7 @@ public class CartMapper {
             .id(entity.getId())
             .product(entity.getProduct())
             .quantity(entity.getQuantity())
-            .deliveryOption(entity.getDeliveryOption().name())
+            .deliveryOption(entity.getDeliveryOption())
             .build();
     }
 

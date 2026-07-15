@@ -144,8 +144,11 @@ public class AppointmentService {
 
         validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
 
-        Branch branch = branchRepository.findById(input.branchId())
-            .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.branchId()));
+        Branch branch = null;
+        if (!(input.serviceType() == AppointmentServiceType.HOME_SERVICE && input.branchId() == null)) {
+            branch = branchRepository.findById(input.branchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.branchId()));
+        }
 
         if (stylist != null) {
             OffsetDateTime start = input.scheduledAt();
@@ -318,7 +321,7 @@ public class AppointmentService {
         try {
             return appointmentRepository.save(appointment);
         } catch (DataIntegrityViolationException e) {
-            throw new IllegalStateException("Stylist is already booked in that time slot");
+            throw new AppointmentConflictException("Stylist is already booked in that time slot");
         }
     }
 

@@ -5,9 +5,9 @@ extend type Query {
 
 extend type Mutation {
     addToCart(input: AddToCartInput!): Cart!
-    updateCartItemQuantity(input: UpdateQuantityInput!): CartItem!
-    updateCartItemDeliveryOption(input: UpdateDeliveryOptionInput!): CartItem!
-    removeCartItems(input: RemoveCartItemsInput!): [ID!]!
+    updateCartItemQuantity(input: UpdateQuantityInput!): Cart!
+    updateCartItemDeliveryOption(input: UpdateDeliveryOptionInput!): Cart!
+    removeCartItems(input: RemoveCartItemsInput!): Cart!
 }
 
 type Cart {
@@ -18,9 +18,19 @@ type Cart {
 
 type CartItem {
     id: ID!
-    product: Product!
+    product: CartItemSummaryDto!
     quantity: Int!
-    deliveryOption: String!
+    deliveryOption: DeliveryOption!
+}
+
+type CartItemSummaryDto{
+    id: ID!,
+    name: String,
+    itemCatalog: ItemCatalog
+    price: BigDecimal!
+    salePrice: BigDecimal
+    image: String
+    isFavorite: Boolean!
 }
 
 input AddToCartInput {
@@ -45,6 +55,12 @@ input RemoveCartItemsInput {
 
 input SelectedCartItemsInput {
     cartItemIds: [ID!]!
+}
+
+enum ItemCatalog {
+    SKIN_CARE,
+    HAIR_CARE,
+    MAKE_UP
 }
 
 enum DeliveryOption {
