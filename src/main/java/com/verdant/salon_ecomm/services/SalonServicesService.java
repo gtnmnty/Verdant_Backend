@@ -23,8 +23,10 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,8 +40,8 @@ public class SalonServicesService {
     private final CloudinaryService cloudinaryService;
 
     public ServicePage getSalonServices(
-       String category, String search, ServiceSort sort,
-       int page, int pageSize
+        String category, String search, ServiceSort sort,
+        int page, int pageSize
     ){
         int normalizePage = Math.max(page - 1, 0) + 1;
         int normalizePageSize = Math.max(pageSize, 1);
@@ -86,8 +88,22 @@ public class SalonServicesService {
             pageable
         );
 
+        // Batch-fetch all images for this page's services in a single query,
+        // instead of querying mediaImageRepository once per service (N+1 fix).
+        List<UUID> serviceIds = result.getContent().stream()
+            .map(SalonService::getId)
+            .toList();
+
+        Map<UUID, List<MediaImage>> imagesByServiceId = mediaImageRepository
+            .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.SALON_SERVICE, serviceIds)
+            .stream()
+            .collect(Collectors.groupingBy(MediaImage::getEntityId));
+
         List<AdminServiceDto> services = result.getContent().stream()
-            .map(this::toAdminDto)
+            .map(service -> toAdminDto(
+                service,
+                imagesByServiceId.getOrDefault(service.getId(), List.of())
+            ))
             .toList();
 
         return new AdminServicePage(
@@ -110,6 +126,10 @@ public class SalonServicesService {
                 ItemType.SALON_SERVICE, service.getId()
             );
 
+        return toAdminDto(service, images);
+    }
+
+    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images){
         return new AdminServiceDto(
             service.getId().toString(),
             service.getName(),

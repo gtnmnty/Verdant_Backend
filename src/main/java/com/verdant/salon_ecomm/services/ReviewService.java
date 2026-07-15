@@ -1,12 +1,9 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.reviews.*;
-import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.entities.Review;
-import com.verdant.salon_ecomm.entities.SalonService;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.mappers.ReviewMapper;
 import com.verdant.salon_ecomm.models.enums.ItemType;
-import com.verdant.salon_ecomm.models.enums.appointments.AppointmentServiceType;
 import com.verdant.salon_ecomm.models.enums.reviews.AdminReviewSort;
 import com.verdant.salon_ecomm.models.enums.reviews.ReviewClientSort;
 import com.verdant.salon_ecomm.models.enums.reviews.ReviewsClientFilter;
@@ -39,6 +36,7 @@ public class ReviewService {
   private final UserRepository userRepository;
   private final ProductRepository productRepository;
   private final SalonServiceRepository salonServiceRepository;
+  private final ReviewMapper reviewMapper;
 
   // ---------- Customer-facing ----------
 
@@ -51,12 +49,14 @@ public class ReviewService {
         ReviewSpec.starsEquals(toStars(filter))
     );
 
-    int normalizedPageSize = Math.max(pageSize, 1);
+    int normalizedPage = Math.max(page, 1);
+    int normalizedPageSize = Math.clamp(normalizedPage, 1, 100);
+
     Pageable pageable = PageRequest.of(page, normalizedPageSize, toClientSort(sort));
     Page<Review> result = reviewRepository.findAll(spec, pageable);
 
     return new ReviewConnection(
-        result.map(this::toDto).getContent(),
+        result.map(reviewMapper::toDto).getContent(),
         (int) result.getTotalElements(),
         result.getTotalPages(),
         page
@@ -87,7 +87,7 @@ public class ReviewService {
 
     updateAggregatesFor(targetType, targetId);
 
-    return toDto(saved);
+    return reviewMapper.toDto(saved);
   }
 
   // ---------- Admin-facing ----------
@@ -97,7 +97,7 @@ public class ReviewService {
       AdminReviewSort sort, int page, int pageSize
   ) {
     int normalizedPage = Math.max(page, 1);
-    int normalizedPageSize = Math.max(pageSize, 1);
+    int normalizedPageSize = Math.clamp(normalizedPage, 1, 100);
 
     Specification<Review> spec = Specification.allOf(
         ReviewSpec.hasItemType(itemType),
@@ -109,7 +109,7 @@ public class ReviewService {
     Page<Review> result = reviewRepository.findAll(spec, pageable);
 
     List<AdminReviewDto> items = result.getContent().stream()
-        .map(this::toAdminDto)
+        .map(reviewMapper::toAdminDto)
         .toList();
 
     return new AdminReviewPage(
@@ -124,7 +124,7 @@ public class ReviewService {
   public AdminReviewDto getAdminReviewById(UUID id) {
     Review review = reviewRepository.findById(id)
         .orElseThrow(() -> new EntityNotFoundException("Review not found: " + id));
-    return toAdminDto(review);
+    return reviewMapper.toAdminDto(review);
   }
   // ---------- Shared internals ----------
 
@@ -142,61 +142,6 @@ public class ReviewService {
     if (rowsUpdated == 0) {
       throw new IllegalStateException("Failed to update aggregates — no matching " + targetType + " row for id " + targetId);
     }
-  }
-
-  private ReviewDto toDto(Review review) {
-    User user = review.getUser();
-    ReviewUserDto userDto = new ReviewUserDto(user.getId(), user.getFullName());
-
-    return new ReviewDto(
-        review.getId(),
-        userDto,
-        review.getStars(),
-        review.getText(),
-        review.getCreatedAt()
-    );
-  }
-
-  // itemName/serviceType/serviceName aren't stored on Review — it only has
-  // targetType/targetId, so they're resolved here by looking up the actual
-  // Product or SalonService each time. If this list gets large/frequently
-  // paginated, consider batching these lookups instead of one-by-one.
-  private AdminReviewDto toAdminDto(Review review) {
-    User user = review.getUser();
-    ReviewUserDto userDto = new ReviewUserDto(user.getId(), user.getFullName());
-
-    ItemType itemType = review.getTargetType();
-    String itemName;
-    AppointmentServiceType serviceType = null;
-    String serviceName = null;
-
-    if (itemType == ItemType.SALON_SERVICE) {
-      SalonService service = salonServiceRepository.findById(review.getTargetId())
-          .orElseThrow(() -> new EntityNotFoundException("Service not found: " + review.getTargetId()));
-      itemName = service.getName();
-      serviceName = service.getName();
-      serviceType = Boolean.TRUE.equals(service.getIsHomeService())
-          ? AppointmentServiceType.HOME_SERVICE
-          : AppointmentServiceType.IN_SALON;
-    } else if (itemType == ItemType.PRODUCT) {
-      Product product = productRepository.findById(review.getTargetId())
-          .orElseThrow(() -> new EntityNotFoundException("Product not found: " + review.getTargetId()));
-      itemName = product.getName();
-    } else {
-      throw new IllegalStateException("Unsupported review target type: " + itemType);
-    }
-
-    return new AdminReviewDto(
-        review.getId(),
-        userDto,
-        itemType,
-        itemName,
-        serviceType,
-        serviceName,
-        review.getStars(),
-        review.getText(),
-        review.getCreatedAt()
-    );
   }
 
   private Short toStars(ReviewsClientFilter filter) {

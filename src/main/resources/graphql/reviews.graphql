@@ -22,7 +22,6 @@ extend type Query {
 
 extend type Mutation {
     upsertReview(targetType: ItemType!, targetId: ID!, stars: Int!, text: String): Review!
-    setReviewFeatured(id: ID!, featured: Boolean!): Review!
 }
 
 enum ReviewClientSort {
@@ -78,7 +77,6 @@ type AdminReviewDto {
     serviceName: String
     stars: Int!
     text: String
-    featured: Boolean!
     createdAt: DateTime!
 }
 

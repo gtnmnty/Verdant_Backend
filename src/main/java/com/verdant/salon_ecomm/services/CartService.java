@@ -74,7 +74,7 @@ public class CartService {
     }
 
     @Transactional
-    public CartItemDto updateQuantity(UUID userId, UpdateQuantityInput input) {
+    public CartDto updateQuantity(UUID userId, UpdateQuantityInput input) {
         if (input.getQuantity() == null || input.getQuantity() < 1) {
             throw new InvalidQuantityException(
                 "Quantity must be at least 1. Use removeCartItems to delete an item."
@@ -84,21 +84,20 @@ public class CartService {
         CartItem cartItem = cartItemRepository.findByIdAndUser_Id(input.getCartItemId(), userId)
             .orElseThrow(() -> new CartItemNotFoundException("Cart item not found: " + input.getCartItemId()));
 
-        cartItem.setQuantity(input.getQuantity());
-        CartItem saved = cartItemRepository.save(cartItem);
-        return cartMapper.toDto(saved);
+        cartItemRepository.save(cartItem);
+        return getCart(userId);
     }
 
     @Transactional
-    public CartItemDto updateDeliveryOption(UUID userId, UpdateDeliveryOptionInput input) {
+    public CartDto updateDeliveryOption(UUID userId, UpdateDeliveryOptionInput input) {
         CartItem cartItem = cartItemRepository.findByIdAndUser_Id(input.getCartItemId(), userId)
             .orElseThrow(() -> new CartItemNotFoundException("Cart item not found: " + input.getCartItemId()));
 
         if (cartItem.getDeliveryOption() == input.getDeliveryOption()) {
-            return cartMapper.toDto(cartItem);
+            return getCart(userId);
         }
 
-        CartItem saved = cartItemRepository
+        cartItemRepository
             .findByUser_IdAndProduct_IdAndDeliveryOption(userId, cartItem.getProduct().getId(), input.getDeliveryOption())
             .map(existingTarget -> {
                 existingTarget.setQuantity(existingTarget.getQuantity() + cartItem.getQuantity());
@@ -110,14 +109,14 @@ public class CartService {
                 return cartItemRepository.save(cartItem);
             });
 
-        return cartMapper.toDto(saved);
+        return getCart(userId);
     }
 
     @Transactional
-    public List<UUID> removeItems(UUID userId, List<UUID> cartItemIds) {
+    public CartDto removeItems(UUID userId, List<UUID> cartItemIds) {
         List<CartItem> owned = fetchOwnedOrThrow(userId, cartItemIds);
         cartItemRepository.deleteAll(owned);
-        return cartItemIds;
+        return getCart(userId);
     }
 
     // Shared by getSelectedCart/removeItems: scopes the lookup to this user via

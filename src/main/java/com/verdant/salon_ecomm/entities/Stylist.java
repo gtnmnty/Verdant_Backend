@@ -1,9 +1,9 @@
 package com.verdant.salon_ecomm.entities;
 
-import com.verdant.salon_ecomm.models.enums.AccountRole;
 import com.verdant.salon_ecomm.models.enums.StylistAccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -54,6 +54,7 @@ public class Stylist {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    @BatchSize(size = 20)
     @ManyToMany(mappedBy = "stylists")
     private List<SalonService> services;
 

@@ -1,6 +1,5 @@
 package com.verdant.salon_ecomm.dtos.cart;
 
-import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +14,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CartItemDto {
     private UUID id;
-    private Product product;
+    private ProductSummaryDto product;
     private Integer quantity;
     private DeliveryOption deliveryOption;
 }
