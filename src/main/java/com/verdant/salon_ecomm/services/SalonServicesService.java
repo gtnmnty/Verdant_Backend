@@ -53,8 +53,21 @@ public class SalonServicesService {
             pageable
         );
 
+        List<SalonService> services = result.getContent();
+        List<UUID> serviceIds = services.stream().map(SalonService::getId).toList();
+
+        List<MediaImage> primaryImages = mediaImageRepository
+            .findByEntityTypeAndEntityIdInAndIsPrimaryTrue(ItemType.SALON_SERVICE, serviceIds);
+
+        Map<UUID, MediaImage> primaryImageMap = primaryImages.stream()
+            .collect(Collectors.toMap(MediaImage::getEntityId, img -> img));
+
+        List<SalonServiceDto> items = services.stream()
+            .map(service -> toDto(service, primaryImageMap.get(service.getId())))
+            .toList();
+
         return new ServicePage(
-            result.getContent(),
+            items,
             normalizePage,
             normalizePageSize,
             (int) result.getTotalElements(),
@@ -118,6 +131,20 @@ public class SalonServicesService {
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
         return toAdminDto(service);
+    }
+
+    public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
+        return new SalonServiceDto(
+            service.getId(),
+            service.getName(),
+            service.getSubName(),
+            service.getItemCatalog(),
+            service.getPrice(),
+            service.getDurationMinutes(),
+            service.getDescription(),
+            service.getBadge(),
+            primaryImage != null ? toImageDTO(primaryImage) : null
+        );
     }
 
     public AdminServiceDto toAdminDto(SalonService service){

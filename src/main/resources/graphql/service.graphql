@@ -18,6 +18,12 @@ extend type Query {
     serviceFavorites(first: Int = 10, after: String): CatalogItemConnection!
 }
 
+extend type Mutation {
+    createService(input: CreateServiceInput!): AdminServiceDto!
+    updateService(input: UpdateServiceInput!): AdminServiceDto!
+    deleteService(id: ID!): AdminServiceDto!
+}
+
 enum ServiceSort {
     NEWEST
     OLDEST
@@ -47,7 +53,7 @@ type SalonService implements CatalogItem {
     id: ID!
     name: String!
     subName: String!
-    category: String!
+    catalog: ItemCatalog!
     price: BigDecimal!
     durationInMinutes: Int!
     description: String
@@ -62,8 +68,6 @@ type SalonService implements CatalogItem {
     primaryImage: MediaImageDto
     stylists: [Stylist!]!
     isFavorited: Boolean!
-    createdAt: DateTime
-    updatedAt: DateTime
 }
 
 type AdminServiceDto {

@@ -34,6 +34,11 @@ public class SalonServiceResolver {
         return service.getItemCatalog().name();
     }
 
+    @SchemaMapping(typeName = "SalonService", field = "durationInMinutes")
+    public Integer durationInMinutes(SalonService service) {
+        return service.getDurationMinutes();
+    }
+
     @QueryMapping
     public SalonService service(@Argument UUID id){
         return salonService.getServiceDetail(id);

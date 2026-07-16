@@ -57,12 +57,6 @@ input SelectedCartItemsInput {
     cartItemIds: [ID!]!
 }
 
-enum ItemCatalog {
-    SKIN_CARE,
-    HAIR_CARE,
-    MAKE_UP
-}
-
 enum DeliveryOption {
     STANDARD
     EXPRESS

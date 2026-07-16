@@ -16,6 +16,12 @@ enum ItemType {
     SALON_SERVICE
 }
 
+enum ItemCatalog {
+    SKIN_CARE
+    HAIR_CARE
+    MAKE_UP
+}
+
 type Address {
     line1: String!
     line2: String
@@ -38,7 +44,7 @@ interface CatalogItem {
     id: ID!
     name: String!
     description: String
-    category: String!
+    catalog: ItemCatalog!
     price: BigDecimal!
     reviewCount: Int!
     averageRating: Float!
