@@ -18,12 +18,12 @@ type Cart {
 
 type CartItem {
     id: ID!
-    product: CartItemSummaryDto!
+    product: ProductSummaryDto!
     quantity: Int!
     deliveryOption: DeliveryOption!
 }
 
-type CartItemSummaryDto{
+type ProductSummaryDto{
     id: ID!,
     name: String,
     itemCatalog: ItemCatalog
@@ -55,12 +55,6 @@ input RemoveCartItemsInput {
 
 input SelectedCartItemsInput {
     cartItemIds: [ID!]!
-}
-
-enum ItemCatalog {
-    SKIN_CARE,
-    HAIR_CARE,
-    MAKE_UP
 }
 
 enum DeliveryOption {

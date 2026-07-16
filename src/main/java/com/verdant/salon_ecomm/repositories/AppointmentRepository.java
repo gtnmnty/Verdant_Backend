@@ -2,8 +2,11 @@ package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.entities.Appointment;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentStatus;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -54,6 +57,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         @Param("windowEnd") OffsetDateTime windowEnd,
         Pageable pageable
     );
+
+    @Override
+    @EntityGraph(attributePaths = {"user", "stylist", "service", "branch"})
+    Page<Appointment> findAll(Specification<Appointment> spec, @NonNull Pageable pageable);
 
     // --- appointmentStatusCounts: admin (global) ---
 

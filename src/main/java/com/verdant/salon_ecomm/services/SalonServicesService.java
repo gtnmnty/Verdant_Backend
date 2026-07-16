@@ -23,8 +23,10 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,8 +40,8 @@ public class SalonServicesService {
     private final CloudinaryService cloudinaryService;
 
     public ServicePage getSalonServices(
-       String category, String search, ServiceSort sort,
-       int page, int pageSize
+        String category, String search, ServiceSort sort,
+        int page, int pageSize
     ){
         int normalizePage = Math.max(page - 1, 0) + 1;
         int normalizePageSize = Math.max(pageSize, 1);
@@ -51,8 +53,21 @@ public class SalonServicesService {
             pageable
         );
 
+        List<SalonService> services = result.getContent();
+        List<UUID> serviceIds = services.stream().map(SalonService::getId).toList();
+
+        List<MediaImage> primaryImages = mediaImageRepository
+            .findByEntityTypeAndEntityIdInAndIsPrimaryTrue(ItemType.SALON_SERVICE, serviceIds);
+
+        Map<UUID, MediaImage> primaryImageMap = primaryImages.stream()
+            .collect(Collectors.toMap(MediaImage::getEntityId, img -> img));
+
+        List<SalonServiceDto> items = services.stream()
+            .map(service -> toDto(service, primaryImageMap.get(service.getId())))
+            .toList();
+
         return new ServicePage(
-            result.getContent(),
+            items,
             normalizePage,
             normalizePageSize,
             (int) result.getTotalElements(),
@@ -86,8 +101,22 @@ public class SalonServicesService {
             pageable
         );
 
+        // Batch-fetch all images for this page's services in a single query,
+        // instead of querying mediaImageRepository once per service (N+1 fix).
+        List<UUID> serviceIds = result.getContent().stream()
+            .map(SalonService::getId)
+            .toList();
+
+        Map<UUID, List<MediaImage>> imagesByServiceId = mediaImageRepository
+            .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.SALON_SERVICE, serviceIds)
+            .stream()
+            .collect(Collectors.groupingBy(MediaImage::getEntityId));
+
         List<AdminServiceDto> services = result.getContent().stream()
-            .map(this::toAdminDto)
+            .map(service -> toAdminDto(
+                service,
+                imagesByServiceId.getOrDefault(service.getId(), List.of())
+            ))
             .toList();
 
         return new AdminServicePage(
@@ -104,12 +133,30 @@ public class SalonServicesService {
         return toAdminDto(service);
     }
 
+    public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
+        return new SalonServiceDto(
+            service.getId(),
+            service.getName(),
+            service.getSubName(),
+            service.getItemCatalog(),
+            service.getPrice(),
+            service.getDurationMinutes(),
+            service.getDescription(),
+            service.getBadge(),
+            primaryImage != null ? toImageDTO(primaryImage) : null
+        );
+    }
+
     public AdminServiceDto toAdminDto(SalonService service){
         List<MediaImage> images = mediaImageRepository
             .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
                 ItemType.SALON_SERVICE, service.getId()
             );
 
+        return toAdminDto(service, images);
+    }
+
+    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images){
         return new AdminServiceDto(
             service.getId().toString(),
             service.getName(),

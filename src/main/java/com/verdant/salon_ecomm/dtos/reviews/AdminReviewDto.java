@@ -10,6 +10,7 @@ public record AdminReviewDto(
     UUID id,
     ReviewUserDto user,
     ItemType itemType,
+    UUID targetId,
     String itemName,
     AppointmentServiceType serviceType,
     String serviceName,

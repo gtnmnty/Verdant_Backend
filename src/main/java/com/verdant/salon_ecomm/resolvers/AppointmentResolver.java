@@ -79,7 +79,7 @@ public class AppointmentResolver {
     @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public AppointmentStatusCounts appointmentStatusCounts(@AuthenticationPrincipal User principal) {
-        UUID userId = hasAdminRole(principal) ? null : principal.getId();
+        UUID userId = hasElevatedRole(principal) ? null : principal.getId();
         return appointmentService.getAppointmentStatusCounts(userId);
     }
 
@@ -101,13 +101,13 @@ public class AppointmentResolver {
         @Argument OffsetDateTime newScheduledAt,
         @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.rescheduleAppointment(id, newScheduledAt, principal.getId(), hasAdminRole(principal));
+        return appointmentService.rescheduleAppointment(id, newScheduledAt, principal.getId(), hasElevatedRole(principal));
     }
 
     @PreAuthorize("isAuthenticated()")
     @MutationMapping
     public Appointment cancelAppointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        return appointmentService.cancelAppointment(id, principal.getId(), hasAdminRole(principal));
+        return appointmentService.cancelAppointment(id, principal.getId(), hasElevatedRole(principal));
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -130,7 +130,7 @@ public class AppointmentResolver {
     @MutationMapping
     public Appointment updateAppointmentRequest(
         @Argument UUID id, @Argument("input")  UpdateAppointmentInput input,
-        @AuthenticationPrincipal User principal, @Argument boolean isAdmin
+        @AuthenticationPrincipal User principal
     ) {
         return appointmentService.updateAppointmentRequest(
             id, input, principal.getId(), hasElevatedRole(principal)
@@ -159,11 +159,6 @@ public class AppointmentResolver {
     @SchemaMapping(typeName = "Appointment", field = "homeAddress")
     public Address homeAddressMap(Appointment appointment) {
         return appointmentMapper.fromHomeAddressMap(appointment.getHomeAddress());
-    }
-
-    private boolean hasAdminRole(User principal) {
-        return principal.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     private boolean hasElevatedRole(User principal) {

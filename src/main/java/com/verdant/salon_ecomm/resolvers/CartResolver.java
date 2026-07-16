@@ -53,7 +53,7 @@ public class CartResolver {
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public CartItemDto updateCartItemQuantity(
+    public CartDto updateCartItemQuantity(
         @AuthenticationPrincipal User currentUser,
         @Argument UpdateQuantityInput input
     ) {
@@ -62,7 +62,7 @@ public class CartResolver {
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public CartItemDto updateCartItemDeliveryOption(
+    public CartDto updateCartItemDeliveryOption(
         @AuthenticationPrincipal User currentUser,
         @Argument UpdateDeliveryOptionInput input
     ) {
@@ -72,7 +72,7 @@ public class CartResolver {
     // Handles both single-item and multi-item ("select how many to delete") removal
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public List<UUID> removeCartItems(
+    public CartDto removeCartItems(
         @AuthenticationPrincipal User currentUser,
         @Argument RemoveCartItemsInput input
     ) {

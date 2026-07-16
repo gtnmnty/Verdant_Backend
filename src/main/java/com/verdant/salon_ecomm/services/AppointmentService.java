@@ -91,6 +91,7 @@ public class AppointmentService {
         );
 
         Page<Appointment> result = appointmentRepository.findAll(spec, pageable);
+        
         List<AdminAppointmentDto> items = result.getContent().stream()
             .map(appointmentMapper::toAdminDto)
             .toList();
@@ -145,7 +146,7 @@ public class AppointmentService {
         validateServiceLocation(input.serviceType(), input.branchId(), input.homeAddress());
 
         Branch branch = null;
-        if (!(input.serviceType() == AppointmentServiceType.HOME_SERVICE && input.branchId() == null)) {
+        if (input.branchId() != null) {
             branch = branchRepository.findById(input.branchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.branchId()));
         }
@@ -321,7 +322,10 @@ public class AppointmentService {
         try {
             return appointmentRepository.save(appointment);
         } catch (DataIntegrityViolationException e) {
-            throw new AppointmentConflictException("Stylist is already booked in that time slot");
+            if (e.getMostSpecificCause().getMessage().contains("overlapping_appointment_constraint")) {
+                throw new AppointmentConflictException("Stylist is already booked in that time slot");
+            }
+            throw e;
         }
     }
 

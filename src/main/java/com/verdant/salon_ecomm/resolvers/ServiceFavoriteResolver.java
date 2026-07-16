@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.resolvers;
 
+import com.verdant.salon_ecomm.dtos.service.SalonServiceDto;
 import com.verdant.salon_ecomm.entities.Favorite;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.ItemType;
@@ -23,7 +24,7 @@ public class ServiceFavoriteResolver {
     private final FavoriteRepository favoriteRepository;
 
     @BatchMapping
-    public Map<SalonService, Boolean> isFavorited(List<SalonService> services, GraphQLContext context){
+    public Map<SalonServiceDto, Boolean> isFavorited(List<SalonServiceDto> services, GraphQLContext context){
         UUID userId = context.get("userId");
 
         if(userId == null){
@@ -31,7 +32,7 @@ public class ServiceFavoriteResolver {
                 service -> service, service -> false));
         }
 
-        List<UUID> servicesId = services.stream().map(SalonService::getId).collect(Collectors.toList());
+        List<UUID> servicesId = services.stream().map(SalonServiceDto::id).collect(Collectors.toList());
 
         List<Favorite> favorites = favoriteRepository
             .findByUserIdAndTargetIdInAndTargetType(userId, servicesId, ItemType.SALON_SERVICE);
@@ -41,6 +42,6 @@ public class ServiceFavoriteResolver {
             .collect(Collectors.toSet());
 
         return services.stream().collect(Collectors
-            .toMap(s -> s, s -> favouriteIds.contains(s.getId())));
+            .toMap(s -> s, s -> favouriteIds.contains(s.id())));
     }
 }

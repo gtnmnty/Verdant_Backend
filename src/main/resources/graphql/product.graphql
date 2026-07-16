@@ -23,7 +23,7 @@ type Product implements CatalogItem {
     id: ID!
     name: String!
     description: String
-    category: String!
+    catalog: ItemCatalog!
     price: BigDecimal!
     salePrice: BigDecimal
     sku: String
