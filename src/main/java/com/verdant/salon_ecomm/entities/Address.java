@@ -25,8 +25,8 @@ public class Address {
     @Column(name = "address_postal", length = 20)
     private String postal;
 
-    @Column(name = "address_country", length = 2)
-    private String country = "PH";
+    @Column(name = "address_country", length = 5)
+    private String country = "US";
 
     @Override
     public String toString() {

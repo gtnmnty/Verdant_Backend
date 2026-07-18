@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.resolvers;
+package com.verdant.salon_ecomm.resolvers.salon_service;
 
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.entities.SalonService;
@@ -29,14 +29,14 @@ public class SalonServiceResolver {
         return salonService.getSalonServices(category, search, sort, page, pageSize);
     }
 
-    @SchemaMapping(typeName = "SalonService", field = "category")
-    public String category(SalonService service){
-        return service.getItemCatalog().name();
-    }
-
     @SchemaMapping(typeName = "SalonService", field = "durationInMinutes")
-    public Integer durationInMinutes(SalonService service) {
-        return service.getDurationMinutes();
+    public Integer durationInMinutes(Object serviceObj) {
+        if (serviceObj instanceof com.verdant.salon_ecomm.dtos.service.SalonServiceDto dto) {
+            return dto.durationInMinutes();
+        } else if (serviceObj instanceof com.verdant.salon_ecomm.entities.SalonService entity) {
+            return entity.getDurationMinutes();
+        }
+        return null;
     }
 
     @QueryMapping

@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.resolvers;
+package com.verdant.salon_ecomm.resolvers.product;
 
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.Product;

@@ -35,12 +35,12 @@ public class CartService {
 
     public CartDto getCart(UUID userId) {
         List<CartItem> items = cartItemRepository.findByUser_IdOrderByAddedAtDesc(userId);
-        return cartMapper.toCartDto(items);
+        return cartMapper.toCartDto(items, userId);
     }
 
     public CartDto getSelectedCart(UUID userId, List<UUID> cartItemIds) {
         List<CartItem> items = fetchOwnedOrThrow(userId, cartItemIds);
-        return cartMapper.toCartDto(items);
+        return cartMapper.toCartDto(items, userId);
     }
 
     @Transactional

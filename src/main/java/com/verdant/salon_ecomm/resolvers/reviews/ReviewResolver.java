@@ -1,10 +1,9 @@
-package com.verdant.salon_ecomm.resolvers;
+package com.verdant.salon_ecomm.resolvers.reviews;
 
 import com.verdant.salon_ecomm.dtos.reviews.AdminReviewDto;
 import com.verdant.salon_ecomm.dtos.reviews.AdminReviewPage;
 import com.verdant.salon_ecomm.dtos.reviews.ReviewConnection;
 import com.verdant.salon_ecomm.dtos.reviews.ReviewDto;
-import com.verdant.salon_ecomm.entities.Review;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.reviews.AdminReviewSort;

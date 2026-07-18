@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.resolvers;
+package com.verdant.salon_ecomm.resolvers.product;
 
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.entities.Product;
@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
-import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 
@@ -32,10 +31,10 @@ public class ProductResolver {
         return productService.getProducts(category, search, sort, page, pageSize);
     }
 
-    @SchemaMapping(typeName = "Product", field = "category")
-    public String category(Product product) {
-        return product.getItemCatalog().name();
-    }
+//    @SchemaMapping(typeName = "Product", field = "category")
+//    public String category(Product product) {
+//        return product.getItemCatalog().name();
+//    }
 
     @QueryMapping
     public Product product(@Argument String id) {
