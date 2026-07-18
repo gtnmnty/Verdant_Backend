@@ -1,10 +1,10 @@
 package com.verdant.salon_ecomm.dtos;
 
-public record Address(
+public record AddressDto(
     String line1,
     String line2,
     String city,
-    String state,
     String postal,
+    String state,
     String country
 ) {}

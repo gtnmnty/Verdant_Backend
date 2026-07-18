@@ -19,7 +19,7 @@ public record UpdateBranchInput(
     @Email(message = "Email must be valid")
     String email,
 
-    OperatingHoursInput openingHours,
+    OperatingHoursInput operatingHours,
     String googleMapsUrl,
     String imageUrl,
     BranchStatus status

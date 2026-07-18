@@ -14,7 +14,7 @@ public record CreateBranchInput(
     String email,
 
     @NotBlank(message = "Branch name is required")
-    OperatingHoursInput openingHours,
+    OperatingHoursInput operatingHours,
 
     String googleMapsUrl,
     String imageUrl,
