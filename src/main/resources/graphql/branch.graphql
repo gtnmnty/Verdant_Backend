@@ -1,0 +1,84 @@
+extend type Query {
+    adminBranches(
+        status: BranchStatus
+        search: String
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminBranchPage!
+
+    branch(id: ID!): Branch!
+}
+
+extend type Mutation {
+    createBranch(input: CreateBranchInput!): Branch!
+    updateBranch(input: UpdateBranchInput!): Branch!
+    deleteBranch(id: ID!): Boolean!
+}
+
+enum BranchStatus {
+    OPEN
+    CLOSED
+}
+
+type AdminBranchPage {
+    items: [Branch!]!
+    page: Int!
+    pageSize: Int!
+    totalElements: Int!
+    totalPages: Int!
+}
+
+type Branch {
+    id: ID!
+    name: String!
+    address: String!
+    phone: String!
+    email: String
+    operatingHours: String
+    googleMapsUrl: String
+    imageUrl: String
+    status: BranchStatus!
+}
+
+type AdminBranchDto {
+    id: ID!
+    name: String!
+    address: String!
+    phone: String!
+    email: String
+    operatingHours: String
+    googleMapsUrl: String
+    imageUrl: String
+    status: BranchStatus!
+    createdAt: String
+    updatedAt: String
+}
+
+
+input CreateBranchInput {
+    name: String!
+    address: String!
+    phone: String!
+    email: String
+    operatingHours: String
+    googleMapsUrl: String
+    imageUrl: String
+    status: BranchStatus
+}
+
+input UpdateBranchInput {
+    id: ID!
+    name: String
+    address: String
+    phone: String
+    email: String
+    operatingHours: String
+    googleMapsUrl: String
+    imageUrl: String
+    status: BranchStatus
+}
+
+input BranchFilterInput {
+    status: BranchStatus
+    search: String
+}

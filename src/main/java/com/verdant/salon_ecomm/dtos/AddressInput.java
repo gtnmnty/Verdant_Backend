@@ -29,7 +29,7 @@ public record AddressInput(
     // Compact constructor: normalize default before validation-consuming code ever sees it
     public AddressInput {
         if (country == null || country.isBlank()) {
-            country = "PH";
+            country = "US";
         }
     }
 }

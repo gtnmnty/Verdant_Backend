@@ -54,6 +54,16 @@ public class SalonServicesService {
         );
 
         List<SalonService> services = result.getContent();
+        if (services.isEmpty()) {
+            return new ServicePage(
+                List.of(),
+                normalizePage,
+                normalizePageSize,
+                (int) result.getTotalElements(),
+                result.getTotalPages()
+            );
+        }
+
         List<UUID> serviceIds = services.stream().map(SalonService::getId).toList();
 
         List<MediaImage> primaryImages = mediaImageRepository
@@ -107,7 +117,9 @@ public class SalonServicesService {
             .map(SalonService::getId)
             .toList();
 
-        Map<UUID, List<MediaImage>> imagesByServiceId = mediaImageRepository
+        Map<UUID, List<MediaImage>> imagesByServiceId = serviceIds.isEmpty()
+            ? Map.of()
+            : mediaImageRepository
             .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.SALON_SERVICE, serviceIds)
             .stream()
             .collect(Collectors.groupingBy(MediaImage::getEntityId));

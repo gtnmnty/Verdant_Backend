@@ -50,16 +50,16 @@ public class ReviewService {
     );
 
     int normalizedPage = Math.max(page, 1);
-    int normalizedPageSize = Math.clamp(normalizedPage, 1, 100);
+    int normalizedPageSize = Math.clamp(pageSize, 1, 100);
 
-    Pageable pageable = PageRequest.of(page, normalizedPageSize, toClientSort(sort));
+    Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, toClientSort(sort));
     Page<Review> result = reviewRepository.findAll(spec, pageable);
 
     return new ReviewConnection(
         result.map(reviewMapper::toDto).getContent(),
         (int) result.getTotalElements(),
         result.getTotalPages(),
-        page
+        normalizedPage
     );
   }
 
@@ -97,7 +97,7 @@ public class ReviewService {
       AdminReviewSort sort, int page, int pageSize
   ) {
     int normalizedPage = Math.max(page, 1);
-    int normalizedPageSize = Math.clamp(normalizedPage, 1, 100);
+    int normalizedPageSize = Math.clamp(pageSize, 1, 100);
 
     Specification<Review> spec = Specification.allOf(
         ReviewSpec.hasItemType(itemType),

@@ -95,7 +95,7 @@ type AdminServiceDto {
 input CreateServiceInput {
     name: String!
     subName: String!
-    category: String!
+    category: ItemCatalog!
     price: BigDecimal!
     durationInMinutes: Int!
     status: CollectionStatus!
@@ -113,7 +113,7 @@ input UpdateServiceInput {
     id: ID!
     name: String
     subName: String
-    category: String
+    category: ItemCatalog
     price: BigDecimal
     durationInMinutes: Int
     status: CollectionStatus

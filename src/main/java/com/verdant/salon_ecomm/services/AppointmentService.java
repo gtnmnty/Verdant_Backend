@@ -322,7 +322,8 @@ public class AppointmentService {
         try {
             return appointmentRepository.save(appointment);
         } catch (DataIntegrityViolationException e) {
-            if (e.getMostSpecificCause().getMessage().contains("overlapping_appointment_constraint")) {
+            String message = e.getMessage();
+            if (message != null && message.contains("overlapping_appointment_constraint")) {
                 throw new AppointmentConflictException("Stylist is already booked in that time slot");
             }
             throw e;

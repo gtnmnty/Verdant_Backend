@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.resolvers;
+package com.verdant.salon_ecomm.resolvers.product;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.entities.Product;
@@ -12,7 +12,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Controller
 @RequiredArgsConstructor

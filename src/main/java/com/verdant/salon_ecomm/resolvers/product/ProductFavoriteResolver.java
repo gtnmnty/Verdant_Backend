@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.resolvers;
+package com.verdant.salon_ecomm.resolvers.product;
 
 import com.verdant.salon_ecomm.entities.Favorite;
 import com.verdant.salon_ecomm.entities.Product;
@@ -26,7 +26,8 @@ public class ProductFavoriteResolver {
         UUID userId = context.get("userId");
 
         if (userId == null) {
-            return products.stream().collect(Collectors.toMap(p -> p, p -> false));
+            return products.stream().collect(Collectors.toMap(
+                p -> p, p -> false));
         }
 
         List<UUID> productIds = products.stream().map(Product::getId).toList();
