@@ -36,7 +36,10 @@ public class SalonServiceResolver {
         } else if (serviceObj instanceof com.verdant.salon_ecomm.entities.SalonService entity) {
             return entity.getDurationMinutes();
         }
-        return null;
+        throw new IllegalArgumentException(
+            "Unsupported SalonService object type: " +
+                (serviceObj != null ? serviceObj.getClass().getName() : "null")
+        );
     }
 
     @QueryMapping

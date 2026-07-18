@@ -1,11 +1,10 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.cart.ProductSummaryDto;
 import com.verdant.salon_ecomm.entities.CartItem;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
 import com.verdant.salon_ecomm.dtos.cart.CartItemDto;
-import com.verdant.salon_ecomm.entities.MediaImage;
+import com.verdant.salon_ecomm.entities.Favorite;
 import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.FavoriteRepository;
@@ -81,7 +80,7 @@ public class CartMapper {
 
         List<UUID> productIds = items.stream()
             .map(CartItem::getProduct)
-            .filter(p -> p != null)
+            .filter(java.util.Objects::nonNull)
             .map(Product::getId)
             .toList();
 
@@ -90,7 +89,7 @@ public class CartMapper {
         return favoriteRepository
             .findByUserIdAndTargetIdInAndTargetType(userId, productIds, ItemType.PRODUCT)
             .stream()
-            .map(f -> f.getTargetId())
+            .map(Favorite::getTargetId)
             .collect(Collectors.toSet());
     }
 }

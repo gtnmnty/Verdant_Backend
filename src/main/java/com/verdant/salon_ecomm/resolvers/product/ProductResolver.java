@@ -31,11 +31,6 @@ public class ProductResolver {
         return productService.getProducts(category, search, sort, page, pageSize);
     }
 
-//    @SchemaMapping(typeName = "Product", field = "category")
-//    public String category(Product product) {
-//        return product.getItemCatalog().name();
-//    }
-
     @QueryMapping
     public Product product(@Argument String id) {
         return productService.getProductDetail(UUID.fromString(id));
