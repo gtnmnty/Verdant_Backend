@@ -13,7 +13,7 @@ public record UpdateBranchInput(
     String name,
 
     @Valid
-    AddressInput address,
+    BranchAddressInput address,
     String phone,
 
     @Email(message = "Email must be valid")

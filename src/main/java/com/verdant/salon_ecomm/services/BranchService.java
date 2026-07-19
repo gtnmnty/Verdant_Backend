@@ -10,6 +10,7 @@ import com.verdant.salon_ecomm.mappers.BranchMapper;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import com.verdant.salon_ecomm.repositories.BranchRepository;
 import com.verdant.salon_ecomm.specifications.BranchSpecification;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -66,7 +67,7 @@ public class BranchService {
     }
 
     @Transactional
-    public AdminBranchDto createBranch(CreateBranchInput input) {
+    public AdminBranchDto createBranch(@Valid CreateBranchInput input) {
         Branch branch = Branch.builder()
             .name(input.name())
             .address(branchMapper.toAddressEntity(input.address()))
@@ -82,7 +83,7 @@ public class BranchService {
     }
 
     @Transactional
-    public AdminBranchDto updateBranch(UpdateBranchInput input) {
+    public AdminBranchDto updateBranch(@Valid UpdateBranchInput input) {
         Branch branch = findBranchOrThrow(input.id());
 
         if (input.name() != null) branch.setName(input.name());

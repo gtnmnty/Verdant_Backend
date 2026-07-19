@@ -110,7 +110,7 @@ type Appointment {
     serviceName: String!
     priceSnapshot: BigDecimal!
     stylist: Stylist
-    branch: Branch
+    branch: String
     scheduledAt: DateTime!
     durationMinutes: Int!
     status: AppointmentStatus!
@@ -128,7 +128,7 @@ type AdminAppointmentDto {
     serviceType: AppointmentServiceType!
     priceSnapshot: BigDecimal!
     stylist: Stylist
-    branch: Branch
+    branch: String
     scheduledAt: DateTime!
     durationMinutes: Int!
     status: AppointmentStatus!

@@ -1,6 +1,5 @@
 package com.verdant.salon_ecomm.dtos.branch;
 
-import com.verdant.salon_ecomm.dtos.AddressDto;
 import com.verdant.salon_ecomm.entities.OperatingHours;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 
@@ -10,7 +9,7 @@ import java.util.UUID;
 public record AdminBranchDto(
     UUID id,
     String name,
-    AddressDto address,
+    BranchAddressDto address,
     String phone,
     String email,
     OperatingHours operatingHours,

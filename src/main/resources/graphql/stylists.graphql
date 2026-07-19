@@ -19,12 +19,6 @@ extend type Mutation {
     assignStylistToServices(stylistId: ID!, serviceIds: [ID!]!): Stylist!
 }
 
-#type Branch {
-#    id: ID!
-#    name: String!
-#    location: String
-#}
-
 type StylistConnection {
     content: [Stylist!]!
     totalElements: Int!

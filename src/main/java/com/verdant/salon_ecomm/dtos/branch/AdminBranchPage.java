@@ -4,8 +4,8 @@ import java.util.List;
 
 public record AdminBranchPage(
     List<AdminBranchDto> items,
+    int totalItems,
     int page,
     int pageSize,
-    int totalItems,
     int totalPages
 ) {}
