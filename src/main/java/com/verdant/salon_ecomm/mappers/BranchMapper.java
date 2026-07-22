@@ -1,14 +1,9 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.dtos.AddressDto;
-import com.verdant.salon_ecomm.dtos.AddressInput;
-import com.verdant.salon_ecomm.dtos.branch.AdminBranchDto;
-import com.verdant.salon_ecomm.dtos.branch.CreateBranchInput;
-import com.verdant.salon_ecomm.dtos.branch.OperatingHoursInput;
+import com.verdant.salon_ecomm.dtos.branch.*;
 import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Branch;
 import com.verdant.salon_ecomm.entities.OperatingHours;
-import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -32,22 +27,9 @@ public class BranchMapper {
         );
     }
 
-    public Branch toEntity(CreateBranchInput input) {
-        return Branch.builder()
-            .name(input.name())
-            .address(toAddressEntity(input.address()))
-            .phone(input.phone())
-            .email(input.email())
-            .operatingHours(toOperatingHoursEntity(input.operatingHours()))
-            .googleMapsUrl(input.googleMapsUrl())
-            .imageUrl(input.imageUrl())
-            .status(input.status() != null ? input.status() : BranchStatus.OPEN)
-            .build();
-    }
-
-    public AddressDto toAddressDto(Address address) {
+    public BranchAddressDto toAddressDto(Address address) {
         if (address == null) return null;
-        return new AddressDto(
+        return new BranchAddressDto(
             address.getLine1(),
             address.getLine2(),
             address.getCity(),
@@ -57,7 +39,7 @@ public class BranchMapper {
         );
     }
 
-    public Address toAddressEntity(AddressInput input) {
+    public Address toAddressEntity(BranchAddressInput input) {
         if (input == null) return null;
         return Address.builder()
             .line1(input.line1())

@@ -1,40 +1,45 @@
-extend type Query {
-    adminBranches(
-        status: BranchStatus
-        search: String
-        page: Int = 1
-        pageSize: Int = 10
-    ): AdminBranchPage!
-
-    branch(id: ID!): Branch!
-}
-
-extend type Mutation {
-    createBranch(input: CreateBranchInput!): Branch!
-    updateBranch(input: UpdateBranchInput!): Branch!
-    deleteBranch(id: ID!): Boolean!
-}
-
 enum BranchStatus {
     OPEN
     CLOSED
 }
 
-type AdminBranchPage {
-    items: [Branch!]!
-    page: Int!
-    pageSize: Int!
-    totalElements: Int!
-    totalPages: Int!
+type BranchAddressDto {
+    line1: String
+    line2: String
+    city: String
+    state: String
+    postal: String
+    country: String
+}
+
+input BranchAddressInput {
+    line1: String
+    line2: String
+    city: String
+    state: String
+    postal: String
+    country: String
+}
+
+type OperatingHours {
+    days: String
+    open: String
+    close: String
+}
+
+input OperatingHoursInput {
+    days: String
+    open: String
+    close: String
 }
 
 type Branch {
     id: ID!
     name: String!
-    address: String!
-    phone: String!
+    address: BranchAddressDto
+    phone: String
     email: String
-    operatingHours: String
+    operatingHours: OperatingHours
     googleMapsUrl: String
     imageUrl: String
     status: BranchStatus!
@@ -43,10 +48,10 @@ type Branch {
 type AdminBranchDto {
     id: ID!
     name: String!
-    address: String!
-    phone: String!
+    address: BranchAddressDto
+    phone: String
     email: String
-    operatingHours: String
+    operatingHours: OperatingHours
     googleMapsUrl: String
     imageUrl: String
     status: BranchStatus!
@@ -54,13 +59,20 @@ type AdminBranchDto {
     updatedAt: String
 }
 
+type AdminBranchPage {
+    items: [AdminBranchDto!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
 
 input CreateBranchInput {
     name: String!
-    address: String!
-    phone: String!
+    address: BranchAddressInput
+    phone: String
     email: String
-    operatingHours: String
+    operatingHours: OperatingHoursInput
     googleMapsUrl: String
     imageUrl: String
     status: BranchStatus
@@ -69,16 +81,28 @@ input CreateBranchInput {
 input UpdateBranchInput {
     id: ID!
     name: String
-    address: String
+    address: BranchAddressInput
     phone: String
     email: String
-    operatingHours: String
+    operatingHours: OperatingHoursInput
     googleMapsUrl: String
     imageUrl: String
     status: BranchStatus
 }
 
-input BranchFilterInput {
-    status: BranchStatus
-    search: String
+extend type Query {
+    adminBranches(
+        status: BranchStatus
+        search: String
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminBranchPage!
+
+    adminBranch(id: ID!): AdminBranchDto!
+}
+
+extend type Mutation {
+    createBranch(input: CreateBranchInput!): AdminBranchDto!
+    updateBranch(input: UpdateBranchInput!): AdminBranchDto!
+    deleteBranch(id: ID!): AdminBranchDto!
 }

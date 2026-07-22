@@ -28,6 +28,7 @@ public class Address {
     private String postal;
 
     @Column(name = "address_country", length = 5)
+    @Builder.Default
     private String country = "US";
 
     @Override

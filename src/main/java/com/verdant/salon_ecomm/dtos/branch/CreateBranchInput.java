@@ -1,21 +1,17 @@
 package com.verdant.salon_ecomm.dtos.branch;
 
-import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 public record CreateBranchInput(
     @NotBlank(message = "Branch name is required")
     String name,
-    AddressInput address,
+    BranchAddressInput address,
     String phone,
-
-    @NotBlank(message = "Email is required")
     String email,
-
-    @NotBlank(message = "Branch name is required")
+    @Valid
     OperatingHoursInput operatingHours,
-
     String googleMapsUrl,
     String imageUrl,
     BranchStatus status
