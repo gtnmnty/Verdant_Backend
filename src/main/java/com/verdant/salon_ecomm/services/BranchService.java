@@ -55,9 +55,9 @@ public class BranchService {
 
         return new AdminBranchPage(
             items,
+            (int) result.getTotalElements(),
             normalizePage,
             normalizePageSize,
-            (int) result.getTotalElements(),
             result.getTotalPages()
         );
     }

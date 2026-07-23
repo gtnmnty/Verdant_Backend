@@ -8,4 +8,8 @@ import java.util.UUID;
 
 public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
     List<OrderItem> findByOrderId(UUID orderId);
+
+    // Batch fetch for list views (My Orders, admin table) — avoids the
+    // N+1 of calling findByOrderId once per order on a page.
+    List<OrderItem> findByOrderIdIn(List<UUID> orderIds);
 }

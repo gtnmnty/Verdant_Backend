@@ -13,11 +13,11 @@ type BranchAddressDto {
 }
 
 input BranchAddressInput {
-    line1: String
+    line1: String!
     line2: String
-    city: String
+    city: String!
     state: String
-    postal: String
+    postal: String!
     country: String
 }
 
@@ -28,9 +28,9 @@ type OperatingHours {
 }
 
 input OperatingHoursInput {
-    days: String
-    open: String
-    close: String
+    days: String!
+    open: String!
+    close: String!
 }
 
 type Branch {
