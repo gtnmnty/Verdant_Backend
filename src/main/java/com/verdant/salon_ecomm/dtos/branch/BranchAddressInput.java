@@ -30,6 +30,8 @@ public record BranchAddressInput(
     public BranchAddressInput {
         if (country == null || country.isBlank()) {
             country = "US";
+        } else {
+            country = country.trim().toUpperCase();
         }
     }
 }
