@@ -1,0 +1,15 @@
+extend type Mutation {
+    createPaymentIntent(input: CreatePaymentInput!): PaymentIntent!
+}
+
+input CreatePaymentInput {
+    orderId: ID!
+}
+
+type PaymentIntent {
+    stripePaymentIntentId: String!
+    clientSecret: String!
+    status: String!
+    amount: BigDecimal!
+    currency: String!
+}

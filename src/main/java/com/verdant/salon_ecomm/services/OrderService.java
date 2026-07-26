@@ -1,144 +1,320 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.dtos.order.OrderDetailDto;
-import com.verdant.salon_ecomm.dtos.order.OrderFilterInput;
-import com.verdant.salon_ecomm.dtos.order.OrderSortInput;
-import com.verdant.salon_ecomm.dtos.order.OrderSummaryDto;
-import com.verdant.salon_ecomm.dtos.order.PageDto;
-import com.verdant.salon_ecomm.entities.Order;
-import com.verdant.salon_ecomm.entities.OrderItem;
+import com.verdant.salon_ecomm.dtos.MediaImageDto;
+import com.verdant.salon_ecomm.dtos.order.*;
+import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
-import com.verdant.salon_ecomm.repositories.OrderItemRepository;
-import com.verdant.salon_ecomm.repositories.OrderRepository;
-import com.verdant.salon_ecomm.specifications.OrderSorts;
-import com.verdant.salon_ecomm.specifications.OrderSpecifications;
+import com.verdant.salon_ecomm.models.enums.ItemType;
+import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
+import com.verdant.salon_ecomm.models.enums.orders.*;
+import com.verdant.salon_ecomm.repositories.*;
+import com.verdant.salon_ecomm.specifications.OrderSpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Concrete service backing the Orders module — no separate interface,
- * per request. Wraps OrderRepository/OrderItemRepository + OrderMapper
- * + the spec/sort helpers built for the GraphQL layer
- * (OrderClientResolver / OrderAdminResolver).
- *
- * NOTE: Order has no @OneToMany back-reference to OrderItem, so items
- * are fetched separately via OrderItemRepository. List views (My
- * Orders, admin table) batch-fetch all items for the page in a single
- * findByOrderIdIn(...) query and group them in memory, rather than
- * querying per order.
- */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class OrderService {
-
-    /**
-     * Cutoff for "recent" vs "older" orders on the customer My Orders
-     * page (images 1 & 2): anything placed in the last 30 days is
-     * "recent", anything before that is reached via "View Older History".
-     */
-    private static final int RECENT_ORDER_WINDOW_DAYS = 30;
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderMapper orderMapper;
 
-    /**
-     * Customer "My Orders" — default view, orders < 30 days old (image 1).
-     * 10 per page. `sort` backs the Newest/Oldest/Highest Total dropdown.
-     */
-    public PageDto<OrderSummaryDto> getMyRecentOrders(UUID userId, int page, int size, OrderSortInput sort) {
-        OffsetDateTime cutoff = OffsetDateTime.now().minusDays(RECENT_ORDER_WINDOW_DAYS);
-        Pageable pageable = PageRequest.of(page, size, OrderSorts.toSort(sort));
+    private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final MediaImageService mediaImageService;
+    private final CartService cartService;
 
-        Page<Order> orders = orderRepository.findByUserIdAndCreatedAtAfter(userId, cutoff, pageable);
-        return PageDto.from(orders, toSummaryDtos(orders.getContent()));
+    // ---------- Queries ----------
+
+    public OrderPage getMyOrders(
+        UUID userId, OrderClientFilter status, OrderTimeframe timeframe,
+        String search, OrderClientSort sort, int page, int pageSize
+    ) {
+        int normalizedPage = Math.max(page, 1);
+        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime windowStart = now.minusDays(30);
+        boolean archived = timeframe == OrderTimeframe.ARCHIVED;
+
+        Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, toClientSort(sort));
+
+        Specification<Order> spec = OrderSpec.filterMyOrders(
+            userId, status, search, windowStart, now, archived
+        );
+
+        Page<Order> result = orderRepository.findAll(spec, pageable);
+
+        return new OrderPage(
+            result.getContent(),
+            normalizedPage,
+            normalizedPageSize,
+            (int) result.getTotalElements(),
+            result.getTotalPages()
+        );
     }
 
-    /**
-     * Customer "View Older History" — orders 30+ days old, paged
-     * (image 2). 10 per page, same sort options as above.
-     */
-    public PageDto<OrderSummaryDto> getMyOlderOrders(UUID userId, int page, int size, OrderSortInput sort) {
-        OffsetDateTime cutoff = OffsetDateTime.now().minusDays(RECENT_ORDER_WINDOW_DAYS);
-        Pageable pageable = PageRequest.of(page, size, OrderSorts.toSort(sort));
-
-        Page<Order> orders = orderRepository.findByUserIdAndCreatedAtBefore(userId, cutoff, pageable);
-        return PageDto.from(orders, toSummaryDtos(orders.getContent()));
-    }
-
-    /**
-     * Higher-role (owner/admin/manager/receptionist) orders table
-     * (image 3), paged, filterable by status + free-text search,
-     * sortable. 10/page.
-     */
-    public PageDto<OrderSummaryDto> getAllOrders(OrderFilterInput filter) {
-        Pageable pageable = PageRequest.of(filter.page(), filter.size(), OrderSorts.toSort(filter.sort()));
-        var spec = OrderSpecifications.withFilters(filter.search(), filter.status());
-
-        Page<Order> orders = orderRepository.findAll(spec, pageable);
-        return PageDto.from(orders, toSummaryDtos(orders.getContent()));
-    }
-
-    /**
-     * Higher-role order detail view (image 4), reached via the
-     * "..." -> "View details" action on a row. Not scoped to a user —
-     * any of the higher roles can open any order (enforced at the
-     * resolver via @PreAuthorize).
-     */
-    public OrderDetailDto getOrderDetail(UUID orderId) {
-        Order order = findOrderOrThrow(orderId);
-        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
-        return orderMapper.toDetailDto(order, items);
-    }
-
-    /**
-     * Customer viewing a single one of their own orders. Scoped to the
-     * owning user — throws if the order exists but belongs to someone
-     * else, so customers can't view arbitrary order IDs.
-     */
-    public OrderDetailDto getMyOrderDetail(UUID userId, UUID orderId) {
-        Order order = findOrderOrThrow(orderId);
-
-        if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
-            throw new ResourceNotFoundException("Order not found: " + orderId);
+    public Order getOrderById(UUID id, UUID currentUserId, boolean isAdmin) {
+        Order order = findOrderOrThrow(id);
+        if (!isAdmin && !order.getUser().getId().equals(currentUserId)) {
+            throw new AccessDeniedException("Not your order");
         }
-
-        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
-        return orderMapper.toDetailDto(order, items);
+        return order;
     }
 
-    private Order findOrderOrThrow(UUID orderId) {
-        return orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
-    }
+    public AdminOrderPage getAdminOrders(
+        OrderStatus status, String search,
+        AdminOrderSort sort, OrderSortDirection direction, int page, int pageSize
+    ) {
+        int normalizedPage = Math.max(page, 1);
+        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
 
-    private List<OrderSummaryDto> toSummaryDtos(List<Order> orders) {
-        if (orders.isEmpty()) {
-            return List.of();
-        }
+        Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, toAdminSort(sort, direction));
 
-        List<UUID> orderIds = orders.stream().map(Order::getId).toList();
+        Specification<Order> spec = OrderSpec.filterAdminOrders(status, search);
+        Page<Order> result = orderRepository.findAll(spec, pageable);
 
-        // Single query for the whole page instead of one per order.
-        Map<UUID, List<OrderItem>> itemsByOrderId = orderItemRepository.findByOrderIdIn(orderIds).stream()
-            .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
-
-        return orders.stream()
-            .map(order -> orderMapper.toSummaryDto(
-                order,
-                itemsByOrderId.getOrDefault(order.getId(), List.of())))
+        List<AdminOrderDto> items = result.getContent().stream()
+            .map(order -> orderMapper.toAdminDto(order, orderItemRepository.findByOrder_Id(order.getId())))
             .toList();
+
+        return new AdminOrderPage(
+            items,
+            normalizedPage,
+            normalizedPageSize,
+            (int) result.getTotalElements(),
+            result.getTotalPages()
+        );
+    }
+
+    public AdminOrderDto getAdminOrderById(UUID id) {
+        Order order = findOrderOrThrow(id);
+        return orderMapper.toAdminDto(order, orderItemRepository.findByOrder_Id(id));
+    }
+
+    // ---------- Mutations ----------
+
+    @Transactional
+    public AdminOrderDto createAdminOrder(AdminCreateOrderInput input) {
+        User user = resolveCustomer(input.userId(), input.email());
+
+        if (input.items() == null || input.items().isEmpty()) {
+            throw new IllegalArgumentException("At least one item is required");
+        }
+
+        Address address = orderMapper.fromAddressInput(input.shippingAddress());
+
+        ItemBuildResult built = buildOrderItems(input.items(), null);
+        List<OrderItem> pendingItems = built.items();
+        BigDecimal subtotal = built.subtotal();
+
+        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal);
+
+        pendingItems.forEach(item -> item.setOrder(savedOrder));
+        List<OrderItem> savedItems = orderItemRepository.saveAll(pendingItems);
+
+        return orderMapper.toAdminDto(savedOrder, savedItems);
+    }
+
+    @Transactional
+    public AdminOrderDto updateAdminOrder(UUID id, AdminUpdateOrderInput input) {
+        Order order = findOrderOrThrow(id);
+
+        if (input.shippingAddress() != null) {
+            order.setAddress(orderMapper.fromAddressInput(input.shippingAddress()));
+        }
+        if (input.paymentMethod() != null) {
+            order.setPaymentMethod(input.paymentMethod());
+        }
+        if (input.orderStatus() != null) {
+            order.setOrderStatus(input.orderStatus());
+        }
+        if (input.paymentStatus() != null) {
+            order.setPaymentStatus(input.paymentStatus());
+        }
+
+        List<OrderItem> items;
+        if (input.items() != null) {
+            orderItemRepository.deleteAll(orderItemRepository.findByOrder_Id(id));
+
+            ItemBuildResult built = buildOrderItems(input.items(), order);
+            List<OrderItem> newItems = built.items();
+            BigDecimal subtotal = built.subtotal();
+
+            order.setSubtotal(subtotal);
+            order.setTotal(subtotal.add(order.getDeliveryFee()));
+            items = orderItemRepository.saveAll(newItems);
+        } else {
+            items = orderItemRepository.findByOrder_Id(id);
+        }
+
+        Order savedOrder = orderRepository.save(order);
+        return orderMapper.toAdminDto(savedOrder, items);
+    }
+
+    @Transactional
+    public Order placeOrder(UUID userId, PlaceOrderInput input) {
+        List<CartItem> cartItems = cartService.getOwnedItems(userId, input.cartItemIds());
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+
+        Address address = orderMapper.fromAddressInput(input.shippingAddress());
+
+        List<UUID> productIds = cartItems.stream()
+            .map(item -> item.getProduct().getId())
+            .toList();
+        Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(productIds);
+
+        List<OrderItem> pendingItems = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (CartItem cartItem : cartItems) {
+            Product product = cartItem.getProduct();
+            String productImage = resolveImageUrl(primaryImages, product.getId());
+
+            OrderItem item = orderMapper.toItemEntity(
+                null, product, productImage, cartItem.getQuantity(), cartItem.getDeliveryOption()
+            );
+            subtotal = subtotal.add(item.getSubtotal());
+            pendingItems.add(item);
+        }
+
+        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal);
+
+        pendingItems.forEach(item -> item.setOrder(savedOrder));
+        orderItemRepository.saveAll(pendingItems);
+
+        cartService.removeItems(userId, input.cartItemIds());
+
+        return savedOrder;
+    }
+
+    @Transactional
+    public List<Order> adminDeleteOrders(List<UUID> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            throw new IllegalArgumentException("No order ids were provided.");
+        }
+
+        List<Order> orders = orderRepository.findAllById(orderIds);
+
+        Set<UUID> foundIds = orders.stream().map(Order::getId).collect(Collectors.toSet());
+        Set<UUID> requestedIds = new HashSet<>(orderIds);
+
+        if (!foundIds.equals(requestedIds)) {
+            throw new ResourceNotFoundException("One or more orders were not found.");
+        }
+
+        orders.forEach(order -> orderItemRepository.deleteAll(orderItemRepository.findByOrder_Id(order.getId())));
+        orderRepository.deleteAll(orders);
+
+        return orders;
+    }
+
+    // ---------- Helpers ----------
+
+    private Map<UUID, MediaImageDto> resolvePrimaryImages(List<UUID> productIds) {
+        return mediaImageService.getPrimaryImagesByEntityIds(ItemType.PRODUCT, productIds);
+    }
+
+    private String resolveImageUrl(Map<UUID, MediaImageDto> primaryImages, UUID productId) {
+        MediaImageDto primaryImage = primaryImages.get(productId);
+        return primaryImage != null ? primaryImage.url() : null;
+    }
+
+    private Order buildAndSaveOrder(User user, Address address, String paymentMethod, BigDecimal subtotal) {
+        // Shipping is currently free across the board (matches cart screen showing 0 per item) —
+        // revisit if per-delivery-option shipping costs get introduced later.
+        BigDecimal deliveryFee = BigDecimal.ZERO;
+        BigDecimal total = subtotal.add(deliveryFee);
+
+        Order order = orderMapper.toEntity(user, address, paymentMethod, subtotal, deliveryFee, total);
+        order.setOrderCode(generateOrderCode());
+
+        return orderRepository.save(order);
+    }
+
+    private ItemBuildResult buildOrderItems(List<AdminOrderItemInput> itemInputs, Order order) {
+        List<UUID> productIds = itemInputs.stream()
+            .map(AdminOrderItemInput::productId)
+            .toList();
+        Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(productIds);
+
+        List<OrderItem> items = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (AdminOrderItemInput itemInput : itemInputs) {
+            Product product = productRepository.findById(itemInput.productId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemInput.productId()));
+            String productImage = resolveImageUrl(primaryImages, product.getId());
+            OrderItem item = orderMapper.toItemEntity(order, product, productImage, itemInput.quantity(), itemInput.deliveryOption());
+            subtotal = subtotal.add(item.getSubtotal());
+            items.add(item);
+        }
+
+        return new ItemBuildResult(items, subtotal);
+    }
+
+    private record ItemBuildResult(List<OrderItem> items, BigDecimal subtotal) {}
+
+    private Order findOrderOrThrow(UUID id) {
+        return orderRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
+    }
+
+    private User resolveCustomer(UUID userId, String email) {
+        if (userId != null) {
+            return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+        }
+        if (email != null && !email.isBlank()) {
+            return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found for email: " + email));
+        }
+        throw new IllegalArgumentException("userId or email is required to identify an existing customer");
+    }
+
+    private String generateOrderCode() {
+        Long sequenceValue = orderRepository.getNextOrderCodeSequenceValue();
+        return "VS-" + String.format("%04d", sequenceValue);
+    }
+
+    private Sort toClientSort(OrderClientSort sort) {
+        OrderClientSort effective = sort != null ? sort : OrderClientSort.NEWEST;
+        return switch (effective) {
+            case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case HIGHEST_TOTAL -> Sort.by(Sort.Direction.DESC, "total");
+        };
+    }
+
+    private Sort toAdminSort(AdminOrderSort sort, OrderSortDirection direction) {
+        AdminOrderSort effectiveSort = sort != null ? sort : AdminOrderSort.DATE;
+        Sort.Direction effectiveDirection = direction == OrderSortDirection.ASC ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        String field = switch (effectiveSort) {
+            case DATE -> "createdAt";
+            case TOTAL -> "total";
+            case STATUS -> "orderStatus";
+        };
+
+        return Sort.by(effectiveDirection, field);
     }
 }

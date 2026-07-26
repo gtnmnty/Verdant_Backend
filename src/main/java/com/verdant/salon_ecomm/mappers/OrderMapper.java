@@ -1,133 +1,192 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.dtos.order.OrderActivityDto;
-import com.verdant.salon_ecomm.dtos.order.OrderDetailDto;
-import com.verdant.salon_ecomm.dtos.order.OrderItemDto;
-import com.verdant.salon_ecomm.dtos.order.OrderSummaryDto;
+import com.verdant.salon_ecomm.dtos.AddressInput;
+import com.verdant.salon_ecomm.dtos.order.*;
+import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Order;
 import com.verdant.salon_ecomm.entities.OrderItem;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.Named;
-import org.mapstruct.ReportingPolicy;
+import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.enums.DeliveryOption;
+import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
+import com.verdant.salon_ecomm.models.enums.PaymentStatus;
+import com.verdant.salon_ecomm.services.OrderService;
+import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.util.Locale;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
-public interface OrderMapper {
+@Component
+public class OrderMapper {
+    private final OrderService orderService;
 
-    // ---- item level ----
-
-    @Mapping(target = "productId", source = "product.id")
-    @Mapping(target = "productCategory", source = "product", qualifiedByName = "productCategory")
-    OrderItemDto toItemDto(OrderItem item);
-
-    List<OrderItemDto> toItemDtos(List<OrderItem> items);
-
-    // Category label shown in image 1 (SKINCARE/FRAGRANCE-style tag)
-    // comes from Product.itemCatalog (ItemCatalog enum: SKIN_CARE,
-    // HAIR_CARE, MAKE_UP). Rendered as the enum name; adjust here if
-    // you want it prettified (e.g. "SKIN_CARE" -> "Skin Care").
-    @Named("productCategory")
-    default String productCategory(com.verdant.salon_ecomm.entities.Product product) {
-        if (product == null || product.getItemCatalog() == null) {
-            return null;
-        }
-        return product.getItemCatalog().name();
+    public OrderMapper(OrderService orderService) {
+        this.orderService = orderService;
     }
 
-    // ---- summary (list) level ----
+    // ---------- Entity -> DTO ----------
 
-    default OrderSummaryDto toSummaryDto(Order order, List<OrderItem> items) {
-        List<OrderItemDto> itemDtos = toItemDtos(items);
-        return new OrderSummaryDto(
-            order.getId(),
-            reference(order),
-            customerName(order),
-            order.getOrderStatus(),
-            order.getPaymentStatus(),
-            items.size(),
-            order.getTotal(),
-            order.getCreatedAt(),
-            itemDtos
-        );
-    }
+    public AdminOrderDto toAdminDto(Order order, List<OrderItem> items) {
+        List<AdminOrderItemDto> itemDtos = items.stream()
+            .map(this::toAdminOrderItemDto)
+            .toList();
 
-    default OrderDetailDto toDetailDto(Order order, List<OrderItem> items) {
-        List<OrderItemDto> itemDtos = toItemDtos(items);
-        return new OrderDetailDto(
+        return new AdminOrderDto(
             order.getId(),
-            reference(order),
-            customerName(order),
+            order.getOrderCode(),
+            order.getUser(),
             order.getOrderStatus(),
             order.getPaymentStatus(),
             order.getPaymentMethod(),
-            items.size(),
+            order.getAddress(),
             order.getSubtotal(),
             order.getDeliveryFee(),
             order.getTotal(),
-            order.getNotes(),
-            order.getCreatedAt(),
-            order.getUpdatedAt(),
+            itemDtos.size(),
             itemDtos,
-            activity(order),
-            shippingAddress(order)
+            buildActivity(order),
+            order.getCreatedAt(),
+            order.getUpdatedAt()
         );
     }
 
-    @Named("reference")
-    default String reference(Order order) {
-        if (order == null || order.getId() == null) {
-            return null;
-        }
-        String hex = order.getId().toString().replace("-", "").toUpperCase();
-        return "VS-" + hex.substring(0, 5);
+    public OrderItemDto toOrderItemDto(OrderItem item) {
+        String label = "Quantity: " + item.getQuantity()
+            + " \u00b7 " + formatPriceFixed(item.getUnitPrice())
+            + " \u00b7 " + formatDeliveryOption(item.getDeliveryOption());
+
+        return new OrderItemDto(
+            item.getId(),
+            item.getProduct(),
+            item.getProductName(),
+            item.getProductImage(),
+            item.getQuantity(),
+            item.getUnitPrice(),
+            item.getSubtotal(),
+            item.getDeliveryOption(),
+            label
+        );
     }
 
-    @Named("customerName")
-    default String customerName(Order order) {
-        if (order == null || order.getUser() == null) {
-            return null;
-        }
-        return order.getUser().getFullName();
+    public AdminOrderItemDto toAdminOrderItemDto(OrderItem item) {
+        String label = "Qty " + item.getQuantity()
+            + " \u00d7 " + formatPriceCompact(item.getUnitPrice())
+            + " \u00b7 " + formatDeliveryOption(item.getDeliveryOption());
+
+        return new AdminOrderItemDto(
+            item.getId(),
+            item.getProduct(),
+            item.getProductName(),
+            item.getProductImage(),
+            item.getQuantity(),
+            item.getUnitPrice(),
+            item.getSubtotal(),
+            item.getDeliveryOption(),
+            label
+        );
     }
 
-    @Named("activity")
-    default List<OrderActivityDto> activity(Order order) {
-        List<OrderActivityDto> activity = new java.util.ArrayList<>();
-        if (order.getCreatedAt() != null) {
-            activity.add(new OrderActivityDto("Order placed", order.getCreatedAt()));
-        }
-        if (order.getPaymentStatus() == com.verdant.salon_ecomm.models.enums.PaymentStatus.PROCESSED
-            || order.getPaymentStatus() == com.verdant.salon_ecomm.models.enums.PaymentStatus.PAID) {
+    // ---------- Automatic activity timeline ----------
+    // Order does not persist a timestamp per stage, so this is reconstructed from
+    // the current status snapshot (createdAt/updatedAt) rather than true history.
+
+    public List<OrderActivityDto> buildActivity(Order order) {
+        List<OrderActivityDto> activity = new ArrayList<>();
+
+        activity.add(new OrderActivityDto("Order placed", order.getCreatedAt()));
+
+        PaymentStatus paymentStatus = order.getPaymentStatus();
+        if (paymentStatus == PaymentStatus.PAID || paymentStatus == PaymentStatus.PROCESSED) {
             activity.add(new OrderActivityDto("Payment received", order.getUpdatedAt()));
-        }
-        if (order.getPaymentStatus() == com.verdant.salon_ecomm.models.enums.PaymentStatus.REFUNDED) {
+        } else if (paymentStatus == PaymentStatus.FAILED) {
+            activity.add(new OrderActivityDto("Payment failed", order.getUpdatedAt()));
+        } else if (paymentStatus == PaymentStatus.REFUNDED) {
             activity.add(new OrderActivityDto("Payment refunded", order.getUpdatedAt()));
         }
-        if (order.getPaymentStatus() == com.verdant.salon_ecomm.models.enums.PaymentStatus.FAILED) {
-            activity.add(new OrderActivityDto("Payment failed", order.getUpdatedAt()));
+
+        OrderStatus status = order.getOrderStatus();
+        if (status == OrderStatus.PROCESSING) {
+            activity.add(new OrderActivityDto("Order processing", order.getUpdatedAt()));
+        } else if (status == OrderStatus.IN_TRANSIT) {
+            activity.add(new OrderActivityDto("Order in transit", order.getUpdatedAt()));
+        } else if (status == OrderStatus.DELIVERED) {
+            activity.add(new OrderActivityDto("Order delivered", order.getUpdatedAt()));
+        } else if (status == OrderStatus.CANCELLED) {
+            activity.add(new OrderActivityDto("Order cancelled", order.getUpdatedAt()));
         }
+
         return activity;
     }
 
-    @Named("shippingAddress")
-    default OrderDetailDto.AddressDto shippingAddress(Order order) {
-        if (order == null) {
-            return null;
-        }
-        return new OrderDetailDto.AddressDto(
-            order.getSnapAddressLine1(),
-            order.getSnapAddressLine2(),
-            order.getSnapAddressCity(),
-            order.getSnapAddressState(),
-            order.getSnapAddressPostal(),
-            order.getSnapAddressCountry()
-        );
+    // ---------- Input -> Entity ----------
+
+    public Order toEntity(
+        User user, Address address, String paymentMethod,
+        BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal total
+    ) {
+        return Order.builder()
+            .user(user)
+            .address(address)
+            .paymentMethod(paymentMethod)
+            .subtotal(subtotal)
+            .deliveryFee(deliveryFee)
+            .total(total)
+            .orderStatus(OrderStatus.PLACED)
+            .paymentStatus(PaymentStatus.PROCESSED)
+            .build();
+        // orderCode is generated and set by the service, not here
     }
 
-    default UUID map(UUID value) {
-        return value;
+    public OrderItem toItemEntity(
+        Order order, Product product, String productImage, int quantity, DeliveryOption deliveryOption
+    ) {
+        BigDecimal unitPrice = product.getPrice();
+        BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+
+        return OrderItem.builder()
+            .order(order)
+            .product(product)
+            .productName(product.getName())
+            .productImage(productImage)
+            .quantity(quantity)
+            .unitPrice(unitPrice)
+            .subtotal(subtotal)
+            .deliveryOption(deliveryOption)
+            .build();
+    }
+
+    public Address fromAddressInput(AddressInput input) {
+        if (input == null) return null;
+        return Address.builder()
+            .line1(input.line1())
+            .line2(input.line2())
+            .city(input.city())
+            .state(input.state())
+            .postal(input.postal())
+            .country(input.country())
+            .build();
+    }
+
+    // ---------- Formatting helpers ----------
+
+    private String formatPriceFixed(BigDecimal price) {
+        return String.format(Locale.US, "$%.2f", price);
+    }
+
+    private String formatPriceCompact(BigDecimal price) {
+        return "$" + price.stripTrailingZeros().toPlainString();
+    }
+
+    private String formatDeliveryOption(DeliveryOption option) {
+        if (option == null) return "";
+        String[] words = option.name().split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (!sb.isEmpty()) sb.append(" ");
+            sb.append(word.charAt(0)).append(word.substring(1).toLowerCase(Locale.US));
+        }
+        return sb.toString();
     }
 }

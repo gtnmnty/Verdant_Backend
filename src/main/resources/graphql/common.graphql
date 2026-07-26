@@ -22,6 +22,12 @@ enum ItemCatalog {
     MAKE_UP
 }
 
+enum DeliveryOption {
+    STANDARD
+    EXPRESS
+    SAME_DAY
+}
+
 type Address {
     line1: String!
     line2: String
@@ -62,3 +68,4 @@ type MediaImage {
     isPrimary: Boolean!
     sortOrder: Int
 }
+

@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.models.enums;
+package com.verdant.salon_ecomm.models.enums.orders;
 
 public enum OrderStatus {
     PLACED,
