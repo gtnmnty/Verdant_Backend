@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
+import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,6 +23,10 @@ public class OrderItem {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
+
+    @Column(name = "delivery_option", nullable = false, length = 30)
+    @Enumerated(EnumType.STRING)
+    private DeliveryOption deliveryOption;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")

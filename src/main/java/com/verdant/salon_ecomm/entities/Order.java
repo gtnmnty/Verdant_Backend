@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.entities;
 
-import com.verdant.salon_ecomm.models.enums.OrderStatus;
+import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -30,6 +30,9 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
 
+    @Column(length = 255)
+    private String orderCode;
+
     @Column(name = "payment_status", nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
     private PaymentStatus paymentStatus;
@@ -40,23 +43,8 @@ public class Order {
     @Column(name = "stripe_payment_intent_id")
     private String stripePaymentIntentId;
 
-    @Column(name = "snap_address_line1", length = 255)
-    private String snapAddressLine1;
-
-    @Column(name = "snap_address_line2", length = 255)
-    private String snapAddressLine2;
-
-    @Column(name = "snap_address_city", length = 100)
-    private String snapAddressCity;
-
-    @Column(name = "snap_address_state", length = 100)
-    private String snapAddressState;
-
-    @Column(name = "snap_address_postal", length = 20)
-    private String snapAddressPostal;
-
-    @Column(name = "snap_address_country", length = 2)
-    private String snapAddressCountry;
+    @Embedded
+    private Address address;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
@@ -66,9 +54,6 @@ public class Order {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
-
-    @Column(columnDefinition = "text")
-    private String notes;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

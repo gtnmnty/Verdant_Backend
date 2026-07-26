@@ -1,3 +1,67 @@
+extend type Query {
+    myOrders(
+        status: OrderClientFilter = ALL
+        timeframe: OrderTimeframe = RECENT
+        search: String
+        sort: OrderClientSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 10
+    ): OrderPage!
+    order(id: ID!): Order
+
+    adminOrders(
+        status: OrderStatus
+        search: String
+        sort: AdminOrderSort = DATE
+        direction: OrderSortDirection = DESC
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminOrderPage!
+
+    adminOrder(id: ID!): AdminOrderDto
+}
+
+extend type Mutation {
+    adminCreateOrder(input: AdminCreateOrderInput!): AdminOrderDto!
+    adminUpdateOrder(id: ID!, input: AdminUpdateOrderInput!): AdminOrderDto!
+    placeOrder(input: PlaceOrderInput!): Order!
+    adminDeleteOrders(ids: [ID!]!): [Order!]!
+}
+
+input AdminOrderItemInput {
+    productId: ID!
+    quantity: Int!
+    deliveryOption: DeliveryOption!
+}
+
+input PlaceOrderInput {
+    cartItemIds: [ID!]!
+    shippingAddress: AddressInput!
+    paymentMethod: String!
+}
+
+input AdminCreateOrderInput {
+    userId: ID
+    fullName: String
+    phone: String
+    email: String
+    shippingAddress: AddressInput!
+    paymentMethod: String!
+    items: [AdminOrderItemInput!]!
+}
+
+input AdminUpdateOrderInput {
+    userId: ID
+    fullName: String
+    phone: String
+    email: String
+    shippingAddress: AddressInput
+    paymentMethod: String
+    orderStatus: OrderStatus
+    paymentStatus: PaymentStatus
+    items: [AdminOrderItemInput!]
+}
+
 enum OrderStatus {
     PLACED
     PROCESSING
@@ -14,110 +78,111 @@ enum PaymentStatus {
     CANCELLED
 }
 
-enum OrderSortField {
-    CREATED_AT
-    TOTAL
+enum OrderClientFilter {
+    ALL
+    PROCESSING
+    IN_TRANSIT
+    DELIVERED
+    CANCELLED
 }
 
-enum SortDirection {
+enum OrderTimeframe {
+    RECENT
+    ARCHIVED
+}
+
+enum OrderClientSort {
+    NEWEST
+    OLDEST
+    HIGHEST_TOTAL
+}
+
+enum AdminOrderSort {
+    DATE
+    TOTAL
+    STATUS
+}
+
+enum OrderSortDirection {
     ASC
     DESC
 }
 
-input OrderSortInput {
-    field: OrderSortField = CREATED_AT
-    direction: SortDirection = DESC
+type OrderPage {
+    items: [Order!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
 }
 
-type OrderItem {
+type AdminOrderPage {
+    items: [AdminOrderDto!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type Order {
     id: ID!
-    productId: ID
-    productName: String!
-    productImage: String
-    productCategory: String
-    quantity: Int!
-    unitPrice: Float!
-    subtotal: Float!
-}
-
-type OrderActivity {
-    label: String!
-    occurredAt: String
-}
-
-type OrderShippingAddress {
-    line1: String
-    line2: String
-    city: String
-    state: String
-    postalCode: String
-    country: String
-}
-
-type OrderSummary {
-    id: ID!
-    reference: String!
-    customerName: String
-    orderStatus: OrderStatus!
-    paymentStatus: PaymentStatus!
-    itemCount: Int!
-    total: Float!
-    placedAt: String!
-    items: [OrderItem!]!
-}
-
-type OrderDetail {
-    id: ID!
-    reference: String!
-    customerName: String
+    orderCode: String!
+    user: User!
     orderStatus: OrderStatus!
     paymentStatus: PaymentStatus!
     paymentMethod: String!
+    address: Address!
+    subtotal: BigDecimal!
+    deliveryFee: BigDecimal!
+    total: BigDecimal!
+    items: [OrderItemDto!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type OrderItemDto {
+    id: ID!
+    product: Product
+    productName: String!
+    productImage: String
+    quantity: Int!
+    unitPrice: BigDecimal!
+    subtotal: BigDecimal!
+    deliveryOption: DeliveryOption!
+    quantityLabel: String!
+}
+
+type AdminOrderDto {
+    id: ID!
+    orderCode: String!
+    user: User!
+    orderStatus: OrderStatus!
+    paymentStatus: PaymentStatus!
+    paymentMethod: String!
+    address: Address!
+    subtotal: BigDecimal!
+    deliveryFee: BigDecimal!
+    total: BigDecimal!
     itemCount: Int!
-    subtotal: Float!
-    deliveryFee: Float!
-    total: Float!
-    notes: String
-    placedAt: String!
-    updatedAt: String
-    items: [OrderItem!]!
-    activity: [OrderActivity!]!
-    shippingAddress: OrderShippingAddress
+    items: [AdminOrderItemDto!]!
+    activity: [OrderActivityDto!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
 }
 
-type OrderSummaryPage {
-    content: [OrderSummary!]!
-    page: Int!
-    size: Int!
-    totalElements: Int!
-    totalPages: Int!
-    hasNext: Boolean!
-    hasPrevious: Boolean!
+type AdminOrderItemDto {
+    id: ID!
+    product: Product
+    productName: String!
+    productImage: String
+    quantity: Int!
+    unitPrice: BigDecimal!
+    subtotal: BigDecimal!
+    deliveryOption: DeliveryOption!
+    itemLine: String!
 }
 
-input OrderFilterInput {
-    search: String
-    status: OrderStatus
-    page: Int = 0
-    size: Int = 10
-    sort: OrderSortInput
-}
-
-extend type Query {
-    # ---- customer (client role) ----
-    "My Orders page (image 1): recent orders, < 30 days old, 10/page, sortable."
-    myOrders(page: Int = 0, size: Int = 10, sort: OrderSortInput): OrderSummaryPage!
-
-    "View Older History (image 2): orders 30+ days old, 10/page, sortable."
-    myOlderOrders(page: Int = 0, size: Int = 10, sort: OrderSortInput): OrderSummaryPage!
-
-    "A single one of the current user's own orders."
-    myOrder(orderId: ID!): OrderDetail!
-
-    # ---- higher roles: admin, manager, receptionist ----
-    "Orders table (image 3): paged (10/page), filterable by status/search, sortable."
-    orders(filter: OrderFilterInput): OrderSummaryPage!
-
-    "Order detail view (image 4), reached via row '...' -> View details."
-    order(orderId: ID!): OrderDetail!
+type OrderActivityDto {
+    label: String!
+    timestamp: DateTime!
 }

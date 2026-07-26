@@ -1,0 +1,42 @@
+extend type Query {
+    """Card feed for admin/orders/{id}, admin/stylist/{id}, admin/account/{id}."""
+    auditLogForEntity(entityType: AuditEntityType!, entityId: ID!, page: Int = 0, size: Int = 30): AuditLogPage!
+
+    """Global recent-activity feed for admin/dashboard."""
+    auditDashboardFeed(page: Int = 0, size: Int = 5): AuditLogPage!
+}
+
+enum AuditEntityType {
+    DASHBOARD
+    ORDER
+    STYLIST
+    ACCOUNT
+}
+
+enum AuditActionType {
+    CREATED
+    BOOKED
+    RESTOCKED
+    FAVORITE
+    UPDATED
+    CANCELLED
+    DELETED
+    SECURITY
+    ADMINISTRATIVE
+}
+
+type AuditLogEntry {
+    id: ID!
+    actionType: AuditActionType!
+    title: String!
+    detail: String
+    actorLabel: String
+    selfService: Boolean!
+    createdAt: String!
+}
+
+type AuditLogPage {
+    content: [AuditLogEntry!]!
+    totalElements: Int!
+    hasNext: Boolean!
+}

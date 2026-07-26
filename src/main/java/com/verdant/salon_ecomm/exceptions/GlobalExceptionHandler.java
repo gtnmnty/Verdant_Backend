@@ -273,6 +273,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
+    @ExceptionHandler(InvalidWebhookSignatureException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWebhookSignature(InvalidWebhookSignatureException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                400,
+                "Invalid webhook signature",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
+
     // Catch-all fallback: keep this last among the REST handlers
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {

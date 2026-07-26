@@ -118,6 +118,10 @@ public class CartService {
         cartItemRepository.deleteAll(owned);
         return getCart(userId);
     }
+    
+    public List<CartItem> getOwnedItems(UUID userId, List<UUID> cartItemIds) {
+        return fetchOwnedOrThrow(userId, cartItemIds);
+    }
 
     // Shared by getSelectedCart/removeItems: scopes the lookup to this user via
     // CartItemSpec and confirms every requested id actually belongs to them.

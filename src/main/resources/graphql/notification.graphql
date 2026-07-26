@@ -1,0 +1,185 @@
+scalar DateTime
+scalar UUID
+
+enum NotificationType {
+    APPOINTMENT_CREATED
+    APPOINTMENT_UPDATED
+    APPOINTMENT_RESCHEDULED
+    APPOINTMENT_CANCELLED
+    APPOINTMENT_APPROVED
+    APPOINTMENT_REJECTED
+    APPOINTMENT_REMINDER
+    APPOINTMENT_NO_SHOW
+    STYLIST_ASSIGNED
+
+    ORDER_CREATED
+    ORDER_UPDATED
+    ORDER_CANCELLED
+    ORDER_DELETED
+    ORDER_STATUS_CHANGED
+    ORDER_PAYMENT_SUCCESS
+    ORDER_PAYMENT_FAILED
+    ORDER_REFUND_REQUESTED
+    ORDER_REFUNDED
+
+    PRODUCT_ADDED
+    PRODUCT_UPDATED
+    PRODUCT_DELETED
+    PRODUCT_LOW_STOCK
+    PRODUCT_OUT_OF_STOCK
+    PRODUCT_BACK_IN_STOCK
+    PRODUCT_PRICE_DROP
+    SERVICE_ADDED
+    SERVICE_UPDATED
+    SERVICE_DELETED
+    SALE_STARTED
+    SALE_ENDING_SOON
+
+    BRANCH_ADDED
+    BRANCH_UPDATED
+    BRANCH_DELETED
+
+    LEAVE_REQUEST_SUBMITTED
+    LEAVE_REQUEST_APPROVED
+    LEAVE_REQUEST_REJECTED
+    STYLIST_ADDED
+    STYLIST_UPDATED
+    STYLIST_DEACTIVATED
+
+    ACCOUNT_CREATED
+    ACCOUNT_UPDATED
+    ACCOUNT_STATUS_CHANGED
+    PASSWORD_CHANGED
+    NEW_LOGIN_DETECTED
+
+    REVIEW_RECEIVED
+    REVIEW_REPLIED
+
+    PROMO_CODE_ISSUED
+    LOYALTY_POINTS_EARNED
+    LOYALTY_POINTS_EXPIRING
+    MEMBERSHIP_TIER_UPGRADED
+
+    BULK_ACTION_PERFORMED
+}
+
+enum ReferenceType {
+    APPOINTMENT
+    ORDER
+    PRODUCT
+    SERVICE
+    BRANCH
+    LEAVE_REQUEST
+    USER
+    REVIEW
+    PROMOTION
+}
+
+enum NotificationPriority {
+    INFO
+    WARNING
+    CRITICAL
+}
+
+enum NotificationReadFilter {
+    ALL
+    READ
+    UNREAD
+}
+
+type Notification {
+    id: UUID!
+    type: NotificationType!
+    title: String!
+    message: String!
+    referenceType: ReferenceType
+    referenceId: UUID
+    isRead: Boolean!
+    readAt: DateTime
+    priority: NotificationPriority
+    actorId: UUID
+    actorName: String
+    createdAt: DateTime!
+}
+
+type NotificationGroup {
+    date: DateTime!
+    notifications: [Notification!]!
+}
+
+type NotificationEdge {
+    cursor: String!
+    node: Notification!
+}
+
+type NotificationConnection {
+    edges: [NotificationEdge!]!
+    pageInfo: PageInfo!
+    unreadCount: Int!
+}
+
+type PageInfo {
+    hasNextPage: Boolean!
+    endCursor: String
+}
+
+type MarkAsReadResult {
+    updatedIds: [UUID!]!
+}
+
+type DeleteNotificationsResult {
+    deletedIds: [UUID!]!
+}
+
+input NotificationCreateInput {
+    userId: UUID!
+    type: NotificationType!
+    title: String!
+    message: String!
+    referenceType: ReferenceType
+    referenceId: UUID
+    priority: NotificationPriority
+    actorId: UUID
+    actorName: String
+}
+
+input NotificationFilterInput {
+    readFilter: NotificationReadFilter = ALL
+    search: String
+    types: [NotificationType!]
+}
+
+extend type Query {
+    notifications(
+        filter: NotificationFilterInput
+        first: Int = 20
+        after: String
+    ): NotificationConnection!
+
+    notificationsGroupedByDate(
+        filter: NotificationFilterInput
+        first: Int = 20
+        after: String
+    ): [NotificationGroup!]!
+
+    notificationUnreadCount: Int!
+}
+
+type Mutation {
+    createNotification(input: NotificationCreateInput!): Notification!
+
+    markNotificationAsRead(id: UUID!): MarkAsReadResult!
+    markNotificationsAsRead(ids: [UUID!]!): MarkAsReadResult!
+    markAllNotificationsAsRead: MarkAsReadResult!
+
+    deleteNotification(id: UUID!): DeleteNotificationsResult!
+    deleteNotifications(ids: [UUID!]!): DeleteNotificationsResult!
+}
+
+type Subscription {
+    """
+    Pushes newly created notifications to the current user in real time
+    (bell icon badge / live feed updates).
+    """
+    notificationReceived: Notification!
+}

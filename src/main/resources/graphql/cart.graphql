@@ -57,8 +57,3 @@ input SelectedCartItemsInput {
     cartItemIds: [ID!]!
 }
 
-enum DeliveryOption {
-    STANDARD
-    EXPRESS
-    SAME_DAY
-}

@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.util.Locale;
+
 public record BranchAddressInput(
     @NotBlank(message = "Address line 1 is required")
     @Size(max = 255)
@@ -31,7 +33,7 @@ public record BranchAddressInput(
         if (country == null || country.isBlank()) {
             country = "US";
         } else {
-            country = country.trim().toUpperCase();
+            country = country.trim().toUpperCase(Locale.ROOT);
         }
     }
 }

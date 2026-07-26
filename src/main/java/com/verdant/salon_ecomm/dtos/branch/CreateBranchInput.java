@@ -12,6 +12,7 @@ public record CreateBranchInput(
     BranchAddressInput address,
     String phone,
     @Email(message = "Email must be valid")
+    @NotBlank
     String email,
     @Valid
     OperatingHoursInput operatingHours,
