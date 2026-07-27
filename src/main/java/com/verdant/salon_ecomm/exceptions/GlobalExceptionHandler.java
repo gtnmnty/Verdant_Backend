@@ -285,6 +285,18 @@ public class GlobalExceptionHandler {
             ));
     }
 
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ErrorResponse> handleInsufficientStock(InsufficientStockException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                409,
+                "Insufficient stock",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
+
     // Catch-all fallback: keep this last among the REST handlers
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {

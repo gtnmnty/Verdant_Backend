@@ -1,9 +1,7 @@
 package com.verdant.salon_ecomm.controllers;
 
-import com.verdant.salon_ecomm.exceptions.InvalidWebhookSignatureException;
 import com.verdant.salon_ecomm.services.PaymentService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,12 +17,11 @@ public class StripeWebhookController {
         @RequestBody String rawPayload,
         @RequestHeader("Stripe-Signature") String signatureHeader) {
 
-        try {
-            paymentService.handleStripeWebhook(rawPayload, signatureHeader);
-            return ResponseEntity.ok("ok");
-        } catch (InvalidWebhookSignatureException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("invalid signature");
-        }
+        // InvalidWebhookSignatureException is intentionally NOT caught here -
+        // it propagates to GlobalExceptionHandler.handleInvalidWebhookSignature,
+        // so callers get the same standardized ErrorResponse shape as every
+        // other endpoint instead of this controller's own raw string body.
+        paymentService.handleStripeWebhook(rawPayload, signatureHeader);
+        return ResponseEntity.ok("ok");
     }
 }
-

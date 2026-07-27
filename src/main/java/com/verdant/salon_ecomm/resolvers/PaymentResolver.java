@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.resolvers;
 import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
 import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.enums.AccountRole;
 import com.verdant.salon_ecomm.services.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -21,11 +22,13 @@ public class PaymentResolver {
     @PreAuthorize("isAuthenticated()")
     public PaymentIntentDto createPaymentIntent(@Argument CreatePaymentInput input,
                                                 @AuthenticationPrincipal User principal) {
-        // ASSUMPTION: wire isAdmin the same way your other resolvers do
-        // (e.g. checking principal's role against your RBAC roles). Left as
-        // false here so a non-admin caller can only pay for their own order
-        // until you plug in the real check.
-        boolean isAdmin = false;
+        // ASSUMPTION: User.getRole() returns your AccountRole enum, matching
+        // the pattern used elsewhere (e.g. NotificationResolver's
+        // hasElevatedRole check). Fails closed: any role other than ADMIN
+        // results in isAdmin=false, so a non-admin can only ever pay for
+        // their own order.
+        boolean isAdmin = principal.getRole() == AccountRole.ADMIN ||
+                          principal.getRole() == AccountRole.MANAGER;
         return paymentService.createPaymentIntent(input, principal.getId(), isAdmin);
     }
 }

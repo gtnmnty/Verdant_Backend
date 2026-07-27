@@ -10,7 +10,6 @@ import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
-import com.verdant.salon_ecomm.services.OrderService;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,13 +19,28 @@ import java.util.Locale;
 
 @Component
 public class OrderMapper {
-    private final OrderService orderService;
-
-    public OrderMapper(OrderService orderService) {
-        this.orderService = orderService;
-    }
 
     // ---------- Entity -> DTO ----------
+
+    public OrderDto toDto(Order order, List<OrderItem> items) {
+        List<OrderItemDto> itemDtos = items.stream()
+            .map(this::toOrderItemDto)
+            .toList();
+
+        return new OrderDto(
+            order.getId(),
+            order.getOrderCode(),
+            order.getOrderStatus(),
+            order.getPaymentStatus(),
+            order.getPaymentMethod(),
+            order.getSubtotal(),
+            order.getDeliveryFee(),
+            order.getTotal(),
+            itemDtos,
+            order.getCreatedAt(),
+            order.getUpdatedAt()
+        );
+    }
 
     public AdminOrderDto toAdminDto(Order order, List<OrderItem> items) {
         List<AdminOrderItemDto> itemDtos = items.stream()
@@ -36,30 +50,42 @@ public class OrderMapper {
         return new AdminOrderDto(
             order.getId(),
             order.getOrderCode(),
-            order.getUser(),
+            toAdminOrderUserDto(order.getUser()),
             order.getOrderStatus(),
             order.getPaymentStatus(),
             order.getPaymentMethod(),
-            order.getAddress(),
+            order.getShippingAddress(),
             order.getSubtotal(),
             order.getDeliveryFee(),
             order.getTotal(),
             itemDtos.size(),
             itemDtos,
-            buildActivity(order),
+            buildMilestones(order),
             order.getCreatedAt(),
             order.getUpdatedAt()
         );
     }
 
+    private AdminOrderUserDto toAdminOrderUserDto(User user) {
+        if (user == null) return null;
+        // ASSUMPTION: matches the field names on AdminOrderUserDto - adjust
+        // getters to your actual User entity API.
+        return new AdminOrderUserDto(
+            user.getId(),
+            user.getFullName(),
+            user.getEmail(),
+            user.getPhone()
+        );
+    }
+
     public OrderItemDto toOrderItemDto(OrderItem item) {
         String label = "Quantity: " + item.getQuantity()
-            + " \u00b7 " + formatPriceFixed(item.getUnitPrice())
-            + " \u00b7 " + formatDeliveryOption(item.getDeliveryOption());
+            + " · " + formatPriceFixed(item.getUnitPrice())
+            + " · " + formatDeliveryOption(item.getDeliveryOption());
 
         return new OrderItemDto(
             item.getId(),
-            item.getProduct(),
+            toOrderItemProductDto(item.getProduct()),
             item.getProductName(),
             item.getProductImage(),
             item.getQuantity(),
@@ -72,12 +98,12 @@ public class OrderMapper {
 
     public AdminOrderItemDto toAdminOrderItemDto(OrderItem item) {
         String label = "Qty " + item.getQuantity()
-            + " \u00d7 " + formatPriceCompact(item.getUnitPrice())
-            + " \u00b7 " + formatDeliveryOption(item.getDeliveryOption());
+            + " × " + formatPriceCompact(item.getUnitPrice())
+            + " · " + formatDeliveryOption(item.getDeliveryOption());
 
         return new AdminOrderItemDto(
             item.getId(),
-            item.getProduct(),
+            toOrderItemProductDto(item.getProduct()),
             item.getProductName(),
             item.getProductImage(),
             item.getQuantity(),
@@ -88,36 +114,41 @@ public class OrderMapper {
         );
     }
 
-    // ---------- Automatic activity timeline ----------
-    // Order does not persist a timestamp per stage, so this is reconstructed from
-    // the current status snapshot (createdAt/updatedAt) rather than true history.
+    // ---------- Current-status milestones ----------
+    // IMPORTANT: Order does not persist a timestamp per transition, so this is
+    // NOT a true activity history/audit log - it's a snapshot of the order's
+    // *current* payment/fulfillment status, each entry stamped with the same
+    // order.updatedAt. Do not present this to users as a timeline of past
+    // events (e.g. "payment received on X, then shipped on Y" would be
+    // misleading if both reuse the same updatedAt). If real per-transition
+    // history is needed later, this should be replaced with a persisted
+    // order/audit-event table and this method should read from that instead.
+    public List<OrderMilestoneDto> buildMilestones(Order order) {
+        List<OrderMilestoneDto> milestones = new ArrayList<>();
 
-    public List<OrderActivityDto> buildActivity(Order order) {
-        List<OrderActivityDto> activity = new ArrayList<>();
-
-        activity.add(new OrderActivityDto("Order placed", order.getCreatedAt()));
+        milestones.add(new OrderMilestoneDto("Order placed", order.getCreatedAt()));
 
         PaymentStatus paymentStatus = order.getPaymentStatus();
         if (paymentStatus == PaymentStatus.PAID || paymentStatus == PaymentStatus.PROCESSED) {
-            activity.add(new OrderActivityDto("Payment received", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Payment received", order.getUpdatedAt()));
         } else if (paymentStatus == PaymentStatus.FAILED) {
-            activity.add(new OrderActivityDto("Payment failed", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Payment failed", order.getUpdatedAt()));
         } else if (paymentStatus == PaymentStatus.REFUNDED) {
-            activity.add(new OrderActivityDto("Payment refunded", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Payment refunded", order.getUpdatedAt()));
         }
 
         OrderStatus status = order.getOrderStatus();
         if (status == OrderStatus.PROCESSING) {
-            activity.add(new OrderActivityDto("Order processing", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Order processing", order.getUpdatedAt()));
         } else if (status == OrderStatus.IN_TRANSIT) {
-            activity.add(new OrderActivityDto("Order in transit", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Order in transit", order.getUpdatedAt()));
         } else if (status == OrderStatus.DELIVERED) {
-            activity.add(new OrderActivityDto("Order delivered", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Order delivered", order.getUpdatedAt()));
         } else if (status == OrderStatus.CANCELLED) {
-            activity.add(new OrderActivityDto("Order cancelled", order.getUpdatedAt()));
+            milestones.add(new OrderMilestoneDto("Order cancelled", order.getUpdatedAt()));
         }
 
-        return activity;
+        return milestones;
     }
 
     // ---------- Input -> Entity ----------
@@ -128,13 +159,17 @@ public class OrderMapper {
     ) {
         return Order.builder()
             .user(user)
-            .address(address)
+            .shippingAddress(address)
             .paymentMethod(paymentMethod)
             .subtotal(subtotal)
             .deliveryFee(deliveryFee)
             .total(total)
             .orderStatus(OrderStatus.PLACED)
-            .paymentStatus(PaymentStatus.PROCESSED)
+            // ASSUMPTION: PaymentStatus.PENDING is the "not yet charged" value -
+            // rename to match whatever your enum actually calls it. Order should
+            // NOT start as PROCESSED; that should only be set once Stripe
+            // confirms the PaymentIntent (via webhook or synchronous check).
+            .paymentStatus(PaymentStatus.PENDING)
             .build();
         // orderCode is generated and set by the service, not here
     }
@@ -188,5 +223,16 @@ public class OrderMapper {
             sb.append(word.charAt(0)).append(word.substring(1).toLowerCase(Locale.US));
         }
         return sb.toString();
+    }
+
+
+    private OrderItemProductDto toOrderItemProductDto(Product product) {
+        if (product == null) return null; // product may have been deleted after the order was placed
+        return new OrderItemProductDto(
+            product.getId(),
+            product.getName(),
+            product.getItemCatalog(),
+            product.getPrice()
+        );
     }
 }

@@ -62,7 +62,6 @@ public class NotificationService {
         );
     }
 
-    @Override
     @Transactional(readOnly = true)
     public List<NotificationGroupDto> getNotificationsGroupedByDate(UUID userId, NotificationQueryDto query) {
         NotificationQueryDto resolved = applyDefaults(query);
@@ -77,13 +76,11 @@ public class NotificationService {
         return notificationMapper.toGroupedByDate(content);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public long getUnreadCount(UUID userId) {
         return notificationRepository.countByUser_IdAndIsReadFalse(userId);
     }
 
-    @Override
     @Transactional
     public NotificationResponseDto create(NotificationCreateDto request) {
         User user = userRepository.findById(request.userId())
@@ -94,22 +91,31 @@ public class NotificationService {
         return notificationMapper.toResponseDto(saved);
     }
 
-    @Override
     @Transactional
-    public int markAsRead(UUID userId, List<UUID> ids) {
-        return notificationRepository.markAsReadByIdsAndUser(ids, userId, OffsetDateTime.now());
+    public List<UUID> markAsRead(UUID userId, List<UUID> ids) {
+        List<UUID> ownedIds = notificationRepository.findByIdInAndUser_Id(ids, userId).stream()
+            .map(Notification::getId)
+            .toList();
+        if (!ownedIds.isEmpty()) {
+            notificationRepository.markAsReadByIdsAndUser(ownedIds, userId, OffsetDateTime.now());
+        }
+        return ownedIds;
     }
 
-    @Override
     @Transactional
-    public int markAllAsRead(UUID userId) {
-        return notificationRepository.markAllAsReadByUser(userId, OffsetDateTime.now());
+    public void markAllAsRead(UUID userId) {
+        notificationRepository.markAllAsReadByUser(userId, OffsetDateTime.now());
     }
 
-    @Override
     @Transactional
-    public long delete(UUID userId, List<UUID> ids) {
-        return notificationRepository.deleteByIdInAndUser_Id(ids, userId);
+    public List<UUID> delete(UUID userId, List<UUID> ids) {
+        List<UUID> ownedIds = notificationRepository.findByIdInAndUser_Id(ids, userId).stream()
+            .map(Notification::getId)
+            .toList();
+        if (!ownedIds.isEmpty()) {
+            notificationRepository.deleteByIdInAndUser_Id(ownedIds, userId);
+        }
+        return ownedIds;
     }
 
     // ── Helpers ──────────────────────────────────────────
@@ -133,6 +139,9 @@ public class NotificationService {
     }
 
     private Pageable buildPageable(NotificationQueryDto query) {
+        int normalizedPage = Math.max(0, query.page());
+        int normalizedSize = Math.clamp(query.size(), 1, 100);
+
         Sort.Direction direction = query.sortDirection() == SortDirection.ASC
             ? Sort.Direction.ASC
             : Sort.Direction.DESC;
@@ -144,6 +153,6 @@ public class NotificationService {
             case IS_READ -> "isRead";
         };
 
-        return PageRequest.of(query.page(), query.size(), Sort.by(direction, property));
+        return PageRequest.of(normalizedPage, normalizedSize, Sort.by(direction, property));
     }
 }

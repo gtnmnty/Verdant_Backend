@@ -1,4 +1,4 @@
-scalar DateTime
+scalar Date
 scalar UUID
 
 enum NotificationType {
@@ -118,11 +118,6 @@ type NotificationConnection {
     unreadCount: Int!
 }
 
-type PageInfo {
-    hasNextPage: Boolean!
-    endCursor: String
-}
-
 type MarkAsReadResult {
     updatedIds: [UUID!]!
 }
@@ -177,9 +172,5 @@ type Mutation {
 }
 
 type Subscription {
-    """
-    Pushes newly created notifications to the current user in real time
-    (bell icon badge / live feed updates).
-    """
     notificationReceived: Notification!
 }

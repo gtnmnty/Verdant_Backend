@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.services;
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.order.*;
 import com.verdant.salon_ecomm.entities.*;
+import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.enums.ItemType;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class OrderService {
 
     private final OrderRepository orderRepository;
@@ -64,8 +66,14 @@ public class OrderService {
 
         Page<Order> result = orderRepository.findAll(spec, pageable);
 
+        Map<UUID, List<OrderItem>> itemsByOrder = fetchItemsByOrder(result.getContent());
+
+        List<OrderDto> items = result.getContent().stream()
+            .map(order -> orderMapper.toDto(order, itemsByOrder.getOrDefault(order.getId(), List.of())))
+            .toList();
+
         return new OrderPage(
-            result.getContent(),
+            items,
             normalizedPage,
             normalizedPageSize,
             (int) result.getTotalElements(),
@@ -93,8 +101,11 @@ public class OrderService {
         Specification<Order> spec = OrderSpec.filterAdminOrders(status, search);
         Page<Order> result = orderRepository.findAll(spec, pageable);
 
+        Map<UUID, List<OrderItem>> itemsByOrder = fetchItemsByOrder(result.getContent());
+
         List<AdminOrderDto> items = result.getContent().stream()
-            .map(order -> orderMapper.toAdminDto(order, orderItemRepository.findByOrder_Id(order.getId())))
+            .map(order -> orderMapper.toAdminDto(
+                order, itemsByOrder.getOrDefault(order.getId(), List.of())))
             .toList();
 
         return new AdminOrderPage(
@@ -140,7 +151,7 @@ public class OrderService {
         Order order = findOrderOrThrow(id);
 
         if (input.shippingAddress() != null) {
-            order.setAddress(orderMapper.fromAddressInput(input.shippingAddress()));
+            order.setShippingAddress(orderMapper.fromAddressInput(input.shippingAddress()));
         }
         if (input.paymentMethod() != null) {
             order.setPaymentMethod(input.paymentMethod());
@@ -155,6 +166,7 @@ public class OrderService {
         List<OrderItem> items;
         if (input.items() != null) {
             orderItemRepository.deleteAll(orderItemRepository.findByOrder_Id(id));
+            orderItemRepository.flush();
 
             ItemBuildResult built = buildOrderItems(input.items(), order);
             List<OrderItem> newItems = built.items();
@@ -189,10 +201,19 @@ public class OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
         for (CartItem cartItem : cartItems) {
             Product product = cartItem.getProduct();
+            int quantity = cartItem.getQuantity();
+
+            int updatedRows = productRepository.decrementStock(product.getId(), quantity);
+            if (updatedRows == 0) {
+                throw new InsufficientStockException(
+                    "Not enough stock for product " + product.getId() + " (requested " + quantity + ")"
+                );
+            }
+
             String productImage = resolveImageUrl(primaryImages, product.getId());
 
             OrderItem item = orderMapper.toItemEntity(
-                null, product, productImage, cartItem.getQuantity(), cartItem.getDeliveryOption()
+                null, product, productImage, quantity, cartItem.getDeliveryOption()
             );
             subtotal = subtotal.add(item.getSubtotal());
             pendingItems.add(item);
@@ -230,6 +251,12 @@ public class OrderService {
     }
 
     // ---------- Helpers ----------
+
+    private Map<UUID, List<OrderItem>> fetchItemsByOrder(List<Order> orders) {
+        List<UUID> orderIds = orders.stream().map(Order::getId).toList();
+        return orderItemRepository.findByOrder_IdIn(orderIds).stream()
+            .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+    }
 
     private Map<UUID, MediaImageDto> resolvePrimaryImages(List<UUID> productIds) {
         return mediaImageService.getPrimaryImagesByEntityIds(ItemType.PRODUCT, productIds);
@@ -293,7 +320,7 @@ public class OrderService {
 
     private String generateOrderCode() {
         Long sequenceValue = orderRepository.getNextOrderCodeSequenceValue();
-        return "VS-" + String.format("%04d", sequenceValue);
+        return "VS-" + String.format("%08d", sequenceValue);
     }
 
     private Sort toClientSort(OrderClientSort sort) {
