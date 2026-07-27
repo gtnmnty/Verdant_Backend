@@ -18,12 +18,12 @@ extend type Query {
         pageSize: Int = 10
     ): AdminOrderPage!
 
-    adminOrder(id: ID!): AdminOrderDto
+    adminOrder(id: ID!): AdminOrder
 }
 
 extend type Mutation {
-    adminCreateOrder(input: AdminCreateOrderInput!): AdminOrderDto!
-    adminUpdateOrder(id: ID!, input: AdminUpdateOrderInput!): AdminOrderDto!
+    adminCreateOrder(input: AdminCreateOrderInput!): AdminOrder!
+    adminUpdateOrder(id: ID!, input: AdminUpdateOrderInput!): AdminOrder!
     placeOrder(input: PlaceOrderInput!): Order!
     adminDeleteOrders(ids: [ID!]!): [Order!]!
 }
@@ -117,7 +117,7 @@ type OrderPage {
 }
 
 type AdminOrderPage {
-    items: [AdminOrderDto!]!
+    items: [AdminOrder!]!
     page: Int!
     pageSize: Int!
     totalItems: Int!
@@ -135,12 +135,12 @@ type Order {
     subtotal: BigDecimal!
     deliveryFee: BigDecimal!
     total: BigDecimal!
-    items: [OrderItemDto!]!
+    items: [OrderItem!]!
     createdAt: DateTime!
     updatedAt: DateTime!
 }
 
-type OrderItemDto {
+type OrderItem {
     id: ID!
     product: Product
     productName: String!
@@ -152,7 +152,7 @@ type OrderItemDto {
     quantityLabel: String!
 }
 
-type AdminOrderDto {
+type AdminOrder {
     id: ID!
     orderCode: String!
     user: User!
@@ -164,13 +164,13 @@ type AdminOrderDto {
     deliveryFee: BigDecimal!
     total: BigDecimal!
     itemCount: Int!
-    items: [AdminOrderItemDto!]!
-    activity: [OrderActivityDto!]!
+    items: [AdminOrderItem!]!
+    activity: [OrderActivity!]!
     createdAt: DateTime!
     updatedAt: DateTime!
 }
 
-type AdminOrderItemDto {
+type AdminOrderItem {
     id: ID!
     product: Product
     productName: String!
@@ -182,7 +182,7 @@ type AdminOrderItemDto {
     itemLine: String!
 }
 
-type OrderActivityDto {
+type OrderActivity {
     label: String!
     timestamp: DateTime!
 }

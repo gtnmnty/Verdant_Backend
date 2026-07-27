@@ -1,14 +1,8 @@
 package com.verdant.salon_ecomm.services;
 
-import com.stripe.exception.ApiConnectionException;
-import com.stripe.exception.ApiException;
-import com.stripe.exception.SignatureVerificationException;
-import com.stripe.exception.StripeException;
-import com.stripe.model.Charge;
-import com.stripe.model.Customer;
-import com.stripe.model.Event;
-import com.stripe.model.PaymentIntent;
-import com.stripe.model.StripeObject;
+import com.stripe.StripeClient;
+import com.stripe.exception.*;
+import com.stripe.model.*;
 import com.stripe.net.RequestOptions;
 import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
@@ -29,14 +23,18 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.repositories.WebhookEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Currency;
 import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,11 +43,8 @@ import java.util.UUID;
 @Slf4j
 public class PaymentService {
 
-    // ASSUMPTION: Order has getPaymentStatus()/setPaymentStatus(PaymentStatus),
-    // separate from its fulfillment `status` field, since you built a
-    // dedicated PaymentStatus enum rather than reusing OrderStatus.
     private static final Set<PaymentStatus> TERMINAL_STATUSES = EnumSet.of(
-        PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.CANCELED
+        PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
     );
 
     private final OrderRepository orderRepository;
@@ -57,34 +52,44 @@ public class PaymentService {
     private final WebhookEventRepository webhookEventRepository;
     private final PaymentMapper paymentMapper;
     private final StripeConfig stripeConfig;
+    private final StripeClient stripeClient;
+
+    // Self-injected proxy so @Retryable actually applies (a plain `this.` call
+    // bypasses the Spring AOP proxy). Set via constructor/setter injection by
+    // Spring since it's declared as a dependency of this same bean type.
+    @Lazy
+    private final PaymentService self;
 
     // ---------- Mutations ----------
 
-    @Transactional
-    public PaymentIntentDto createPaymentIntent(CreatePaymentInput input, UUID currentUserId, boolean isAdmin){
-        Order order = orderRepository.findById(input.orderId())
-            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + input.orderId()));
-
-        if (!isAdmin && (order.getUser() == null || !order.getUser().getId().equals(currentUserId))) {
-            throw new AccessDeniedException("Not your order");
-        }
+    public PaymentIntentDto createPaymentIntent(CreatePaymentInput input, UUID currentUserId, boolean isAdmin) {
+        Order order = self.loadAndAuthorizeOrder(input.orderId(), currentUserId, isAdmin);
 
         if (order.getStripePaymentIntentId() != null) {
             return paymentMapper.toDto(retrieveExistingIntent(order.getStripePaymentIntentId()));
         }
 
         User user = order.getUser();
-        String stripeCustomerId = ensureStripeCustomer(user);
+        if (user == null) {
+            throw new PaymentException(
+                "Order " + order.getId() + " has no associated user; cannot create a Stripe customer"
+            );
+        }
+
+        String stripeCustomerId = self.ensureStripeCustomer(user);
 
         PaymentIntent intent;
         try {
-            intent = createStripePaymentIntent(order, stripeCustomerId);
+            intent = self.createStripePaymentIntent(order, stripeCustomerId);
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to create PaymentIntent for order " + order.getId(), ex);
+            throw new PaymentException("Failed to create PaymentIntent for order " + order.getId());
         }
 
-        order.setStripePaymentIntentId(intent.getId());
-        orderRepository.save(order);
+        Order updated = self.persistPaymentIntentId(order.getId(), intent.getId());
+        if (!intent.getId().equals(updated.getStripePaymentIntentId())) {
+            // Lost the race — another request already persisted its intent id first.
+            return paymentMapper.toDto(retrieveExistingIntent(updated.getStripePaymentIntentId()));
+        }
 
         return paymentMapper.toDto(intent);
     }
@@ -126,8 +131,68 @@ public class PaymentService {
 
     // ---------- Private helpers ----------
 
+    @Transactional(readOnly = true)
+    protected Order loadAndAuthorizeOrder(UUID orderId, UUID currentUserId, boolean isAdmin) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (!isAdmin && (order.getUser() == null || !order.getUser().getId().equals(currentUserId))) {
+            throw new AccessDeniedException("Not your order");
+        }
+        return order;
+    }
+
+    @Transactional
+    protected Order persistPaymentIntentId(UUID orderId, String paymentIntentId) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (order.getStripePaymentIntentId() == null) {
+            order.setStripePaymentIntentId(paymentIntentId);
+            orderRepository.save(order);
+        }
+        return order;
+    }
+
+    @Transactional
+    protected String ensureStripeCustomer(User user) {
+        if (user.getStripeCustomerId() != null) {
+            return user.getStripeCustomerId();
+        }
+
+        Customer customer;
+        try {
+            CustomerCreateParams params = CustomerCreateParams.builder()
+                .setEmail(user.getEmail())
+                .setName(user.getFullName())
+                .putMetadata("user_id", user.getId().toString())
+                .build();
+            customer = stripeClient.customers().create(params);
+        } catch (StripeException ex) {
+            throw new PaymentException("Failed to create Stripe customer for user " + user.getId());
+        }
+
+        user.setStripeCustomerId(customer.getId());
+        userRepository.save(user);
+        return customer.getId();
+    }
+
     private String extractPaymentIntentId(Event event) {
-        StripeObject stripeObject = event.getDataObjectDeserializer().getObject().orElse(null);
+        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+        StripeObject stripeObject = deserializer.getObject().orElse(null);
+
+        if (stripeObject == null) {
+            log.warn("Could not deserialize Stripe event {} ({}) - likely API version mismatch; " +
+                "falling back to raw JSON", event.getId(), event.getType());
+            try {
+                stripeObject = deserializer.deserializeUnsafe();
+            } catch (EventDataObjectDeserializationException ex) {
+                log.warn("Fallback deserialization failed for event {} ({}): {}",
+                    event.getId(), event.getType(), ex.getMessage());
+                return null;
+            }
+        }
+
         if (stripeObject instanceof PaymentIntent intent) {
             return intent.getId();
         }
@@ -165,53 +230,44 @@ public class PaymentService {
             case "payment_intent.processing" -> PaymentStatus.PROCESSED;
             case "payment_intent.succeeded" -> PaymentStatus.PAID;
             case "payment_intent.payment_failed" -> PaymentStatus.FAILED;
-            case "payment_intent.canceled" -> PaymentStatus.CANCELED;
+            case "payment_intent.canceled" -> PaymentStatus.CANCELLED;
             case "charge.refunded" -> PaymentStatus.REFUNDED;
             default -> null;
         };
     }
 
-    private String ensureStripeCustomer(User user) {
-        if (user.getStripeCustomerId() != null) {
-            return user.getStripeCustomerId();
-        }
-        try {
-            CustomerCreateParams params = CustomerCreateParams.builder()
-                .setEmail(user.getEmail())
-                .setName(user.getFullName())
-                .putMetadata("user_id", user.getId().toString())
-                .build();
-            Customer customer = Customer.create(params);
-            user.setStripeCustomerId(customer.getId());
-            userRepository.save(user);
-            return customer.getId();
-        } catch (StripeException ex) {
-            throw new PaymentException("Failed to create Stripe customer for user " + user.getId(), ex);
-        }
-    }
-
     private PaymentIntent retrieveExistingIntent(String stripePaymentIntentId) {
         try {
-            return PaymentIntent.retrieve(stripePaymentIntentId);
+            return stripeClient.paymentIntents().retrieve(stripePaymentIntentId);
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to retrieve existing PaymentIntent " + stripePaymentIntentId, ex);
+            throw new PaymentException("Failed to retrieve existing PaymentIntent " + stripePaymentIntentId);
         }
     }
 
     @Retryable(
         retryFor = { ApiConnectionException.class, ApiException.class },
-        maxAttempts = 3,
         backoff = @Backoff(delay = 500, multiplier = 2)
     )
     PaymentIntent createStripePaymentIntent(Order order, String stripeCustomerId) throws StripeException {
-        long minorUnits = order.getTotal()
-            .movePointRight(2)
+        BigDecimal orderTotal = order.getTotal();
+        if (orderTotal == null || orderTotal.signum() <= 0) {
+            throw new PaymentException("Order " + order.getId() + " has no valid total to charge");
+        }
+
+        String currency = stripeConfig.getCurrency();
+        // Same fraction-digit source as PaymentMapper.toMajorUnits, so the two
+        // conversions stay inverse of each other for non-2-decimal currencies
+        // (JPY has 0 minor digits, KWD/BHD have 3).
+        int fractionDigits = Currency.getInstance(currency.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
+
+        long minorUnits = orderTotal
+            .movePointRight(fractionDigits)
             .setScale(0, RoundingMode.HALF_UP)
             .longValueExact();
 
         PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
             .setAmount(minorUnits)
-            .setCurrency("usd")
+            .setCurrency(currency)
             .setCustomer(stripeCustomerId)
             .putMetadata("order_id", order.getId().toString())
             .setAutomaticPaymentMethods(
@@ -225,6 +281,6 @@ public class PaymentService {
             .setIdempotencyKey("order_" + order.getId() + "_payment_intent")
             .build();
 
-        return PaymentIntent.create(params, options);
+        return stripeClient.paymentIntents().create(params, options);
     }
 }

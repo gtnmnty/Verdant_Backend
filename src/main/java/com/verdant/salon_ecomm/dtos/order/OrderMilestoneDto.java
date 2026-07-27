@@ -2,7 +2,7 @@ package com.verdant.salon_ecomm.dtos.order;
 
 import java.time.OffsetDateTime;
 
-public record OrderActivityDto(
+public record OrderMilestoneDto(
     String label,
     OffsetDateTime timestamp
 ) {}

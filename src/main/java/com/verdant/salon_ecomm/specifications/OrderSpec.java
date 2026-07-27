@@ -8,7 +8,9 @@ import org.springframework.data.jpa.domain.Specification;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public class OrderSpec {
+public final class OrderSpec {
+
+    private OrderSpec() {}
 
     public static Specification<Order> filterAdminOrders(
         OrderStatus status, String search
@@ -49,7 +51,14 @@ public class OrderSpec {
 
     public static Specification<Order> hasClientFilter(OrderClientFilter clientFilter) {
         if (clientFilter == null || clientFilter == OrderClientFilter.ALL) return null;
-        return hasStatus(OrderStatus.valueOf(clientFilter.name()));
+        return switch (clientFilter) {
+            case PROCESSING -> (root, query, cb) -> root.get("orderStatus")
+                .in(OrderStatus.PLACED, OrderStatus.PROCESSING);
+            case IN_TRANSIT -> hasStatus(OrderStatus.IN_TRANSIT);
+            case DELIVERED -> hasStatus(OrderStatus.DELIVERED);
+            case CANCELLED -> hasStatus(OrderStatus.CANCELLED);
+            case ALL -> null;
+        };
     }
 
     public static Specification<Order> withinWindow(OffsetDateTime start, OffsetDateTime end) {

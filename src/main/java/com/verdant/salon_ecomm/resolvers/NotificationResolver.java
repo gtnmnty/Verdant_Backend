@@ -3,7 +3,7 @@ package com.verdant.salon_ecomm.resolvers;
 import com.verdant.salon_ecomm.dtos.notification.*;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationReadFilter;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationSortField;
-import com.verdant.salon_ecomm.models.enums.NotificationType;
+import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.SortDirection;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.services.NotificationPublisher;
@@ -53,7 +53,7 @@ public class NotificationResolver {
             .toList();
 
         boolean hasNextPage = (result.page() + 1) < result.totalPages();
-        String endCursor = edges.isEmpty() ? null : edges.get(edges.size() - 1).cursor();
+        String endCursor = edges.isEmpty() ? null : edges.getLast().cursor();
 
         return new NotificationGraphQLTypes.NotificationConnection(
             edges, new NotificationGraphQLTypes.PageInfo(hasNextPage, endCursor), result.unreadCount()
@@ -86,67 +86,88 @@ public class NotificationResolver {
     // ── Mutations ──────────────────────────────────────────
 
     @MutationMapping
-    @PreAuthorize("isAuthenticated()")
-    public NotificationResponseDto createNotification(@Argument("input") NotificationCreateDto input) {
-        NotificationResponseDto created = notificationService.create(input);
-        notificationPublisher.publish(input.userId(), created);
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','OWNER','ADMIN')")
+    public NotificationResponseDto createNotification(
+        @Argument("input") NotificationCreateDto input,
+        @AuthenticationPrincipal User principal
+    ) {
+        // Recipient (userId) and content come from the input, but actor identity
+        // is always derived from the authenticated caller - never trust a
+        // client-supplied actorId/actorName, or any authenticated staff member
+        // could spoof being someone else in the notification's origin.
+        NotificationCreateDto sanitized = new NotificationCreateDto(
+            input.userId(),
+            input.type(),
+            input.title(),
+            input.message(),
+            input.referenceType(),
+            input.referenceId(),
+            input.priority(),
+            principal.getId(),
+            principal.getFullName()
+        );
+
+        NotificationResponseDto created = notificationService.create(sanitized);
+        notificationPublisher.publish(sanitized.userId(), created);
         return created;
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public NotificationGraphQLTypes.MarkAsReadResult markNotificationAsRead(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        notificationService.markAsRead(principal.getId(), List.of(id));
-        // Bulk update returns a row count, not the ids that matched — assuming
-        // the single id belonged to the caller. See markNotificationsAsRead
-        // note below for the same limitation at scale.
-        return new NotificationGraphQLTypes.MarkAsReadResult(List.of(id));
+    public NotificationGraphQLTypes.MarkAsReadResult markNotificationAsRead(
+        @Argument UUID id, @AuthenticationPrincipal User principal
+    ) {
+        List<UUID> updatedIds = notificationService.markAsRead(principal.getId(), List.of(id));
+        return new NotificationGraphQLTypes.MarkAsReadResult(updatedIds);
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public NotificationGraphQLTypes.MarkAsReadResult markNotificationsAsRead(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
-        notificationService.markAsRead(principal.getId(), ids);
-        // Limitation: NotificationService.markAsRead currently returns only
-        // an affected-row count, not which ids matched. If a caller passes
-        // an id they don't own, it's silently skipped by the repository but
-        // this result still reports it as "updated". Tightening this means
-        // having the service return the matched ids instead of an int —
-        // worth doing if the client needs to know about partial failures.
-        return new NotificationGraphQLTypes.MarkAsReadResult(ids);
+    public NotificationGraphQLTypes.MarkAsReadResult markNotificationsAsRead(
+        @Argument List<UUID> ids, @AuthenticationPrincipal User principal
+    ) {
+        List<UUID> updatedIds = notificationService.markAsRead(principal.getId(), ids);
+        return new NotificationGraphQLTypes.MarkAsReadResult(updatedIds);
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public NotificationGraphQLTypes.MarkAsReadResult markAllNotificationsAsRead(@AuthenticationPrincipal User principal) {
+    public NotificationGraphQLTypes.MarkAsReadResult markAllNotificationsAsRead(
+        @AuthenticationPrincipal User principal
+    ) {
         notificationService.markAllAsRead(principal.getId());
         return new NotificationGraphQLTypes.MarkAsReadResult(List.of());
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public NotificationGraphQLTypes.DeleteNotificationsResult deleteNotification(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        notificationService.delete(principal.getId(), List.of(id));
-        return new NotificationGraphQLTypes.DeleteNotificationsResult(List.of(id));
+    public NotificationGraphQLTypes.DeleteNotificationsResult deleteNotification(
+        @Argument UUID id, @AuthenticationPrincipal User principal
+    ) {
+        List<UUID> deletedIds = notificationService.delete(principal.getId(), List.of(id));
+        return new NotificationGraphQLTypes.DeleteNotificationsResult(deletedIds);
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
-    public NotificationGraphQLTypes.DeleteNotificationsResult deleteNotifications(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
-        notificationService.delete(principal.getId(), ids);
-        return new NotificationGraphQLTypes.DeleteNotificationsResult(ids);
+    public NotificationGraphQLTypes.DeleteNotificationsResult deleteNotifications(
+        @Argument List<UUID> ids, @AuthenticationPrincipal User principal
+    ) {
+        List<UUID> deletedIds = notificationService.delete(principal.getId(), ids);
+        return new NotificationGraphQLTypes.DeleteNotificationsResult(deletedIds);
     }
 
     // ── Subscription ───────────────────────────────────────
 
     @SubscriptionMapping
+    @PreAuthorize("isAuthenticated()")
     public Flux<NotificationResponseDto> notificationReceived(@AuthenticationPrincipal User principal) {
         return notificationPublisher.streamFor(principal.getId());
     }
 
     // ── Helpers ──────────────────────────────────────────
 
-    private record NotificationFilterInputArgs(
+    public record NotificationFilterInputArgs(
         NotificationReadFilter readFilter,
         String search,
         List<NotificationType> types

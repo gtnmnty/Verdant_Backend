@@ -14,9 +14,10 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
-    List<Product> findByItemCatalog(ItemCatalog category);
-    List<Product> findByIsFeaturedTrue();
-    List<Product> findByStatus(CollectionStatus status);
+    @Modifying
+    @Query("update Product p set p.stockQuantity = p.stockQuantity - :qty " +
+        "where p.id = :id and p.stockQuantity >= :qty")
+    int decrementStock(@Param("id") UUID id, @Param("qty") int qty);
 
     @Modifying
     @Query("UPDATE Product p SET p.reviewCount = :count, p.averageRating = :avg WHERE p.id = :id")

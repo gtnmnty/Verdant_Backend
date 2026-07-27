@@ -15,7 +15,7 @@ public class AuditLogMapper {
             log.getDetail(),
             log.isSelfService() ? "Self-service" : log.getActorLabel(),
             log.isSelfService(),
-            log.getCreatedAt()
+            log.getCreatedAt().toString()
         );
     }
 }

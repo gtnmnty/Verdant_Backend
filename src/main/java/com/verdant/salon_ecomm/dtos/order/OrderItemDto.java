@@ -1,6 +1,5 @@
 package com.verdant.salon_ecomm.dtos.order;
 
-import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 
 import java.math.BigDecimal;
@@ -8,7 +7,7 @@ import java.util.UUID;
 
 public record OrderItemDto(
     UUID id,
-    Product product,
+    OrderItemProductDto product,
     String productName,
     String productImage,
     Integer quantity,

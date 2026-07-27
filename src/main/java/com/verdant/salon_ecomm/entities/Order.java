@@ -30,7 +30,7 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
 
-    @Column(length = 255)
+    @Column(length = 250)
     private String orderCode;
 
     @Column(name = "payment_status", nullable = false, length = 30)
@@ -44,7 +44,7 @@ public class Order {
     private String stripePaymentIntentId;
 
     @Embedded
-    private Address address;
+    private Address shippingAddress;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
