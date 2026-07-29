@@ -2,16 +2,23 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.order.*;
+import com.verdant.salon_ecomm.dtos.order.admin.*;
 import com.verdant.salon_ecomm.entities.*;
+import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
+import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
+import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
 import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.enums.ItemType;
+import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.orders.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -44,6 +51,7 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final MediaImageService mediaImageService;
     private final CartService cartService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ---------- Queries ----------
 
@@ -125,7 +133,7 @@ public class OrderService {
     // ---------- Mutations ----------
 
     @Transactional
-    public AdminOrderDto createAdminOrder(AdminCreateOrderInput input) {
+    public AdminOrderDto createAdminOrder(AdminCreateOrderInput input, User actor) {
         User user = resolveCustomer(input.userId(), input.email());
 
         if (input.items() == null || input.items().isEmpty()) {
@@ -134,7 +142,7 @@ public class OrderService {
 
         Address address = orderMapper.fromAddressInput(input.shippingAddress());
 
-        ItemBuildResult built = buildOrderItems(input.items(), null);
+        ItemBuildResult built = buildOrderItems(input.items());
         List<OrderItem> pendingItems = built.items();
         BigDecimal subtotal = built.subtotal();
 
@@ -143,43 +151,90 @@ public class OrderService {
         pendingItems.forEach(item -> item.setOrder(savedOrder));
         List<OrderItem> savedItems = orderItemRepository.saveAll(pendingItems);
 
+        eventPublisher.publishEvent(new OrderCreatedByAdminEvent(savedOrder, actor));
+
         return orderMapper.toAdminDto(savedOrder, savedItems);
     }
 
     @Transactional
-    public AdminOrderDto updateAdminOrder(UUID id, AdminUpdateOrderInput input) {
+    public AdminOrderDto updateAdminOrder(UUID id, AdminUpdateOrderInput input, User actor) {
         Order order = findOrderOrThrow(id);
+
+        OrderStatus previousOrderStatus = order.getOrderStatus();
+        PaymentStatus previousPaymentStatus = order.getPaymentStatus();
 
         if (input.shippingAddress() != null) {
             order.setShippingAddress(orderMapper.fromAddressInput(input.shippingAddress()));
         }
-        if (input.paymentMethod() != null) {
-            order.setPaymentMethod(input.paymentMethod());
-        }
-        if (input.orderStatus() != null) {
-            order.setOrderStatus(input.orderStatus());
-        }
-        if (input.paymentStatus() != null) {
-            order.setPaymentStatus(input.paymentStatus());
-        }
+        if (input.paymentMethod() != null) { order.setPaymentMethod(input.paymentMethod()); }
+        if (input.orderStatus() != null) { order.setOrderStatus(input.orderStatus()); }
+        if (input.paymentStatus() != null) { order.setPaymentStatus(input.paymentStatus()); }
 
         List<OrderItem> items;
         if (input.items() != null) {
-            orderItemRepository.deleteAll(orderItemRepository.findByOrder_Id(id));
-            orderItemRepository.flush();
+            List<OrderItem> existingItems = orderItemRepository.findByOrder_Id(id);
+            Map<UUID, OrderItem> existingByProduct = existingItems.stream()
+                .collect(Collectors.toMap(item -> item.getProduct().getId(), item -> item));
+            Map<UUID, AdminOrderItemInput> requestedByProduct = input.items().stream()
+                .collect(Collectors.toMap(AdminOrderItemInput::productId, i -> i));
 
-            ItemBuildResult built = buildOrderItems(input.items(), order);
-            List<OrderItem> newItems = built.items();
-            BigDecimal subtotal = built.subtotal();
+            for (OrderItem existing : existingItems) {
+                UUID productId = existing.getProduct().getId();
+                if (!requestedByProduct.containsKey(productId)) {
+                    restoreStock(productId, existing.getQuantity());
+                }
+            }
+
+            List<UUID> productIds = input.items().stream()
+                .map(AdminOrderItemInput::productId)
+                .toList();
+            Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(productIds);
+
+            List<OrderItem> reconciledItems = new ArrayList<>();
+            BigDecimal subtotal = BigDecimal.ZERO;
+            for (AdminOrderItemInput itemInput : input.items()) {
+                OrderItem existing = existingByProduct.get(itemInput.productId());
+
+                if (existing != null) {
+                    if (!existing.getQuantity().equals(itemInput.quantity())) {
+                        reconcileStockForQuantityChange(itemInput.productId(), existing.getQuantity(), itemInput.quantity());
+                        existing.setQuantity(itemInput.quantity());
+                        existing.setSubtotal(existing.getUnitPrice().multiply(BigDecimal.valueOf(itemInput.quantity())));
+                    }
+                    existing.setDeliveryOption(itemInput.deliveryOption());
+                    subtotal = subtotal.add(existing.getSubtotal());
+                    reconciledItems.add(existing);
+                } else {
+                    Product product = productRepository.findById(itemInput.productId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemInput.productId()));
+                    reserveStock(product.getId(), itemInput.quantity());
+                    String productImage = resolveImageUrl(primaryImages, product.getId());
+                    OrderItem newItem = orderMapper.toItemEntity(order, product, productImage, itemInput.quantity(), itemInput.deliveryOption());
+                    subtotal = subtotal.add(newItem.getSubtotal());
+                    reconciledItems.add(newItem);
+                }
+            }
+
+            List<OrderItem> removedItems = existingItems.stream()
+                .filter(item -> !requestedByProduct.containsKey(item.getProduct().getId()))
+                .toList();
+            if (!removedItems.isEmpty()) {
+                orderItemRepository.deleteAll(removedItems);
+                orderItemRepository.flush();
+            }
 
             order.setSubtotal(subtotal);
             order.setTotal(subtotal.add(order.getDeliveryFee()));
-            items = orderItemRepository.saveAll(newItems);
-        } else {
-            items = orderItemRepository.findByOrder_Id(id);
+            items = orderItemRepository.saveAll(reconciledItems);
         }
+        else { items = orderItemRepository.findByOrder_Id(id); }
 
         Order savedOrder = orderRepository.save(order);
+
+        eventPublisher.publishEvent(
+            new OrderUpdatedEvent(savedOrder, actor, previousOrderStatus, previousPaymentStatus)
+        );
+
         return orderMapper.toAdminDto(savedOrder, items);
     }
 
@@ -200,21 +255,7 @@ public class OrderService {
         List<OrderItem> pendingItems = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
         for (CartItem cartItem : cartItems) {
-            Product product = cartItem.getProduct();
-            int quantity = cartItem.getQuantity();
-
-            int updatedRows = productRepository.decrementStock(product.getId(), quantity);
-            if (updatedRows == 0) {
-                throw new InsufficientStockException(
-                    "Not enough stock for product " + product.getId() + " (requested " + quantity + ")"
-                );
-            }
-
-            String productImage = resolveImageUrl(primaryImages, product.getId());
-
-            OrderItem item = orderMapper.toItemEntity(
-                null, product, productImage, quantity, cartItem.getDeliveryOption()
-            );
+            OrderItem item = reserveStockAndBuildItem(cartItem, primaryImages);
             subtotal = subtotal.add(item.getSubtotal());
             pendingItems.add(item);
         }
@@ -226,11 +267,13 @@ public class OrderService {
 
         cartService.removeItems(userId, input.cartItemIds());
 
+        eventPublisher.publishEvent(new OrderPlacedEvent(savedOrder, user));
+
         return savedOrder;
     }
 
     @Transactional
-    public List<Order> adminDeleteOrders(List<UUID> orderIds) {
+    public List<Order> adminDeleteOrders(List<UUID> orderIds, User actor) {
         if (orderIds == null || orderIds.isEmpty()) {
             throw new IllegalArgumentException("No order ids were provided.");
         }
@@ -246,6 +289,12 @@ public class OrderService {
 
         orders.forEach(order -> orderItemRepository.deleteAll(orderItemRepository.findByOrder_Id(order.getId())));
         orderRepository.deleteAll(orders);
+
+        // Published before the transaction commits but after deleteAll is queued —
+        // listeners run AFTER_COMMIT (see OrderAuditListener/OrderNotificationListener),
+        // so by the time they read `orders`, rows are gone from the DB but this
+        // in-memory list still holds the data they need to describe what was deleted.
+        eventPublisher.publishEvent(new OrdersDeletedEvent(orders, actor));
 
         return orders;
     }
@@ -279,7 +328,7 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
-    private ItemBuildResult buildOrderItems(List<AdminOrderItemInput> itemInputs, Order order) {
+    private ItemBuildResult buildOrderItems(List<AdminOrderItemInput> itemInputs) {
         List<UUID> productIds = itemInputs.stream()
             .map(AdminOrderItemInput::productId)
             .toList();
@@ -290,8 +339,11 @@ public class OrderService {
         for (AdminOrderItemInput itemInput : itemInputs) {
             Product product = productRepository.findById(itemInput.productId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemInput.productId()));
+
+            reserveStock(product.getId(), itemInput.quantity());
+
             String productImage = resolveImageUrl(primaryImages, product.getId());
-            OrderItem item = orderMapper.toItemEntity(order, product, productImage, itemInput.quantity(), itemInput.deliveryOption());
+            OrderItem item = orderMapper.toItemEntity(null, product, productImage, itemInput.quantity(), itemInput.deliveryOption());
             subtotal = subtotal.add(item.getSubtotal());
             items.add(item);
         }
@@ -316,6 +368,40 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found for email: " + email));
         }
         throw new IllegalArgumentException("userId or email is required to identify an existing customer");
+    }
+
+    private void reserveStock(UUID productId, int quantity) {
+        int updatedRows = productRepository.decrementStock(productId, quantity);
+        if (updatedRows == 0) {
+            throw new InsufficientStockException(
+                "Not enough stock for product " + productId + " (requested " + quantity + ")"
+            );
+        }
+    }
+
+    private void restoreStock(UUID productId, int quantity) {
+        if (quantity > 0) {
+            productRepository.incrementStock(productId, quantity);
+        }
+    }
+
+    private void reconcileStockForQuantityChange(UUID productId, int oldQuantity, int newQuantity) {
+        int delta = newQuantity - oldQuantity;
+        if (delta > 0) {
+            reserveStock(productId, delta);
+        } else if (delta < 0) {
+            restoreStock(productId, -delta);
+        }
+    }
+
+    private OrderItem reserveStockAndBuildItem(CartItem cartItem, Map<UUID, MediaImageDto> primaryImages) {
+        Product product = cartItem.getProduct();
+        int quantity = cartItem.getQuantity();
+
+        reserveStock(product.getId(), quantity);
+
+        String productImage = resolveImageUrl(primaryImages, product.getId());
+        return orderMapper.toItemEntity(null, product, productImage, quantity, cartItem.getDeliveryOption());
     }
 
     private String generateOrderCode() {

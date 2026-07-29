@@ -49,7 +49,7 @@ public class NotificationMapper {
 
         for (NotificationResponseDto dto : notifications) {
             LocalDate date = dto.createdAt().atZoneSameInstant(ZoneOffset.UTC).toLocalDate();
-            grouped.computeIfAbsent(date, _ -> new ArrayList<>()).add(dto);
+            grouped.computeIfAbsent(date, unused -> new ArrayList<>()).add(dto);
         }
 
         return grouped.entrySet().stream()

@@ -13,6 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuditLogService {
@@ -22,7 +24,7 @@ public class AuditLogService {
 
     // ---------- Queries ----------
 
-    public Page<AuditLogDto> getForEntity(AuditEntityType entityType, Long entityId, Pageable pageable) {
+    public Page<AuditLogDto> getForEntity(AuditEntityType entityType, String entityId, Pageable pageable) {
         return auditLogRepository
             .findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable)
             .map(auditLogMapper::toDto);
@@ -36,12 +38,12 @@ public class AuditLogService {
 
     @Transactional
     public void record(
-        AuditEntityType entityType, Long entityId, AuditActionType actionType,
+        AuditEntityType entityType, UUID entityId, AuditActionType actionType,
         String title, String detail, User actor
     ) {
         AuditLog log = AuditLog.builder()
             .entityType(entityType)
-            .entityId(entityId)
+            .entityId(entityId.toString())
             .actionType(actionType)
             .title(title)
             .detail(detail)
@@ -54,12 +56,12 @@ public class AuditLogService {
 
     @Transactional
     public void recordSelfService(
-        AuditEntityType entityType, Long entityId, AuditActionType actionType,
+        AuditEntityType entityType, UUID entityId, AuditActionType actionType,
         String title, String detail
     ) {
         AuditLog log = AuditLog.builder()
             .entityType(entityType)
-            .entityId(entityId)
+            .entityId(entityId.toString())
             .actionType(actionType)
             .title(title)
             .detail(detail)

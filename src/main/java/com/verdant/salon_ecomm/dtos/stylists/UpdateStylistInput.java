@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.dtos.stylists;
 
-import com.verdant.salon_ecomm.models.enums.StylistAccountStatus;
+import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;
 
 import java.util.List;
 import java.util.UUID;

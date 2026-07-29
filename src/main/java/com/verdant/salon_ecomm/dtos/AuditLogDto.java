@@ -2,6 +2,8 @@ package com.verdant.salon_ecomm.dtos;
 
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 
+import java.time.Instant;
+
 public record AuditLogDto(
     Long id,
     AuditActionType actionType,
@@ -9,5 +11,5 @@ public record AuditLogDto(
     String detail,
     String actorLabel,
     boolean selfService,
-    String createdAt
+    Instant createdAt
 ) {}

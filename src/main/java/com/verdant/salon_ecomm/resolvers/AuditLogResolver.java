@@ -22,7 +22,7 @@ public class AuditLogResolver {
     @QueryMapping
     public Page<AuditLogDto> auditLogForEntity(
         @Argument AuditEntityType entityType,
-        @Argument Long entityId,
+        @Argument String entityId,
         @Argument int page,
         @Argument int size
     ) {

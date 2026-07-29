@@ -2,7 +2,7 @@ package com.verdant.salon_ecomm.specifications;
 
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.Stylist;
-import com.verdant.salon_ecomm.models.enums.StylistAccountStatus;
+import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;
 import jakarta.persistence.criteria.Join;
 import org.springframework.data.jpa.domain.Specification;
 

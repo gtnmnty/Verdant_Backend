@@ -30,7 +30,7 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
 
-    @Column(length = 250)
+    @Column(length = 255)
     private String orderCode;
 
     @Column(name = "payment_status", nullable = false, length = 30)
