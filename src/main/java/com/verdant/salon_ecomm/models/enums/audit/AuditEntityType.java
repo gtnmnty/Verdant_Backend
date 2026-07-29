@@ -4,5 +4,6 @@ public enum AuditEntityType {
     DASHBOARD,
     ORDER,
     STYLIST,
-    ACCOUNT
+    ACCOUNT,
+    PRODUCT
 }

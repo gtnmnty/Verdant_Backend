@@ -3,7 +3,7 @@ package com.verdant.salon_ecomm.dtos.order.events;
 import com.verdant.salon_ecomm.entities.Order;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
-import com.verdant.salon_ecomm.models.enums.orders.PaymentStatus;
+import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 
 public record OrderUpdatedEvent(
         Order order,

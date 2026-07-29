@@ -17,6 +17,7 @@ import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.orders.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -30,12 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -136,6 +132,13 @@ public class OrderService {
     public AdminOrderDto createAdminOrder(AdminCreateOrderInput input, User actor) {
         User user = resolveCustomer(input.userId(), input.email());
 
+        if (input.fullName() == null || input.fullName().isBlank()) {
+            throw new IllegalArgumentException("Customer full name is required for admin order creation");
+        }
+        if (input.phone() == null || input.phone().isBlank()) {
+            throw new IllegalArgumentException("Customer phone number is required for admin order creation");
+        }
+
         if (input.items() == null || input.items().isEmpty()) {
             throw new IllegalArgumentException("At least one item is required");
         }
@@ -158,7 +161,8 @@ public class OrderService {
 
     @Transactional
     public AdminOrderDto updateAdminOrder(UUID id, AdminUpdateOrderInput input, User actor) {
-        Order order = findOrderOrThrow(id);
+        Order order = orderRepository.findByIdForUpdate(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
 
         OrderStatus previousOrderStatus = order.getOrderStatus();
         PaymentStatus previousPaymentStatus = order.getPaymentStatus();
@@ -172,6 +176,19 @@ public class OrderService {
 
         List<OrderItem> items;
         if (input.items() != null) {
+            List<UUID> requestedProductIds = input.items().stream()
+                .map(AdminOrderItemInput::productId)
+                .toList();
+
+            Set<UUID> seen = new HashSet<>();
+            Set<UUID> duplicateProductIds = requestedProductIds.stream()
+                .filter(productId -> !seen.add(productId))
+                .collect(Collectors.toSet());
+
+            if (!duplicateProductIds.isEmpty()) {
+                throw new ValidationException("Duplicate product IDs in order items: " + duplicateProductIds);
+            }
+
             List<OrderItem> existingItems = orderItemRepository.findByOrder_Id(id);
             Map<UUID, OrderItem> existingByProduct = existingItems.stream()
                 .collect(Collectors.toMap(item -> item.getProduct().getId(), item -> item));
@@ -185,10 +202,7 @@ public class OrderService {
                 }
             }
 
-            List<UUID> productIds = input.items().stream()
-                .map(AdminOrderItemInput::productId)
-                .toList();
-            Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(productIds);
+            Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(requestedProductIds);
 
             List<OrderItem> reconciledItems = new ArrayList<>();
             BigDecimal subtotal = BigDecimal.ZERO;
@@ -197,26 +211,41 @@ public class OrderService {
 
                 if (existing != null) {
                     if (!existing.getQuantity().equals(itemInput.quantity())) {
-                        reconcileStockForQuantityChange(itemInput.productId(), existing.getQuantity(), itemInput.quantity());
+                        reconcileStockForQuantityChange(
+                            itemInput.productId(),
+                            existing.getQuantity(),
+                            itemInput.quantity()
+                        );
                         existing.setQuantity(itemInput.quantity());
-                        existing.setSubtotal(existing.getUnitPrice().multiply(BigDecimal.valueOf(itemInput.quantity())));
+                        existing.setSubtotal(
+                            existing.getUnitPrice().multiply(
+                                BigDecimal.valueOf(itemInput.quantity())
+                            )
+                        );
                     }
                     existing.setDeliveryOption(itemInput.deliveryOption());
                     subtotal = subtotal.add(existing.getSubtotal());
                     reconciledItems.add(existing);
                 } else {
                     Product product = productRepository.findById(itemInput.productId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemInput.productId()));
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                            "Product not found: " + itemInput.productId())
+                        );
                     reserveStock(product.getId(), itemInput.quantity());
                     String productImage = resolveImageUrl(primaryImages, product.getId());
-                    OrderItem newItem = orderMapper.toItemEntity(order, product, productImage, itemInput.quantity(), itemInput.deliveryOption());
+                    OrderItem newItem = orderMapper.toItemEntity(
+                        order, product, productImage,
+                        itemInput.quantity(),
+                        itemInput.deliveryOption()
+                    );
                     subtotal = subtotal.add(newItem.getSubtotal());
                     reconciledItems.add(newItem);
                 }
             }
 
             List<OrderItem> removedItems = existingItems.stream()
-                .filter(item -> !requestedByProduct.containsKey(item.getProduct().getId()))
+                .filter(item -> !requestedByProduct
+                    .containsKey(item.getProduct().getId()))
                 .toList();
             if (!removedItems.isEmpty()) {
                 orderItemRepository.deleteAll(removedItems);
@@ -232,7 +261,9 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
 
         eventPublisher.publishEvent(
-            new OrderUpdatedEvent(savedOrder, actor, previousOrderStatus, previousPaymentStatus)
+            new OrderUpdatedEvent(
+                savedOrder, actor, previousOrderStatus, previousPaymentStatus
+            )
         );
 
         return orderMapper.toAdminDto(savedOrder, items);
@@ -287,7 +318,8 @@ public class OrderService {
             throw new ResourceNotFoundException("One or more orders were not found.");
         }
 
-        orders.forEach(order -> orderItemRepository.deleteAll(orderItemRepository.findByOrder_Id(order.getId())));
+        orders.forEach(order -> orderItemRepository
+            .deleteAll(orderItemRepository.findByOrder_Id(order.getId())));
         orderRepository.deleteAll(orders);
 
         // Published before the transaction commits but after deleteAll is queued —
@@ -316,13 +348,18 @@ public class OrderService {
         return primaryImage != null ? primaryImage.url() : null;
     }
 
-    private Order buildAndSaveOrder(User user, Address address, String paymentMethod, BigDecimal subtotal) {
+    private Order buildAndSaveOrder(
+        User user, Address address, String paymentMethod, BigDecimal subtotal
+    ) {
         // Shipping is currently free across the board (matches cart screen showing 0 per item) —
         // revisit if per-delivery-option shipping costs get introduced later.
         BigDecimal deliveryFee = BigDecimal.ZERO;
         BigDecimal total = subtotal.add(deliveryFee);
 
-        Order order = orderMapper.toEntity(user, address, paymentMethod, subtotal, deliveryFee, total);
+        Order order = orderMapper.toEntity(
+            user, address, paymentMethod,
+            subtotal, deliveryFee, total
+        );
         order.setOrderCode(generateOrderCode());
 
         return orderRepository.save(order);
@@ -338,12 +375,18 @@ public class OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
         for (AdminOrderItemInput itemInput : itemInputs) {
             Product product = productRepository.findById(itemInput.productId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemInput.productId()));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                    "Product not found: " + itemInput.productId())
+                );
 
             reserveStock(product.getId(), itemInput.quantity());
 
             String productImage = resolveImageUrl(primaryImages, product.getId());
-            OrderItem item = orderMapper.toItemEntity(null, product, productImage, itemInput.quantity(), itemInput.deliveryOption());
+            OrderItem item = orderMapper.toItemEntity(
+                null, product, productImage,
+                itemInput.quantity(),
+                itemInput.deliveryOption()
+            );
             subtotal = subtotal.add(item.getSubtotal());
             items.add(item);
         }

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
@@ -36,7 +37,7 @@ public class AuditLogService {
 
     // ---------- Mutations ----------
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(
         AuditEntityType entityType, UUID entityId, AuditActionType actionType,
         String title, String detail, User actor
@@ -54,7 +55,7 @@ public class AuditLogService {
         auditLogRepository.save(log);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSelfService(
         AuditEntityType entityType, UUID entityId, AuditActionType actionType,
         String title, String detail

@@ -89,18 +89,11 @@ public class PaymentService {
             throw new PaymentException("Failed to create PaymentIntent for order " + order.getId());
         }
 
-        Order updated = self.persistPaymentIntentId(order.getId(), intent.getId());
+        Order updated = self.persistPaymentIntentId(order.getId(), order.getUser().getId(), intent.getId());
         if (!intent.getId().equals(updated.getStripePaymentIntentId())) {
             // Lost the race — another request already persisted its intent id first.
             return paymentMapper.toDto(retrieveExistingIntent(updated.getStripePaymentIntentId()));
         }
-
-        eventPublisher.publishEvent(new PaymentStatusChangedEvent(
-            order.getId(), order.getUser().getId(),
-            null,              // no previous status — this is the initiation
-            PaymentStatus.PENDING,         // or whatever your "awaiting payment" status is
-            "payment_intent.created"       // not a real Stripe event type, just your own marker
-        ));
 
         return paymentMapper.toDto(intent);
     }
@@ -154,13 +147,20 @@ public class PaymentService {
     }
 
     @Transactional
-    protected Order persistPaymentIntentId(UUID orderId, String paymentIntentId) {
+    protected Order persistPaymentIntentId(UUID orderId, UUID userId, String paymentIntentId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
             .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
 
         if (order.getStripePaymentIntentId() == null) {
             order.setStripePaymentIntentId(paymentIntentId);
             orderRepository.save(order);
+
+            eventPublisher.publishEvent(new PaymentStatusChangedEvent(
+                order.getId(), userId,
+                null,
+                PaymentStatus.PENDING,
+                "payment_intent.created"
+            ));
         }
         return order;
     }
@@ -267,7 +267,7 @@ public class PaymentService {
         try {
             return stripeClient.paymentIntents().retrieve(stripePaymentIntentId);
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to create Stripe customer for user " + stripePaymentIntentId, ex);
+            throw new PaymentException("Failed to retrieve PaymentIntent " + stripePaymentIntentId, ex);
         }
     }
 

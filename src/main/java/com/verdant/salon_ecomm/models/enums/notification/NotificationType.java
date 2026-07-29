@@ -23,6 +23,10 @@ public enum NotificationType {
     ORDER_PAYMENT_FAILED,
     ORDER_REFUND_REQUESTED,
     ORDER_REFUNDED,
+    ORDER_PAYMENT_PENDING,
+    ORDER_PAYMENT_ACTION_REQUIRED,
+    ORDER_PAYMENT_PROCESSING,
+    ORDER_PAYMENT_CANCELLED,
 
     // ── Products & Services (catalog) ───────────
     PRODUCT_ADDED,

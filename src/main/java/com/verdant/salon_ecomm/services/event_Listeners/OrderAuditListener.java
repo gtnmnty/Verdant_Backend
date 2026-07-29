@@ -8,18 +8,16 @@ import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
+@RequiredArgsConstructor
 public class OrderAuditListener {
 
     private final AuditLogService auditLogService;
-
-    public OrderAuditListener(AuditLogService auditLogService) {
-        this.auditLogService = auditLogService;
-    }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPlaced(OrderPlacedEvent event) {
@@ -52,23 +50,23 @@ public class OrderAuditListener {
 
         if (event.orderStatusChanged()) {
             auditLogService.record(
-                    AuditEntityType.ORDER,
-                    order.getId(),
-                    AuditActionType.UPDATED,
-                    "Order " + order.getOrderCode() + " status changed",
-                    event.previousOrderStatus() + " -> " + order.getOrderStatus(),
-                    event.actor()
+                AuditEntityType.ORDER,
+                order.getId(),
+                AuditActionType.UPDATED,
+                "Order " + order.getOrderCode() + " status changed",
+                event.previousOrderStatus() + " -> " + order.getOrderStatus(),
+                event.actor()
             );
         }
 
         if (event.paymentStatusChanged()) {
             auditLogService.record(
-                    AuditEntityType.ORDER,
-                    order.getId(),
-                    AuditActionType.UPDATED,
-                    "Order " + order.getOrderCode() + " payment status changed",
-                    event.previousPaymentStatus() + " -> " + order.getPaymentStatus(),
-                    event.actor()
+                AuditEntityType.ORDER,
+                order.getId(),
+                AuditActionType.UPDATED,
+                "Order " + order.getOrderCode() + " payment status changed",
+                event.previousPaymentStatus() + " -> " + order.getPaymentStatus(),
+                event.actor()
             );
         }
     }
