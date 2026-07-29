@@ -25,7 +25,7 @@ public class PaymentResolver {
         // ASSUMPTION: User.getRole() returns your AccountRole enum, matching
         // the pattern used elsewhere (e.g. NotificationResolver's
         // hasElevatedRole check). Fails closed: any role other than ADMIN
-        // results in isAdmin=false, so a non-admin can only ever pay for
+        // results in isAdmin=false, so a non-admin or non-manager can only pay for
         // their own order.
         boolean isAdmin = principal.getRole() == AccountRole.ADMIN ||
                           principal.getRole() == AccountRole.MANAGER;

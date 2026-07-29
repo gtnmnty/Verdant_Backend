@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.dtos.notification;
 
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
-import com.verdant.salon_ecomm.models.enums.NotificationType;
+import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 
 import java.util.UUID;

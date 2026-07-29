@@ -1,6 +1,11 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.order.*;
+import com.verdant.salon_ecomm.dtos.order.admin.AdminCreateOrderInput;
+import com.verdant.salon_ecomm.dtos.order.admin.AdminOrderDto;
+import com.verdant.salon_ecomm.dtos.order.admin.AdminOrderPage;
+import com.verdant.salon_ecomm.dtos.order.admin.AdminUpdateOrderInput;
+import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Order;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
@@ -81,22 +86,24 @@ public class OrderResolver {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     @MutationMapping
-    public AdminOrderDto adminCreateOrder(@Argument("input") AdminCreateOrderInput input) {
-        return orderService.createAdminOrder(input);
+    public AdminOrderDto adminCreateOrder(
+        @Argument("input") AdminCreateOrderInput input, @AuthenticationPrincipal User principal
+    ) {
+        return orderService.createAdminOrder(input, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     @MutationMapping
     public AdminOrderDto adminUpdateOrder(
-        @Argument UUID id, @Argument("input") AdminUpdateOrderInput input
+        @Argument UUID id, @Argument("input") AdminUpdateOrderInput input, @AuthenticationPrincipal User principal
     ) {
-        return orderService.updateAdminOrder(id, input);
+        return orderService.updateAdminOrder(id, input, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     @MutationMapping
-    public List<Order> adminDeleteOrders(@Argument List<UUID> ids) {
-        return orderService.adminDeleteOrders(ids);
+    public List<Order> adminDeleteOrders(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+        return orderService.adminDeleteOrders(ids, principal);
     }
 
     // ---------- Field resolvers ----------
@@ -106,6 +113,11 @@ public class OrderResolver {
         return orderItemRepository.findByOrder_Id(order.getId()).stream()
             .map(orderMapper::toOrderItemDto)
             .toList();
+    }
+
+    @SchemaMapping(typeName = "Order", field = "address")
+    public Address address(Order order) {
+        return order.getShippingAddress();
     }
 
     private boolean hasElevatedRole(User principal) {

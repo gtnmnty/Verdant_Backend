@@ -180,6 +180,7 @@ type AdminOrderItem {
     subtotal: BigDecimal!
     deliveryOption: DeliveryOption!
     itemLine: String!
+    quantityLabel: String!
 }
 
 type OrderActivity {

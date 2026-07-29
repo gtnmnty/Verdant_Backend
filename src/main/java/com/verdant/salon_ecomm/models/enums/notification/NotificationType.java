@@ -54,7 +54,10 @@ public enum NotificationType {
     // ── Accounts ─────────────────────────────────
     ACCOUNT_CREATED,
     ACCOUNT_UPDATED,
+    ACCOUNT_ADDRESS_CHANGED,
     ACCOUNT_STATUS_CHANGED,
+    PHONE_NUMBER_CHANGED,
+    EMAIL_CHANGED,
     PASSWORD_CHANGED,
     NEW_LOGIN_DETECTED,
 

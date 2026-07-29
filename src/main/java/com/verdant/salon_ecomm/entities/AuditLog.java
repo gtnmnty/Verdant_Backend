@@ -17,14 +17,17 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "audit_logs")
+@Table(name = "audit_logs", indexes = {
+    @Index(name = "idx_audit_entity_created", columnList = "entityType, entityId, createdAt"),
+    @Index(name = "idx_audit_created", columnList = "createdAt")
+})
 public class AuditLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long entityId;
+    private String entityId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

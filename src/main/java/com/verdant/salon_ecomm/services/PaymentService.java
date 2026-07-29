@@ -10,6 +10,7 @@ import com.stripe.param.PaymentIntentCreateParams;
 import com.verdant.salon_ecomm.config.StripeConfig;
 import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
+import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
 import com.verdant.salon_ecomm.entities.Order;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.entities.stripe.WebhookEvent;
@@ -23,6 +24,7 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.repositories.WebhookEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -53,6 +55,8 @@ public class PaymentService {
     private final PaymentMapper paymentMapper;
     private final StripeConfig stripeConfig;
     private final StripeClient stripeClient;
+
+    private final ApplicationEventPublisher eventPublisher;
 
     // Self-injected proxy so @Retryable actually applies (a plain `this.` call
     // bypasses the Spring AOP proxy). Set via constructor/setter injection by
@@ -90,6 +94,13 @@ public class PaymentService {
             // Lost the race — another request already persisted its intent id first.
             return paymentMapper.toDto(retrieveExistingIntent(updated.getStripePaymentIntentId()));
         }
+
+        eventPublisher.publishEvent(new PaymentStatusChangedEvent(
+            order.getId(), order.getUser().getId(),
+            null,              // no previous status — this is the initiation
+            PaymentStatus.PENDING,         // or whatever your "awaiting payment" status is
+            "payment_intent.created"       // not a real Stripe event type, just your own marker
+        ));
 
         return paymentMapper.toDto(intent);
     }
@@ -154,7 +165,6 @@ public class PaymentService {
         return order;
     }
 
-    @Transactional
     protected String ensureStripeCustomer(User user) {
         if (user.getStripeCustomerId() != null) {
             return user.getStripeCustomerId();
@@ -167,14 +177,32 @@ public class PaymentService {
                 .setName(user.getFullName())
                 .putMetadata("user_id", user.getId().toString())
                 .build();
-            customer = stripeClient.customers().create(params);
+
+            RequestOptions requestOptions = RequestOptions.builder()
+                .setIdempotencyKey("stripe-customer-user-" + user.getId())
+                .build();
+
+            customer = stripeClient.customers().create(params, requestOptions);
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to create Stripe customer for user " + user.getId());
+            throw new PaymentException("Failed to create Stripe customer for user " + user.getId(), ex);
         }
 
-        user.setStripeCustomerId(customer.getId());
-        userRepository.save(user);
-        return customer.getId();
+        return self.persistStripeCustomerId(user.getId(), customer.getId());
+    }
+
+    @Transactional
+    public String persistStripeCustomerId(UUID userId, String stripeCustomerId) {
+        User lockedUser = userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new PaymentException("User not found: " + userId));
+
+        // Another concurrent call already created and persisted a customer — reuse it.
+        if (lockedUser.getStripeCustomerId() != null) {
+            return lockedUser.getStripeCustomerId();
+        }
+
+        lockedUser.setStripeCustomerId(stripeCustomerId);
+        userRepository.save(lockedUser);
+        return stripeCustomerId;
     }
 
     private String extractPaymentIntentId(Event event) {
@@ -204,14 +232,9 @@ public class PaymentService {
 
     private void applyStripeEvent(Order order, String eventType) {
         PaymentStatus next = mapEventToStatus(eventType);
-        if (next == null) {
-            log.debug("Unhandled Stripe event type: {}", eventType);
-            return;
-        }
+        if (next == null) { log.debug("Unhandled Stripe event type: {}", eventType); return; }
 
         PaymentStatus current = order.getPaymentStatus();
-
-        // Refund is the one legal transition OUT of a terminal state.
         boolean isRefund = current == PaymentStatus.PAID && next == PaymentStatus.REFUNDED;
 
         if (TERMINAL_STATUSES.contains(current) && !isRefund) {
@@ -222,6 +245,10 @@ public class PaymentService {
 
         order.setPaymentStatus(next);
         orderRepository.save(order);
+
+        eventPublisher.publishEvent(new PaymentStatusChangedEvent(
+            order.getId(), order.getUser().getId(), current, next, eventType
+        ));
     }
 
     private PaymentStatus mapEventToStatus(String eventType) {
@@ -240,7 +267,7 @@ public class PaymentService {
         try {
             return stripeClient.paymentIntents().retrieve(stripePaymentIntentId);
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to retrieve existing PaymentIntent " + stripePaymentIntentId);
+            throw new PaymentException("Failed to create Stripe customer for user " + stripePaymentIntentId, ex);
         }
     }
 

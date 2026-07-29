@@ -27,7 +27,7 @@ public class StripeConfig {
     }
 
     @Bean
-    public StripeClient StripeClient(StripeConfig stripeConfig) {
-        return new StripeClient(stripeConfig.getApiKey());
+    public StripeClient stripeClient() {
+        return new StripeClient(apiKey);
     }
 }

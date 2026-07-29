@@ -51,7 +51,9 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**", "/test/public", "/error", "/graphql", "/graphiql/**").permitAll()
+                    .requestMatchers(
+                        "/auth/**", "/test/public", "/error",
+                        "/graphql", "/graphiql/**", "/webhooks/stripe").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

@@ -123,6 +123,16 @@ public class GlobalExceptionHandler {
             .build();
     }
 
+    // Insufficient Stock
+    @GraphQlExceptionHandler(InsufficientStockException.class)
+    public GraphQLError handleInsufficientStockException(InsufficientStockException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .errorType(ErrorType.BAD_REQUEST)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "INSUFFICIENT_STOCK", "status", 409))
+            .build();
+    }
+
     // Catch-all fallback: keep this last among the GraphQL handlers
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {

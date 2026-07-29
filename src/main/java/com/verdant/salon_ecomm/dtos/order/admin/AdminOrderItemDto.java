@@ -1,5 +1,6 @@
-package com.verdant.salon_ecomm.dtos.order;
+package com.verdant.salon_ecomm.dtos.order.admin;
 
+import com.verdant.salon_ecomm.dtos.order.OrderItemProductDto;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 
 import java.math.BigDecimal;

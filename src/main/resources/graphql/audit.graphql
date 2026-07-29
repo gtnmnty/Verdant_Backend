@@ -1,9 +1,9 @@
 extend type Query {
-    """Card feed for admin/orders/{id}, admin/stylist/{id}, admin/account/{id}."""
-    auditLogForEntity(entityType: AuditEntityType!, entityId: ID!, page: Int = 0, size: Int = 30): AuditLogPage!
+    """Card feed for admin/orders/{id} admin/stylist/{id} admin/account/{id}."""
+    auditLogForEntity(entityType: AuditEntityType! entityId: ID! page: Int = 0 size: Int = 30): AuditLogPage!
 
     """Global recent-activity feed for admin/dashboard."""
-    auditDashboardFeed(page: Int = 0, size: Int = 5): AuditLogPage!
+    auditDashboardFeed(page: Int = 0 size: Int = 5): AuditLogPage!
 }
 
 enum AuditEntityType {
@@ -23,6 +23,10 @@ enum AuditActionType {
     DELETED
     SECURITY
     ADMINISTRATIVE
+    PAYMENT_INITIATED
+    PAYMENT_SUCCEEDED
+    PAYMENT_FAILED
+    PAYMENT_REFUNDED
 }
 
 type AuditLogEntry {

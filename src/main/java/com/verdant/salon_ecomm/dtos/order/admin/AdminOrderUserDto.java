@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.dtos.order;
+package com.verdant.salon_ecomm.dtos.order.admin;
 
 import java.util.UUID;
 

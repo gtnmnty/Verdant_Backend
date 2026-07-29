@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     Page<AuditLog> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-        AuditEntityType entityType, Long entityId, Pageable pageable);
+        AuditEntityType entityType, String entityId, Pageable pageable);
 
     Page<AuditLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

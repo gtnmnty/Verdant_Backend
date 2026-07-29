@@ -16,10 +16,14 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
     @Modifying
     @Query("update Product p set p.stockQuantity = p.stockQuantity - :qty " +
-        "where p.id = :id and p.stockQuantity >= :qty")
+        "where p.id = :id and :qty > 0 and p.stockQuantity >= :qty")
     int decrementStock(@Param("id") UUID id, @Param("qty") int qty);
 
     @Modifying
     @Query("UPDATE Product p SET p.reviewCount = :count, p.averageRating = :avg WHERE p.id = :id")
     int updateReviewAggregates(@Param("id") UUID id, @Param("count") int count, @Param("avg") BigDecimal avg);
+
+    @Modifying
+    @Query("UPDATE Product p SET p.stockQuantity = p.stockQuantity + :quantity WHERE p.id = :productId")
+    void incrementStock(@Param("productId") UUID productId, @Param("quantity") int quantity);
 }
