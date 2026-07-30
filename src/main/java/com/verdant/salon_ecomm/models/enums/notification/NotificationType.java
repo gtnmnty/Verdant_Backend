@@ -5,6 +5,7 @@ public enum NotificationType {
     // ── Appointments ─────────────────────────────
     APPOINTMENT_CREATED,
     APPOINTMENT_UPDATED,
+    APPOINTMENT_COMPLETED,
     APPOINTMENT_RESCHEDULED,
     APPOINTMENT_CANCELLED,
     APPOINTMENT_APPROVED,
@@ -31,6 +32,7 @@ public enum NotificationType {
     // ── Products & Services (catalog) ───────────
     PRODUCT_ADDED,
     PRODUCT_UPDATED,
+    PRODUCT_IMAGE_UPDATED,
     PRODUCT_DELETED,
     PRODUCT_LOW_STOCK,
     PRODUCT_OUT_OF_STOCK,
@@ -38,6 +40,7 @@ public enum NotificationType {
     PRODUCT_PRICE_DROP,
     SERVICE_ADDED,
     SERVICE_UPDATED,
+    SERVICE_IMAGE_UPDATED,
     SERVICE_DELETED,
     SALE_STARTED,
     SALE_ENDING_SOON,
