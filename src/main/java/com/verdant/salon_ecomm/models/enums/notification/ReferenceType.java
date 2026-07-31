@@ -9,5 +9,7 @@ public enum ReferenceType {
     LEAVE_REQUEST,
     USER,
     REVIEW,
-    PROMOTION
+    PROMOTION,
+    STYLIST,
+    MEDIA_IMAGE
 }

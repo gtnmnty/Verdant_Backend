@@ -37,25 +37,25 @@ public class ProductResolver {
     }
 
     @MutationMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public AdminProductDto createProduct(@Argument CreateProductInput input) {
         return productService.createProduct(input);
     }
 
     @MutationMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public AdminProductDto updateProduct(@Argument UpdateProductInput input) {
         return productService.updateProduct(input);
     }
 
     @MutationMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public boolean deleteProduct(@Argument String id) {
         return productService.deleteProduct(UUID.fromString(id));
     }
 
     @QueryMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'MANAGER', 'OWNER')")
     public AdminProductPage adminProducts(
         @Argument String category,
         @Argument String search,
@@ -68,7 +68,7 @@ public class ProductResolver {
     }
 
     @QueryMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'MANAGER', 'OWNER')")
     public AdminProductDto adminProduct(@Argument String id) {
         return productService.getAdminProduct(UUID.fromString(id));
     }

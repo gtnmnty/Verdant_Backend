@@ -36,7 +36,7 @@ type AuditLogEntry {
     detail: String
     actorLabel: String
     selfService: Boolean!
-    createdAt: String!
+    createdAt: DateTime!
 }
 
 type AuditLogPage {

@@ -18,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -81,7 +82,7 @@ public class NotificationService {
         return notificationRepository.countByUser_IdAndIsReadFalse(userId);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public NotificationResponseDto create(NotificationCreateDto request) {
         User user = userRepository.findById(request.userId())
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + request.userId()));
