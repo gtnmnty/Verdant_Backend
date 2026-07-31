@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.resolvers.salon_service;
 
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ServiceSort;
 import com.verdant.salon_ecomm.services.SalonServicesService;
@@ -11,6 +12,7 @@ import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
 import java.util.UUID;
@@ -49,20 +51,20 @@ public class SalonServiceResolver {
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto create(@Argument CreateServiceInput input){
-        return salonService.createServiceInput(input);
+    public AdminServiceDto create(@Argument CreateServiceInput input, @AuthenticationPrincipal User principal){
+        return salonService.createServiceInput(input, principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto update(@Argument UpdateServiceInput input){
-        return salonService.updateServiceInput(input);
+    public AdminServiceDto update(@Argument UpdateServiceInput input, @AuthenticationPrincipal User principal){
+        return salonService.updateServiceInput(input, principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto deleteService(@Argument UUID id){
-        return salonService.deleteService(id);
+    public AdminServiceDto deleteService(@Argument UUID id, @AuthenticationPrincipal User principal){
+        return salonService.deleteService(id, principal.getId());
     }
 
     @MutationMapping
