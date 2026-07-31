@@ -288,6 +288,10 @@ public class SalonServicesService {
         CollectionStatus previousStatus = service.getStatus();
         Boolean previousIsHomeService = service.getIsHomeService();
         Boolean previousIsFeatured = service.isFeatured();
+        String previousDescription = service.getDescription();
+        String previousInfo = String.valueOf(service.getInfo());
+        var previousTags = service.getTags();
+        String previousBadge = service.getBadge();
         Set<UUID> previousStylistIds = service.getStylists().stream().map(Stylist::getId).collect(Collectors.toSet());
 
         if (input.name() != null) service.setName(input.name());
@@ -343,10 +347,32 @@ public class SalonServicesService {
                 "isFeatured", String.valueOf(previousIsFeatured), String.valueOf(saved.isFeatured())
             ));
         }
+        if (!Objects.equals(previousDescription, saved.getDescription())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "description", previousDescription, saved.getDescription())
+            );
+        }
+        if (!Objects.equals(previousInfo, saved.getInfo())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "info", String.valueOf(previousInfo), String.valueOf(saved.getInfo()))
+            );
+        }
+        if (!Objects.equals(previousTags, saved.getTags())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "tags", String.valueOf(previousTags), String.valueOf(saved.getTags()))
+            );
+        }
+        if (!Objects.equals(previousBadge, saved.getBadge())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "badge", previousBadge, saved.getBadge())
+            );
+        }
+
         Set<UUID> newStylistIds = saved.getStylists().stream().map(Stylist::getId).collect(Collectors.toSet());
         if (!Objects.equals(previousStylistIds, newStylistIds)) {
             changes.add(new SalonServiceUpdatedEvent.FieldChange(
-                "stylists", previousStylistIds.size() + " assigned", newStylistIds.size() + " assigned"
+                "stylists", previousStylistIds.size() + " assigned",
+                newStylistIds.size() + " assigned"
             ));
         }
 
@@ -367,10 +393,10 @@ public class SalonServicesService {
             cloudinaryService.delete(image.getPublicId());
         }
 
+        AdminServiceDto dto = toAdminDto(service, images);
+
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
         serviceRepository.deleteById(id);
-
-        AdminServiceDto dto = toAdminDto(service);
 
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceDeletedEvent(service, actor));

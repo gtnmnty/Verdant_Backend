@@ -76,6 +76,7 @@ public class SalonServiceNotificationListener {
 
         List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
         for (User staffMember : staff) {
+            if (actorId != null && actorId.equals(staffMember.getId())) continue;
             notificationService.create(new NotificationCreateDto(
                 staffMember.getId(),
                 type,

@@ -18,6 +18,9 @@ import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -36,6 +39,12 @@ public class AppointmentNotificationListener {
     private final NotificationService notificationService;
     private final UserRepository userRepository;
 
+    @Async
+    @Retryable(
+        retryFor = Exception.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentBooked(AppointmentBookedEvent event) {
         Appointment appointment = event.appointment();
@@ -125,15 +134,30 @@ public class AppointmentNotificationListener {
         ));
     }
 
+    @Async
+    @Retryable(
+        retryFor = Exception.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentUpdated(AppointmentUpdatedEvent event) {
         Appointment appointment = event.appointment();
+        String fullSummary = event.changeSummary();
+
+        // 1. Create a safe summary for the customer
+        String safeSummary = buildCustomerSafeSummary(fullSummary);
+
+        // 2. Build the customer message (use a generic fallback if all changes were internal)
+        String customerMessage = safeSummary.isEmpty()
+            ? "Your appointment " + appointment.getAppointmentCode() + " was updated."
+            : "Your appointment " + appointment.getAppointmentCode() + " was updated: " + safeSummary;
 
         notificationService.create(new NotificationCreateDto(
             appointment.getUser().getId(),
             NotificationType.APPOINTMENT_UPDATED,
             "Appointment updated",
-            "Your appointment " + appointment.getAppointmentCode() + " was updated: " + event.changeSummary(),
+            customerMessage,
             ReferenceType.APPOINTMENT,
             appointment.getId(),
             NotificationPriority.INFO,
@@ -141,8 +165,9 @@ public class AppointmentNotificationListener {
             event.actor() != null ? event.actor().getFullName() : null
         ));
 
+        // 3. Keep the full raw summary for staff
         notifyStaff(appointment, NotificationType.APPOINTMENT_UPDATED, "Appointment updated",
-            appointment.getAppointmentCode() + " updated: " + event.changeSummary(),
+            appointment.getAppointmentCode() + " updated: " + fullSummary,
             event.actor() != null ? event.actor().getId() : null,
             event.actor() != null ? event.actor().getFullName() : null);
     }
@@ -175,6 +200,8 @@ public class AppointmentNotificationListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkCancelled(AppointmentsBulkCancelledEvent event) {
         List<Appointment> appointments = event.appointments();
+        if (appointments == null || appointments.isEmpty()) return;
+
         UUID actorId = event.actor() != null ? event.actor().getId() : null;
         String actorName = event.actor() != null ? event.actor().getFullName() : null;
 
@@ -183,7 +210,8 @@ public class AppointmentNotificationListener {
                 appointment.getUser().getId(),
                 NotificationType.APPOINTMENT_CANCELLED,
                 "Appointment cancelled",
-                appointment.getServiceName() + " (" + appointment.getAppointmentCode() + ") was cancelled.",
+                appointment.getServiceName() + " (" +
+                    appointment.getAppointmentCode() + ") was cancelled.",
                 ReferenceType.APPOINTMENT,
                 appointment.getId(),
                 NotificationPriority.WARNING,
@@ -193,8 +221,9 @@ public class AppointmentNotificationListener {
         }
 
         notifyStaffBulk(NotificationType.BULK_ACTION_PERFORMED, "Bulk appointment cancellation",
-            appointments.size() + " appointments were cancelled" + (actorName != null ? " by " + actorName : "") + ".",
-            appointments.get(0).getId(), actorId, actorName);
+            appointments.size() + " appointments were cancelled" +
+                    (actorName != null ? " by " + actorName : "") + ".",
+            appointments.getFirst().getId(), actorId, actorName);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -218,8 +247,9 @@ public class AppointmentNotificationListener {
         }
 
         notifyStaffBulk(NotificationType.BULK_ACTION_PERFORMED, "Bulk appointment deletion",
-            appointments.size() + " appointments were deleted" + (actorName != null ? " by " + actorName : "") + ".",
-            appointments.get(0).getId(), actorId, actorName);
+            appointments.size() + " appointments were deleted" +
+                    (actorName != null ? " by " + actorName : "") + ".",
+            appointments.getFirst().getId(), actorId, actorName);
     }
 
     // ── Helpers ──────────────────────────────────────────
@@ -228,20 +258,7 @@ public class AppointmentNotificationListener {
         Appointment appointment, NotificationType type, String title, String message,
         UUID actorId, String actorName
     ) {
-        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
-        for (User staffMember : staff) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(),
-                type,
-                title,
-                message,
-                ReferenceType.APPOINTMENT,
-                appointment.getId(),
-                NotificationPriority.INFO,
-                actorId,
-                actorName
-            ));
-        }
+        notifyStaffBulk(type, title, message, appointment.getId(), actorId, actorName);
     }
 
     private void notifyStaffBulk(
@@ -262,5 +279,20 @@ public class AppointmentNotificationListener {
                 actorName
             ));
         }
+    }
+    
+    private String buildCustomerSafeSummary(String fullSummary) {
+        if (fullSummary == null || fullSummary.isBlank()) {
+            return "";
+        }
+
+        // Split by comma, trim whitespace, and filter out sensitive fields
+        return java.util.Arrays.stream(fullSummary.split(","))
+            .map(String::trim)
+            .filter(change -> {
+                String lowerChange = change.toLowerCase();
+                return !lowerChange.startsWith("customer") && !lowerChange.startsWith("notes");
+            })
+            .collect(java.util.stream.Collectors.joining(", "));
     }
 }
