@@ -41,7 +41,11 @@ public class AppointmentResolver {
         @Argument int pageSize,
         @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.getMyAppointments(principal.getId(), status, timeframe, search, sort, page, pageSize);
+        return appointmentService.getMyAppointments(
+            principal.getId(), status,
+            timeframe, search, sort, page,
+            pageSize
+        );
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -63,7 +67,11 @@ public class AppointmentResolver {
         @Argument int page,
         @Argument int pageSize
     ) {
-        return appointmentService.getAdminAppointments(status, stylistId, branch, serviceType, search, sort, page, pageSize);
+        return appointmentService.getAdminAppointments(
+            status, stylistId, branch,
+            serviceType, search, sort,
+            page, pageSize
+        );
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -101,7 +109,9 @@ public class AppointmentResolver {
         @Argument OffsetDateTime newScheduledAt,
         @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.rescheduleAppointment(id, newScheduledAt, principal.getId(), hasElevatedRole(principal));
+        return appointmentService.rescheduleAppointment(
+            id, newScheduledAt, principal.getId(), hasElevatedRole(principal)
+        );
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -122,8 +132,10 @@ public class AppointmentResolver {
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public List<Appointment> cancelAppointments(@Argument List<UUID> ids) {
-        return appointmentService.cancelAppointments(ids);
+    public List<Appointment> cancelAppointments(
+        @Argument List<UUID> ids, @AuthenticationPrincipal User principal
+    ) {
+        return appointmentService.cancelAppointments(ids, principal.getId());
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -139,14 +151,16 @@ public class AppointmentResolver {
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public Appointment deleteAppointment(@Argument UUID id) {
-        return appointmentService.deleteAppointment(id);
+    public Appointment deleteAppointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
+        return appointmentService.deleteAppointment(id, principal.getId());
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public List<Appointment> deleteAppointments(@Argument List<UUID> ids) {
-        return appointmentService.deleteAppointments(ids);
+    public List<Appointment> deleteAppointments(
+        @Argument List<UUID> ids, @AuthenticationPrincipal User principal
+    ) {
+        return appointmentService.deleteAppointments(ids, principal.getId());
     }
 
     // ---------- Field resolvers ----------

@@ -2,17 +2,23 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.service.*;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.stylists.StylistSummaryDto;
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.Stylist;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.*;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.StylistRepository;
+import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +30,7 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -38,6 +45,8 @@ public class SalonServicesService {
     private final MediaImageRepository mediaImageRepository;
     private final StylistRepository stylistRepository;
     private final CloudinaryService cloudinaryService;
+    private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ServicePage getSalonServices(
         String category, String search, ServiceSort sort,
@@ -237,7 +246,7 @@ public class SalonServicesService {
     }
 
     @Transactional
-    public AdminServiceDto createServiceInput(CreateServiceInput input) {
+    public AdminServiceDto createServiceInput(CreateServiceInput input, UUID actorId) {
         List<Stylist> stylists = resolveStylists(input.stylistIds());
 
         SalonService service = SalonService.builder()
@@ -258,13 +267,28 @@ public class SalonServicesService {
             .averageRating(BigDecimal.ZERO)
             .build();
 
-        return toAdminDto(serviceRepository.save(service));
+        SalonService saved = serviceRepository.save(service);
+
+        User actor = resolveActor(actorId);
+        eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
+
+        return toAdminDto(saved);
     }
 
     @Transactional
-    public AdminServiceDto updateServiceInput(UpdateServiceInput input) {
+    public AdminServiceDto updateServiceInput(UpdateServiceInput input, UUID actorId) {
         SalonService service =  serviceRepository.findById(input.id())
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
+
+        String previousName = service.getName();
+        String previousSubName = service.getSubName();
+        ItemCatalog previousCatalog = service.getItemCatalog();
+        BigDecimal previousPrice = service.getPrice();
+        Integer previousDuration = service.getDurationMinutes();
+        CollectionStatus previousStatus = service.getStatus();
+        Boolean previousIsHomeService = service.getIsHomeService();
+        Boolean previousIsFeatured = service.isFeatured();
+        Set<UUID> previousStylistIds = service.getStylists().stream().map(Stylist::getId).collect(Collectors.toSet());
 
         if (input.name() != null) service.setName(input.name());
         if (input.subName() != null) service.setSubName(input.subName());
@@ -280,11 +304,60 @@ public class SalonServicesService {
         if (input.isFeatured() != null) service.setFeatured(input.isFeatured());
         if (input.stylistIds() != null) service.setStylists(resolveStylists(input.stylistIds()));
 
-        return  toAdminDto(serviceRepository.save(service));
+        SalonService saved = serviceRepository.save(service);
+
+        List<SalonServiceUpdatedEvent.FieldChange> changes = new java.util.ArrayList<>();
+        if (!Objects.equals(previousName, saved.getName())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange("name", previousName, saved.getName()));
+        }
+        if (!Objects.equals(previousSubName, saved.getSubName())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange("subName", previousSubName, saved.getSubName()));
+        }
+        if (!Objects.equals(previousCatalog, saved.getItemCatalog())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "category", String.valueOf(previousCatalog), String.valueOf(saved.getItemCatalog())
+            ));
+        }
+        if (!Objects.equals(previousPrice, saved.getPrice())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "price", String.valueOf(previousPrice), String.valueOf(saved.getPrice())
+            ));
+        }
+        if (!Objects.equals(previousDuration, saved.getDurationMinutes())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "durationMinutes", String.valueOf(previousDuration), String.valueOf(saved.getDurationMinutes())
+            ));
+        }
+        if (!Objects.equals(previousStatus, saved.getStatus())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "status", String.valueOf(previousStatus), String.valueOf(saved.getStatus())
+            ));
+        }
+        if (!Objects.equals(previousIsHomeService, saved.getIsHomeService())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "isHomeService", String.valueOf(previousIsHomeService), String.valueOf(saved.getIsHomeService())
+            ));
+        }
+        if (!Objects.equals(previousIsFeatured, saved.isFeatured())) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "isFeatured", String.valueOf(previousIsFeatured), String.valueOf(saved.isFeatured())
+            ));
+        }
+        Set<UUID> newStylistIds = saved.getStylists().stream().map(Stylist::getId).collect(Collectors.toSet());
+        if (!Objects.equals(previousStylistIds, newStylistIds)) {
+            changes.add(new SalonServiceUpdatedEvent.FieldChange(
+                "stylists", previousStylistIds.size() + " assigned", newStylistIds.size() + " assigned"
+            ));
+        }
+
+        User actor = resolveActor(actorId);
+        eventPublisher.publishEvent(new SalonServiceUpdatedEvent(saved, actor, changes));
+
+        return toAdminDto(saved);
     }
 
     @Transactional
-    public AdminServiceDto deleteService(UUID id) {
+    public AdminServiceDto deleteService(UUID id, UUID actorId) {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
@@ -296,6 +369,16 @@ public class SalonServicesService {
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
         serviceRepository.deleteById(id);
-        return toAdminDto(service);
+
+        AdminServiceDto dto = toAdminDto(service);
+
+        User actor = resolveActor(actorId);
+        eventPublisher.publishEvent(new SalonServiceDeletedEvent(service, actor));
+
+        return dto;
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 }

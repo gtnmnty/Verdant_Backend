@@ -1,13 +1,18 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
 import com.verdant.salon_ecomm.entities.MediaImage;
+import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
+import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +31,8 @@ public class MediaImageService {
     private final CloudinaryService cloudinaryService;
     private final SalonServiceRepository salonServiceRepository;
     private final ProductRepository productRepository;
+    private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -104,7 +111,7 @@ public class MediaImageService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
-    public MediaImageDto setPrimary(ItemType itemType, UUID imageId, UUID serviceId) {
+    public MediaImageDto setPrimary(ItemType itemType, UUID imageId, UUID serviceId, UUID actorId) {
         MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
             imageId, serviceId, itemType
         ).orElseThrow(() -> new ResourceNotFoundException("Image not found"));
@@ -112,7 +119,20 @@ public class MediaImageService {
         mediaImageRepository.clearPrimaryFlag(image.getEntityType(), image.getEntityId());
         image.setPrimary(true);
 
-        return toImageDTO(mediaImageRepository.save(image));
+        MediaImageDto dto = toImageDTO(mediaImageRepository.save(image));
+
+        if (itemType == ItemType.SALON_SERVICE) {
+            salonServiceRepository.findById(serviceId).ifPresent(service -> {
+                User actor = resolveActor(actorId);
+                eventPublisher.publishEvent(new SalonServiceImageUpdatedEvent(service, actor));
+            });
+        }
+
+        return dto;
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 
     @Transactional(readOnly = true)

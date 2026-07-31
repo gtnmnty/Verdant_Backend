@@ -135,6 +135,11 @@ public class OrderService {
         if (input.fullName() == null || input.fullName().isBlank()) {
             throw new IllegalArgumentException("Customer full name is required for admin order creation");
         }
+
+        user.setFullName(input.fullName());
+        user.setPhone(input.phone());
+        userRepository.save(user);
+
         if (input.phone() == null || input.phone().isBlank()) {
             throw new IllegalArgumentException("Customer phone number is required for admin order creation");
         }

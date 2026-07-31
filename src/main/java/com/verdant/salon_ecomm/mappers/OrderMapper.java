@@ -168,10 +168,6 @@ public class OrderMapper {
             .deliveryFee(deliveryFee)
             .total(total)
             .orderStatus(OrderStatus.PLACED)
-            // ASSUMPTION: PaymentStatus.PENDING is the "not yet charged" value -
-            // rename to match whatever your enum actually calls it. Order should
-            // NOT start as PROCESSED; that should only be set once Stripe
-            // confirms the PaymentIntent (via webhook or synchronous check).
             .paymentStatus(PaymentStatus.PENDING)
             .build();
         // orderCode is generated and set by the service, not here

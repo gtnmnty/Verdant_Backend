@@ -50,13 +50,13 @@ public class ProductNotificationListener {
                 notifyStaff(product, NotificationType.PRODUCT_OUT_OF_STOCK, "Product out of stock",
                     product.getName() + " is now out of stock",
                     event.actor());
-            } else if (product.getStockQuantity() <= product.getLowStockThreshold()) {
-                notifyStaff(product, NotificationType.PRODUCT_LOW_STOCK, "Product low on stock",
-                    product.getName() + " has " + product.getStockQuantity() + " left",
-                    event.actor());
             } else if (event.previousStockQuantity() == 0 && product.getStockQuantity() > 0) {
                 notifyStaff(product, NotificationType.PRODUCT_BACK_IN_STOCK, "Product back in stock",
                     product.getName() + " is back in stock",
+                    event.actor());
+            } else if (product.getStockQuantity() <= product.getLowStockThreshold()) {
+                notifyStaff(product, NotificationType.PRODUCT_LOW_STOCK, "Product low on stock",
+                    product.getName() + " has " + product.getStockQuantity() + " left",
                     event.actor());
             }
         }
