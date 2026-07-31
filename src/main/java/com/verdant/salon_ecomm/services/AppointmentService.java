@@ -2,6 +2,14 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.appointment.*;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCancelledEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCompletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentDeletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
 import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.exceptions.AppointmentConflictException;
 import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
@@ -12,6 +20,7 @@ import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AppointmentSpec;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -37,6 +48,7 @@ public class AppointmentService {
     private final SalonServiceRepository salonServiceRepository;
     private final StylistRepository stylistRepository;
     private final BranchRepository branchRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ---------- Queries ----------
 
@@ -91,7 +103,7 @@ public class AppointmentService {
         );
 
         Page<Appointment> result = appointmentRepository.findAll(spec, pageable);
-        
+
         List<AdminAppointmentDto> items = result.getContent().stream()
             .map(appointmentMapper::toAdminDto)
             .toList();
@@ -159,7 +171,9 @@ public class AppointmentService {
         Appointment appointment = appointmentMapper.toEntity(input, user, service, stylist, branch);
         appointment.setAppointmentCode(generateAppointmentCode());
 
-        return saveAppointmentSafely(appointment);
+        Appointment saved = saveAppointmentSafely(appointment);
+        eventPublisher.publishEvent(new AppointmentBookedEvent(saved));
+        return saved;
     }
 
     @Transactional
@@ -179,8 +193,14 @@ public class AppointmentService {
             );
         }
 
+        OffsetDateTime previousScheduledAt = appointment.getScheduledAt();
         appointment.setScheduledAt(newScheduledAt);
-        return saveAppointmentSafely(appointment);
+        Appointment saved = saveAppointmentSafely(appointment);
+
+        User actor = resolveActor(currentUserId);
+        eventPublisher.publishEvent(new AppointmentRescheduledEvent(saved, actor, previousScheduledAt));
+
+        return saved;
     }
 
     @Transactional
@@ -189,7 +209,12 @@ public class AppointmentService {
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        return appointmentRepository.save(appointment);
+        Appointment saved = appointmentRepository.save(appointment);
+
+        User actor = resolveActor(currentUserId);
+        eventPublisher.publishEvent(new AppointmentCancelledEvent(saved, actor));
+
+        return saved;
     }
 
     @Transactional
@@ -197,16 +222,28 @@ public class AppointmentService {
         Appointment appointment = getAppointmentById(id, currentUserId,  isAdmin);
         requireNotTerminal(appointment);
         appointment.setStatus(AppointmentStatus.COMPLETED);
-        return appointmentRepository.save(appointment);
+        Appointment saved = appointmentRepository.save(appointment);
+
+        User actor = resolveActor(currentUserId);
+        eventPublisher.publishEvent(new AppointmentCompletedEvent(saved, actor));
+
+        return saved;
     }
 
     @Transactional
-    public List<Appointment> cancelAppointments(List<UUID> ids) {
+    public List<Appointment> cancelAppointments(List<UUID> ids, UUID actorId) {
         List<Appointment> eligible = appointmentRepository.findAllById(ids).stream()
             .filter(a -> a.getStatus() != AppointmentStatus.COMPLETED && a.getStatus() != AppointmentStatus.CANCELLED)
             .toList();
         eligible.forEach(a -> a.setStatus(AppointmentStatus.CANCELLED));
-        return appointmentRepository.saveAll(eligible);
+        List<Appointment> saved = appointmentRepository.saveAll(eligible);
+
+        if (!saved.isEmpty()) {
+            User actor = resolveActor(actorId);
+            eventPublisher.publishEvent(new AppointmentsBulkCancelledEvent(saved, actor));
+        }
+
+        return saved;
     }
 
     @Transactional
@@ -215,6 +252,16 @@ public class AppointmentService {
         UUID currentUserId, boolean isAdmin
     ) {
         Appointment appointment = getAppointmentById(id, currentUserId, isAdmin);
+
+        User previousUser = appointment.getUser();
+        SalonService previousService = appointment.getService();
+        Stylist previousStylist = appointment.getStylist();
+        OffsetDateTime previousScheduledAt = appointment.getScheduledAt();
+        Short previousGuests = appointment.getGuests();
+        String previousNotes = appointment.getNotes();
+        AppointmentServiceType previousServiceType = appointment.getServiceType();
+        Branch previousBranch = appointment.getBranch();
+        Map<String, Object> previousHomeAddress = appointment.getHomeAddress();
 
         if (input.userId() != null) {
             User user = userRepository.findById(input.userId())
@@ -279,23 +326,135 @@ public class AppointmentService {
             );
         }
 
-        return saveAppointmentSafely(appointment);
+        Appointment saved = saveAppointmentSafely(appointment);
+
+        List<AppointmentUpdatedEvent.FieldChange> changes = buildAppointmentChanges(
+            saved, previousUser, previousService, previousStylist, previousScheduledAt,
+            previousGuests, previousNotes, previousServiceType, previousBranch, previousHomeAddress
+        );
+
+        User actor = resolveActor(currentUserId);
+        eventPublisher.publishEvent(new AppointmentUpdatedEvent(saved, actor, changes));
+
+        return saved;
+    }
+
+    private List<AppointmentUpdatedEvent.FieldChange> buildAppointmentChanges(
+        Appointment appointment, User previousUser, SalonService previousService, Stylist previousStylist,
+        OffsetDateTime previousScheduledAt, Short previousGuests, String previousNotes,
+        AppointmentServiceType previousServiceType, Branch previousBranch, Map<String, Object> previousHomeAddress
+    ) {
+        List<AppointmentUpdatedEvent.FieldChange> changes = new java.util.ArrayList<>();
+
+        UUID prevUserId = previousUser != null ? previousUser.getId() : null;
+        UUID newUserId = appointment.getUser() != null ? appointment.getUser().getId() : null;
+        if (!Objects.equals(prevUserId, newUserId)) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "customer",
+                previousUser != null ? previousUser.getFullName() : "none",
+                appointment.getUser() != null ? appointment.getUser().getFullName() : "none"
+            ));
+        }
+
+        UUID prevServiceId = previousService != null ? previousService.getId() : null;
+        UUID newServiceId = appointment.getService() != null ? appointment.getService().getId() : null;
+        if (!Objects.equals(prevServiceId, newServiceId)) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "service",
+                previousService != null ? previousService.getName() : "none",
+                appointment.getService() != null ? appointment.getService().getName() : "none"
+            ));
+        }
+
+        UUID prevStylistId = previousStylist != null ? previousStylist.getId() : null;
+        UUID newStylistId = appointment.getStylist() != null ? appointment.getStylist().getId() : null;
+        if (!Objects.equals(prevStylistId, newStylistId)) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "stylist",
+                previousStylist != null ? previousStylist.getName() : "unassigned",
+                appointment.getStylist() != null ? appointment.getStylist().getName() : "unassigned"
+            ));
+        }
+
+        if (!Objects.equals(previousScheduledAt, appointment.getScheduledAt())) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "scheduledAt",
+                String.valueOf(previousScheduledAt),
+                String.valueOf(appointment.getScheduledAt())
+            ));
+        }
+
+        if (!Objects.equals(previousGuests, appointment.getGuests())) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "guests",
+                String.valueOf(previousGuests),
+                String.valueOf(appointment.getGuests())
+            ));
+        }
+
+        if (!Objects.equals(previousNotes, appointment.getNotes())) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "notes",
+                previousNotes != null ? previousNotes : "none",
+                appointment.getNotes() != null ? appointment.getNotes() : "none"
+            ));
+        }
+
+        if (!Objects.equals(previousServiceType, appointment.getServiceType())) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "serviceType",
+                String.valueOf(previousServiceType),
+                String.valueOf(appointment.getServiceType())
+            ));
+        }
+
+        UUID prevBranchId = previousBranch != null ? previousBranch.getId() : null;
+        UUID newBranchId = appointment.getBranch() != null ? appointment.getBranch().getId() : null;
+        if (!Objects.equals(prevBranchId, newBranchId)) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "branch",
+                previousBranch != null ? previousBranch.getName() : "none",
+                appointment.getBranch() != null ? appointment.getBranch().getName() : "none"
+            ));
+        }
+
+        if (!Objects.equals(previousHomeAddress, appointment.getHomeAddress())) {
+            changes.add(new AppointmentUpdatedEvent.FieldChange(
+                "homeAddress", "updated", "updated"
+            ));
+        }
+
+        return changes;
     }
 
     @Transactional
-    public Appointment deleteAppointment(UUID id) {
+    public Appointment deleteAppointment(UUID id, UUID actorId) {
         Appointment appointment = appointmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Appointment cannot be found"));
 
         appointmentRepository.delete(appointment);
+
+        User actor = resolveActor(actorId);
+        eventPublisher.publishEvent(new AppointmentDeletedEvent(appointment, actor));
+
         return appointment;
     }
 
     @Transactional
-    public List<Appointment> deleteAppointments(List<UUID> ids) {
+    public List<Appointment> deleteAppointments(List<UUID> ids, UUID actorId) {
         List<Appointment> appointments = appointmentRepository.findAllById(ids);
         appointmentRepository.deleteAll(appointments);
+
+        if (!appointments.isEmpty()) {
+            User actor = resolveActor(actorId);
+            eventPublisher.publishEvent(new AppointmentsBulkDeletedEvent(appointments, actor));
+        }
+
         return appointments;
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 
     private Appointment findAppointmentOrThrow(UUID id) {

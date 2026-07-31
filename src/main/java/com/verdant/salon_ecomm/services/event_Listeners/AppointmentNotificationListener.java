@@ -1,0 +1,266 @@
+package com.verdant.salon_ecomm.services.event_Listeners;
+
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCancelledEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCompletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentDeletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
+import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
+import com.verdant.salon_ecomm.entities.Appointment;
+import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
+import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
+import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
+import com.verdant.salon_ecomm.repositories.UserRepository;
+import com.verdant.salon_ecomm.services.NotificationService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.List;
+import java.util.UUID;
+
+@Component
+@RequiredArgsConstructor
+public class AppointmentNotificationListener {
+
+    private static final List<AccountRole> STAFF_ROLES = List.of(
+        AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
+    );
+
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentBooked(AppointmentBookedEvent event) {
+        Appointment appointment = event.appointment();
+        User customer = appointment.getUser();
+
+        notificationService.create(new NotificationCreateDto(
+            customer.getId(),
+            NotificationType.APPOINTMENT_CREATED,
+            "Appointment booked",
+            appointment.getServiceName() + " booked for " + appointment.getScheduledAt() + ".",
+            ReferenceType.APPOINTMENT,
+            appointment.getId(),
+            NotificationPriority.INFO,
+            null,
+            null
+        ));
+
+        notifyStaff(appointment, NotificationType.APPOINTMENT_CREATED, "New appointment",
+            customer.getFullName() + " booked " + appointment.getServiceName()
+                + " for " + appointment.getScheduledAt() + ".",
+            null, null);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentRescheduled(AppointmentRescheduledEvent event) {
+        Appointment appointment = event.appointment();
+
+        if (!event.isSelfService()) {
+            notificationService.create(new NotificationCreateDto(
+                appointment.getUser().getId(),
+                NotificationType.APPOINTMENT_RESCHEDULED,
+                "Appointment rescheduled",
+                appointment.getServiceName() + " moved to " + appointment.getScheduledAt() + ".",
+                ReferenceType.APPOINTMENT,
+                appointment.getId(),
+                NotificationPriority.INFO,
+                event.actor() != null ? event.actor().getId() : null,
+                event.actor() != null ? event.actor().getFullName() : null
+            ));
+        }
+
+        notifyStaff(appointment, NotificationType.APPOINTMENT_RESCHEDULED, "Appointment rescheduled",
+            appointment.getAppointmentCode() + " moved to " + appointment.getScheduledAt() + ".",
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentCancelled(AppointmentCancelledEvent event) {
+        Appointment appointment = event.appointment();
+
+        if (!event.isSelfService()) {
+            notificationService.create(new NotificationCreateDto(
+                appointment.getUser().getId(),
+                NotificationType.APPOINTMENT_CANCELLED,
+                "Appointment cancelled",
+                appointment.getServiceName() + " (" + appointment.getAppointmentCode() + ") was cancelled.",
+                ReferenceType.APPOINTMENT,
+                appointment.getId(),
+                NotificationPriority.WARNING,
+                event.actor() != null ? event.actor().getId() : null,
+                event.actor() != null ? event.actor().getFullName() : null
+            ));
+        }
+
+        notifyStaff(appointment, NotificationType.APPOINTMENT_CANCELLED, "Appointment cancelled",
+            appointment.getAppointmentCode() + " was cancelled.",
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentCompleted(AppointmentCompletedEvent event) {
+        Appointment appointment = event.appointment();
+
+        // Staff performed the action themselves, so only the customer needs telling.
+        notificationService.create(new NotificationCreateDto(
+            appointment.getUser().getId(),
+            NotificationType.APPOINTMENT_COMPLETED,
+            "Appointment completed",
+            appointment.getServiceName() + " is complete. We hope you enjoyed it!",
+            ReferenceType.APPOINTMENT,
+            appointment.getId(),
+            NotificationPriority.INFO,
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null
+        ));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentUpdated(AppointmentUpdatedEvent event) {
+        Appointment appointment = event.appointment();
+
+        notificationService.create(new NotificationCreateDto(
+            appointment.getUser().getId(),
+            NotificationType.APPOINTMENT_UPDATED,
+            "Appointment updated",
+            "Your appointment " + appointment.getAppointmentCode() + " was updated: " + event.changeSummary(),
+            ReferenceType.APPOINTMENT,
+            appointment.getId(),
+            NotificationPriority.INFO,
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null
+        ));
+
+        notifyStaff(appointment, NotificationType.APPOINTMENT_UPDATED, "Appointment updated",
+            appointment.getAppointmentCode() + " updated: " + event.changeSummary(),
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentDeleted(AppointmentDeletedEvent event) {
+        Appointment appointment = event.appointment();
+
+        notificationService.create(new NotificationCreateDto(
+            appointment.getUser().getId(),
+            NotificationType.APPOINTMENT_DELETED,
+            "Appointment removed",
+            appointment.getAppointmentCode() + " was removed by staff.",
+            ReferenceType.APPOINTMENT,
+            appointment.getId(),
+            NotificationPriority.WARNING,
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null
+        ));
+
+        notifyStaff(appointment, NotificationType.APPOINTMENT_DELETED, "Appointment deleted",
+            appointment.getAppointmentCode() + " deleted by staff.",
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null);
+    }
+
+    // ── Bulk operations: ONE staff/admin notification for the whole batch, ──────
+    // ── plus an individual heads-up to each affected customer.               ──
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentsBulkCancelled(AppointmentsBulkCancelledEvent event) {
+        List<Appointment> appointments = event.appointments();
+        UUID actorId = event.actor() != null ? event.actor().getId() : null;
+        String actorName = event.actor() != null ? event.actor().getFullName() : null;
+
+        for (Appointment appointment : appointments) {
+            notificationService.create(new NotificationCreateDto(
+                appointment.getUser().getId(),
+                NotificationType.APPOINTMENT_CANCELLED,
+                "Appointment cancelled",
+                appointment.getServiceName() + " (" + appointment.getAppointmentCode() + ") was cancelled.",
+                ReferenceType.APPOINTMENT,
+                appointment.getId(),
+                NotificationPriority.WARNING,
+                actorId,
+                actorName
+            ));
+        }
+
+        notifyStaffBulk(NotificationType.BULK_ACTION_PERFORMED, "Bulk appointment cancellation",
+            appointments.size() + " appointments were cancelled" + (actorName != null ? " by " + actorName : "") + ".",
+            appointments.get(0).getId(), actorId, actorName);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentsBulkDeleted(AppointmentsBulkDeletedEvent event) {
+        List<Appointment> appointments = event.appointments();
+        UUID actorId = event.actor() != null ? event.actor().getId() : null;
+        String actorName = event.actor() != null ? event.actor().getFullName() : null;
+
+        for (Appointment appointment : appointments) {
+            notificationService.create(new NotificationCreateDto(
+                appointment.getUser().getId(),
+                NotificationType.APPOINTMENT_DELETED,
+                "Appointment removed",
+                appointment.getAppointmentCode() + " was removed by staff.",
+                ReferenceType.APPOINTMENT,
+                appointment.getId(),
+                NotificationPriority.WARNING,
+                actorId,
+                actorName
+            ));
+        }
+
+        notifyStaffBulk(NotificationType.BULK_ACTION_PERFORMED, "Bulk appointment deletion",
+            appointments.size() + " appointments were deleted" + (actorName != null ? " by " + actorName : "") + ".",
+            appointments.get(0).getId(), actorId, actorName);
+    }
+
+    // ── Helpers ──────────────────────────────────────────
+
+    private void notifyStaff(
+        Appointment appointment, NotificationType type, String title, String message,
+        UUID actorId, String actorName
+    ) {
+        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
+        for (User staffMember : staff) {
+            notificationService.create(new NotificationCreateDto(
+                staffMember.getId(),
+                type,
+                title,
+                message,
+                ReferenceType.APPOINTMENT,
+                appointment.getId(),
+                NotificationPriority.INFO,
+                actorId,
+                actorName
+            ));
+        }
+    }
+
+    private void notifyStaffBulk(
+        NotificationType type, String title, String message,
+        UUID referenceAppointmentId, UUID actorId, String actorName
+    ) {
+        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
+        for (User staffMember : staff) {
+            notificationService.create(new NotificationCreateDto(
+                staffMember.getId(),
+                type,
+                title,
+                message,
+                ReferenceType.APPOINTMENT,
+                referenceAppointmentId,
+                NotificationPriority.INFO,
+                actorId,
+                actorName
+            ));
+        }
+    }
+}

@@ -5,13 +5,14 @@ public enum NotificationType {
     // ── Appointments ─────────────────────────────
     APPOINTMENT_CREATED,
     APPOINTMENT_UPDATED,
-    APPOINTMENT_COMPLETED,
     APPOINTMENT_RESCHEDULED,
     APPOINTMENT_CANCELLED,
+    APPOINTMENT_DELETED,
     APPOINTMENT_APPROVED,
     APPOINTMENT_REJECTED,
     APPOINTMENT_REMINDER,
     APPOINTMENT_NO_SHOW,
+    APPOINTMENT_COMPLETED,
     STYLIST_ASSIGNED,
 
     // ── Orders & Payments ────────────────────────
@@ -32,16 +33,16 @@ public enum NotificationType {
     // ── Products & Services (catalog) ───────────
     PRODUCT_ADDED,
     PRODUCT_UPDATED,
-    PRODUCT_IMAGE_UPDATED,
     PRODUCT_DELETED,
     PRODUCT_LOW_STOCK,
     PRODUCT_OUT_OF_STOCK,
     PRODUCT_BACK_IN_STOCK,
     PRODUCT_PRICE_DROP,
+    PRODUCT_IMAGE_UPDATED,
     SERVICE_ADDED,
     SERVICE_UPDATED,
-    SERVICE_IMAGE_UPDATED,
     SERVICE_DELETED,
+    SERVICE_IMAGE_UPDATED,
     SALE_STARTED,
     SALE_ENDING_SOON,
 
@@ -57,6 +58,7 @@ public enum NotificationType {
     STYLIST_ADDED,
     STYLIST_UPDATED,
     STYLIST_DEACTIVATED,
+    STYLIST_IMAGE_UPDATED,
 
     // ── Accounts ─────────────────────────────────
     ACCOUNT_CREATED,
@@ -71,6 +73,7 @@ public enum NotificationType {
     // ── Reviews ──────────────────────────────────
     REVIEW_RECEIVED,
     REVIEW_REPLIED,
+    FAVORITE_ADDED,
 
     // ── Promotions & Loyalty ─────────────────────
     PROMO_CODE_ISSUED,
@@ -80,5 +83,4 @@ public enum NotificationType {
 
     // ── System / Audit ───────────────────────────
     BULK_ACTION_PERFORMED
-
 }

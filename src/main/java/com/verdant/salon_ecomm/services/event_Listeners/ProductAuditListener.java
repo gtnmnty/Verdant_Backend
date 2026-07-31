@@ -40,13 +40,15 @@ public class ProductAuditListener {
         Product product = event.product();
 
         if (event.stockChanged()) {
+            AuditActionType stockAction = product.getStockQuantity() > event.previousStockQuantity()
+                ? AuditActionType.RESTOCKED : AuditActionType.UPDATED;
             auditLogService.record(
-                    AuditEntityType.PRODUCT,
-                    product.getId(),
-                    AuditActionType.RESTOCKED,
-                    "Product " + product.getName() + " stock changed",
-                    event.previousStockQuantity() + " -> " + product.getStockQuantity(),
-                    event.actor()
+                AuditEntityType.PRODUCT,
+                product.getId(),
+                stockAction,
+                "Product " + product.getName() + " stock changed",
+                event.previousStockQuantity() + " -> " + product.getStockQuantity(),
+                event.actor()
             );
         }
 
