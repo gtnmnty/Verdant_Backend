@@ -4,6 +4,7 @@ import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
@@ -69,6 +70,20 @@ public class SalonServiceAuditListener {
             AuditActionType.DELETED,
             "Service \"" + service.getName() + "\" deleted",
             null,
+            event.actor()
+        );
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onSalonServicesBulkDeleted(SalonServicesBulkDeletedEvent event) {
+        if (event.services().isEmpty()) return;
+        int count = event.services().size();
+        auditLogService.record(
+            AuditEntityType.SALON_SERVICE,
+            event.services().get(0).getId(),
+            AuditActionType.BULK_DELETED,
+            count + " services deleted",
+            "Bulk deleted by staff",
             event.actor()
         );
     }

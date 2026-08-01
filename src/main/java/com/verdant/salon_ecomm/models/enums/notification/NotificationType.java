@@ -58,6 +58,7 @@ public enum NotificationType {
     STYLIST_ADDED,
     STYLIST_UPDATED,
     STYLIST_DEACTIVATED,
+    STYLIST_DELETED,
     STYLIST_IMAGE_UPDATED,
 
     // ── Accounts ─────────────────────────────────

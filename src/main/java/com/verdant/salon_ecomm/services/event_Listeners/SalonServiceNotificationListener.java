@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.AccountRole;
@@ -68,6 +69,15 @@ public class SalonServiceNotificationListener {
             event.actor());
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onSalonServicesBulkDeleted(SalonServicesBulkDeletedEvent event) {
+        if (event.services().isEmpty()) return;
+        notifyStaff(event.services().get(0), NotificationType.BULK_ACTION_PERFORMED, "Bulk service deletion",
+            event.services().size() + " services were deleted"
+                + (event.actor() != null ? " by " + event.actor().getFullName() : "") + ".",
+            event.actor());
+    }
+
     // ── Helpers ──────────────────────────────────────────
 
     private void notifyStaff(SalonService service, NotificationType type, String title, String message, User actor) {
@@ -76,7 +86,6 @@ public class SalonServiceNotificationListener {
 
         List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
         for (User staffMember : staff) {
-            if (actorId != null && actorId.equals(staffMember.getId())) continue;
             notificationService.create(new NotificationCreateDto(
                 staffMember.getId(),
                 type,

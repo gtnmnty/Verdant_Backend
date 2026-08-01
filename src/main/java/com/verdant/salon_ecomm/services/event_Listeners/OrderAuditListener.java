@@ -23,11 +23,11 @@ public class OrderAuditListener {
     public void onOrderPlaced(OrderPlacedEvent event) {
         Order order = event.order();
         auditLogService.recordSelfService(
-                AuditEntityType.ORDER,
-                order.getId(),
-                AuditActionType.CREATED,
-                "Order " + order.getOrderCode() + " placed",
-                "Placed by customer " + event.customer().getFullName()
+            AuditEntityType.ORDER,
+            order.getId(),
+            AuditActionType.CREATED,
+            "Order " + order.getOrderCode() + " placed",
+            "Placed by customer " + event.customer().getFullName()
         );
     }
 
@@ -35,12 +35,12 @@ public class OrderAuditListener {
     public void onOrderCreatedByAdmin(OrderCreatedByAdminEvent event) {
         Order order = event.order();
         auditLogService.record(
-                AuditEntityType.ORDER,
-                order.getId(),
-                AuditActionType.CREATED,
-                "Order " + order.getOrderCode() + " created",
-                "Created on behalf of " + order.getUser().getFullName(),
-                event.actor()
+            AuditEntityType.ORDER,
+            order.getId(),
+            AuditActionType.CREATED,
+            "Order " + order.getOrderCode() + " created",
+            "Created on behalf of " + order.getUser().getFullName(),
+            event.actor()
         );
     }
 
@@ -73,15 +73,15 @@ public class OrderAuditListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrdersDeleted(OrdersDeletedEvent event) {
-        for (Order order : event.orders()) {
-            auditLogService.record(
-                    AuditEntityType.ORDER,
-                    order.getId(),
-                    AuditActionType.DELETED,
-                    "Order " + order.getOrderCode() + " deleted",
-                    null,
-                    event.actor()
-            );
-        }
+        if (event.orders().isEmpty()) return;
+        int count = event.orders().size();
+        auditLogService.record(
+            AuditEntityType.ORDER,
+            event.orders().getFirst().getId(),
+            AuditActionType.BULK_DELETED,
+            count + " orders deleted",
+            "Bulk deleted by staff",
+            event.actor()
+        );
     }
 }

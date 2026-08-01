@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.dtos.favorites.events.FavoriteToggledEvent;
 import com.verdant.salon_ecomm.entities.Favorite;
 import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.entities.SalonService;
@@ -10,8 +11,8 @@ import com.verdant.salon_ecomm.repositories.FavoriteRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class FavoriteService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final SalonServiceRepository salonServiceRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Product toggleProduct(UUID productId) {
@@ -39,8 +41,10 @@ public class FavoriteService {
         Optional<Favorite> existing = favoriteRepository
             .findByUserIdAndTargetIdAndTargetType(userId, productId, ItemType.PRODUCT);
 
+        boolean added;
         if (existing.isPresent()) {
             favoriteRepository.delete(existing.get());
+            added = false;
         } else {
             Favorite favorite = Favorite.builder()
                 .user(userRepository.getReferenceById(userId))
@@ -48,7 +52,13 @@ public class FavoriteService {
                 .targetType(ItemType.PRODUCT)
                 .build();
             favoriteRepository.save(favorite);
+            added = true;
         }
+
+        User user = userRepository.getReferenceById(userId);
+        eventPublisher.publishEvent(
+            new FavoriteToggledEvent(user, ItemType.PRODUCT, productId, product.getName(), added)
+        );
 
         return product;
     }
@@ -63,8 +73,10 @@ public class FavoriteService {
         Optional<Favorite> existing = favoriteRepository
             .findByUserIdAndTargetIdAndTargetType(userId, serviceId, ItemType.SALON_SERVICE);
 
+        boolean added;
         if (existing.isPresent()) {
             favoriteRepository.delete(existing.get());
+            added = false;
         } else {
             Favorite favorite = Favorite.builder()
                 .user(userRepository.getReferenceById(userId))
@@ -73,7 +85,13 @@ public class FavoriteService {
                 .build();
 
             favoriteRepository.save(favorite);
+            added = true;
         }
+
+        User user = userRepository.getReferenceById(userId);
+        eventPublisher.publishEvent(
+            new FavoriteToggledEvent(user, ItemType.SALON_SERVICE, serviceId, service.getName(), added)
+        );
 
         return service;
     }

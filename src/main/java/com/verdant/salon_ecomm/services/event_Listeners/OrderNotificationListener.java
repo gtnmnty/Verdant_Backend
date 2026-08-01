@@ -125,6 +125,11 @@ public class OrderNotificationListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrdersDeleted(OrdersDeletedEvent event) {
+        if (event.orders().isEmpty()) return;
+
+        UUID actorId = event.actor() != null ? event.actor().getId() : null;
+        String actorName = event.actor() != null ? event.actor().getFullName() : null;
+
         for (Order order : event.orders()) {
             notificationService.create(new NotificationCreateDto(
                 order.getUser().getId(),
@@ -134,14 +139,14 @@ public class OrderNotificationListener {
                 ReferenceType.ORDER,
                 order.getId(),
                 NotificationPriority.WARNING,
-                event.actor().getId(),
-                event.actor().getFullName()
+                actorId,
+                actorName
             ));
-
-            notifyStaff(order, NotificationType.ORDER_DELETED, "Order deleted",
-                "Order " + order.getOrderCode() + " deleted by " + event.actor().getFullName(),
-                event.actor().getId(), event.actor().getFullName());
         }
+
+        notifyStaff(event.orders().get(0), NotificationType.BULK_ACTION_PERFORMED, "Bulk order deletion",
+            event.orders().size() + " orders were deleted" + (actorName != null ? " by " + actorName : "") + ".",
+            actorId, actorName);
     }
 
     // ── Helpers ──────────────────────────────────────────
