@@ -105,4 +105,5 @@ extend type Mutation {
     createBranch(input: CreateBranchInput!): AdminBranchDto!
     updateBranch(input: UpdateBranchInput!): AdminBranchDto!
     deleteBranch(id: ID!): AdminBranchDto!
+    deleteBranches(ids: [ID!]!): [AdminBranchDto!]!
 }

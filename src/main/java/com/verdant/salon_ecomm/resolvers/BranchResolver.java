@@ -4,6 +4,8 @@ import com.verdant.salon_ecomm.dtos.branch.AdminBranchDto;
 import com.verdant.salon_ecomm.dtos.branch.AdminBranchPage;
 import com.verdant.salon_ecomm.dtos.branch.CreateBranchInput;
 import com.verdant.salon_ecomm.dtos.branch.UpdateBranchInput;
+import com.verdant.salon_ecomm.entities.Branch;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import com.verdant.salon_ecomm.services.BranchService;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +13,10 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
+import java.util.List;
 import java.util.UUID;
 
 @Controller
@@ -58,5 +62,11 @@ public class BranchResolver {
     @MutationMapping
     public AdminBranchDto deleteBranch(@Argument UUID id) {
         return branchService.deleteBranch(id);
+    }
+
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
+    @MutationMapping
+    public List<Branch> deleteBranches(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+        return branchService.deleteBranches(ids, principal.getId());
     }
 }

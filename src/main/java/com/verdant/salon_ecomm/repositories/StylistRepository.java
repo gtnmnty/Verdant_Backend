@@ -8,14 +8,18 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 public interface StylistRepository extends JpaRepository<Stylist, UUID>, JpaSpecificationExecutor<Stylist> {
-    List<Stylist> findByStatus(String status);
-    List<Stylist> findAllByStatus(String status);
-
+    // Used to block branch deletion when stylists are still assigned — one IN-clause
+    // query for the whole batch instead of looping per branch id.
+    @Query("SELECT DISTINCT s.branch.id FROM Stylist s WHERE s.branch.id IN :branchIds")
+    List<UUID> findDistinctBranchIdsWithStylists(@Param("branchIds") Collection<UUID> branchIds);
 
     @Override
     @EntityGraph(attributePaths = {"branch"})
