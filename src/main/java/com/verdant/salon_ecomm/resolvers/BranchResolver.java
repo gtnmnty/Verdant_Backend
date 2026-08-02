@@ -66,7 +66,7 @@ public class BranchResolver {
 
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public List<Branch> deleteBranches(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+    public List<AdminBranchDto> deleteBranches(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
         return branchService.deleteBranches(ids, principal.getId());
     }
 }

@@ -18,8 +18,8 @@ public class RetryConfig implements AsyncConfigurer {
     @Override
     public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
         return (Throwable ex, Method method, Object... params) -> {
-            log.error("Async method '{}' failed after exhausting retries. Args: {}",
-                method.getName(), params, ex);
+            log.error("Async method '{}' failed after exhausting retries.",
+                method.getName(), ex);
         };
     }
 }

@@ -131,7 +131,7 @@ public class BranchService {
     }
 
     @Transactional
-    public List<Branch> deleteBranches(List<UUID> ids, UUID actorId) {
+    public List<AdminBranchDto> deleteBranches(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("No branch ids were provided.");
         }
@@ -182,7 +182,7 @@ public class BranchService {
         User actor = actorId != null ? userRepository.findById(actorId).orElse(null) : null;
         eventPublisher.publishEvent(new BranchesBulkDeletedEvent(branches, actor));
 
-        return branches;
+        return branches.stream().map(branchMapper::toAdminDto).toList();
     }
 
     private Branch findBranchOrThrow(UUID id) {
