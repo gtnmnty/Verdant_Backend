@@ -4,7 +4,7 @@ import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.dtos.reviews.events.ReviewSubmittedEvent;
 import com.verdant.salon_ecomm.entities.Review;
 import com.verdant.salon_ecomm.entities.User;
-import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;

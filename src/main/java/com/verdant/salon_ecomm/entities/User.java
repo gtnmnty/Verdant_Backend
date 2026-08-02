@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.entities;
 
-import com.verdant.salon_ecomm.models.enums.AccountRole;
-import com.verdant.salon_ecomm.models.enums.AccountStatus;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;

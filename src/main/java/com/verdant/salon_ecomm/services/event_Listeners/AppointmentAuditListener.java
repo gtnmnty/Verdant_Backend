@@ -117,7 +117,7 @@ public class AppointmentAuditListener {
         int count = event.appointments().size();
         auditLogService.record(
             AuditEntityType.APPOINTMENT,
-            event.appointments().get(0).getId(),
+            event.appointments().getFirst().getId(),
             AuditActionType.BULK_CANCELLED,
             count + " appointments cancelled",
             "Bulk cancelled by staff",
@@ -130,7 +130,7 @@ public class AppointmentAuditListener {
         int count = event.appointments().size();
         auditLogService.record(
             AuditEntityType.APPOINTMENT,
-            event.appointments().get(0).getId(),
+            event.appointments().getFirst().getId(),
             AuditActionType.BULK_DELETED,
             count + " appointments deleted",
             "Bulk deleted by staff",

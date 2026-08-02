@@ -3,7 +3,6 @@ package com.verdant.salon_ecomm.services;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -16,9 +15,10 @@ public class CloudinaryService {
 
     private final Cloudinary cloudinary;
 
+    @SuppressWarnings("unchecked")
     public CloudinaryUploadResult upload(MultipartFile file) {
         try {
-            Map result = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+            Map<String, Object> result = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
             return new CloudinaryUploadResult(
                 (String) result.get("secure_url"),
                 (String) result.get("public_id")
@@ -28,9 +28,10 @@ public class CloudinaryService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public void delete(String publicId) {
         try {
-            Map result = cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+            Map<String, Object> result = cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
             String status = (String) result.get("result");
 
             if (!"ok".equals(status) && !"not found".equals(status)) {

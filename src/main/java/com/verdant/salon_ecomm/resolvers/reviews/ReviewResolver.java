@@ -25,46 +25,46 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReviewResolver {
 
-  private final ReviewService reviewService;
+    private final ReviewService reviewService;
 
-  @QueryMapping
-  public ReviewConnection reviews(
-      @Argument ItemType targetType, @Argument UUID targetId,
-      @Argument ReviewsClientFilter filter, @Argument ReviewClientSort sort,
-      @Argument int page, @Argument int pageSize
-  ) {
-    return reviewService.getReviews(targetType, targetId, filter, sort, page, pageSize);
-  }
-
-  @MutationMapping
-  @PreAuthorize("isAuthenticated()")
-  public ReviewDto upsertReview(
-      @Argument ItemType targetType, @Argument UUID targetId,
-      @Argument int stars, @Argument String text
-  ) {
-    return reviewService.upsertReview(getCurrentUserId(), targetType, targetId, (short) stars, text);
-  }
-
-  @PreAuthorize("hasRole('ADMIN')")
-  @QueryMapping
-  public AdminReviewPage adminReviews(
-      @Argument ItemType itemType, @Argument ReviewsClientFilter filter, @Argument String search,
-      @Argument AdminReviewSort sort, @Argument int page, @Argument int pageSize
-  ) {
-    return reviewService.getAdminReviews(itemType, filter, search, sort, page, pageSize);
-  }
-
-  @PreAuthorize("hasRole('ADMIN')")
-  @QueryMapping
-  public AdminReviewDto adminReview(@Argument UUID id) {
-    return reviewService.getAdminReviewById(id);
-  }
-
-  private UUID getCurrentUserId() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication != null && authentication.getPrincipal() instanceof User user) {
-      return user.getId();
+    @QueryMapping
+    public ReviewConnection reviews(
+        @Argument ItemType targetType, @Argument UUID targetId,
+        @Argument ReviewsClientFilter filter, @Argument ReviewClientSort sort,
+        @Argument int page, @Argument int pageSize
+    ) {
+        return reviewService.getReviews(targetType, targetId, filter, sort, page, pageSize);
     }
-    throw new IllegalStateException("No authenticated user found");
-  }
+
+    @MutationMapping
+    @PreAuthorize("isAuthenticated()")
+    public ReviewDto upsertReview(
+        @Argument ItemType targetType, @Argument UUID targetId,
+        @Argument int stars, @Argument String text
+    ) {
+        return reviewService.upsertReview(getCurrentUserId(), targetType, targetId, (short) stars, text);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
+    @QueryMapping
+    public AdminReviewPage adminReviews(
+        @Argument ItemType itemType, @Argument ReviewsClientFilter filter, @Argument String search,
+        @Argument AdminReviewSort sort, @Argument int page, @Argument int pageSize
+    ) {
+        return reviewService.getAdminReviews(itemType, filter, search, sort, page, pageSize);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
+    @QueryMapping
+    public AdminReviewDto adminReview(@Argument UUID id) {
+        return reviewService.getAdminReviewById(id);
+    }
+
+    private UUID getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof User user) {
+            return user.getId();
+        }
+        throw new IllegalStateException("No authenticated user found");
+    }
 }

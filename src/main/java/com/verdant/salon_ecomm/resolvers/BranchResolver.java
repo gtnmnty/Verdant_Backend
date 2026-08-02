@@ -4,7 +4,6 @@ import com.verdant.salon_ecomm.dtos.branch.AdminBranchDto;
 import com.verdant.salon_ecomm.dtos.branch.AdminBranchPage;
 import com.verdant.salon_ecomm.dtos.branch.CreateBranchInput;
 import com.verdant.salon_ecomm.dtos.branch.UpdateBranchInput;
-import com.verdant.salon_ecomm.entities.Branch;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import com.verdant.salon_ecomm.services.BranchService;
@@ -66,7 +65,7 @@ public class BranchResolver {
 
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public List<Branch> deleteBranches(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+    public List<AdminBranchDto> deleteBranches(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
         return branchService.deleteBranches(ids, principal.getId());
     }
 }

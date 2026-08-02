@@ -34,9 +34,9 @@ public class SalonServiceNotificationListener {
         if (!event.hasChanges()) return;
 
         SalonService service = event.service();
-        staffNotifier.notify(ReferenceType.SERVICE, service.getId(), NotificationType.SERVICE_ADDED,
-            "New service added",
-            "\"" + service.getName() + "\" was added to the catalog.",
+        staffNotifier.notify(ReferenceType.SERVICE, service.getId(), NotificationType.SERVICE_UPDATED,
+            "Service updated",
+            "\"" + service.getName() + "\" was updated: " + event.changeSummary(),
             event.actor());
     }
 

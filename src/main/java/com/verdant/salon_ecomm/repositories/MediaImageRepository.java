@@ -24,7 +24,12 @@ public interface MediaImageRepository extends JpaRepository<MediaImage, UUID> {
 
     void deleteByEntityTypeAndEntityId(ItemType entityType, UUID entityId);
 
-    void deleteByEntityTypeAndEntityIdIn(ItemType entityType, Collection<UUID> entityIds);
+    @Modifying
+    @Query("DELETE FROM MediaImage m WHERE m.entityType = :entityType AND m.entityId IN :entityIds")
+    void deleteByEntityTypeAndEntityIdIn(
+        @Param("entityType") ItemType entityType,
+        @Param("entityIds") Collection<UUID> entityIds
+    );
 
     @Modifying
     @Query("UPDATE MediaImage m SET m.isPrimary = false WHERE m.entityType = :entityType AND m.entityId = :entityId")

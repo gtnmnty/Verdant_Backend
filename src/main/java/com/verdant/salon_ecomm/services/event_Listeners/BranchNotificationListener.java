@@ -3,7 +3,7 @@ package com.verdant.salon_ecomm.services.event_Listeners;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.dtos.branch.events.BranchesBulkDeletedEvent;
 import com.verdant.salon_ecomm.entities.User;
-import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
@@ -45,7 +45,7 @@ public class BranchNotificationListener {
                 "Bulk branch deletion",
                 message,
                 ReferenceType.BRANCH,
-                event.branches().get(0).getId(),
+                event.branches().getFirst().getId(),
                 NotificationPriority.INFO,
                 actorId,
                 actorName

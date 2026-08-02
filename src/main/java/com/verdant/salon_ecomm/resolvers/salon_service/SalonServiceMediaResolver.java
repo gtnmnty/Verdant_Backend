@@ -27,7 +27,7 @@ public class SalonServiceMediaResolver {
             mediaImageService.getPrimaryImagesByEntityIds(ItemType.SALON_SERVICE, serviceIds);
 
         Map<SalonService, MediaImageDto> result = new HashMap<>();
-        for(SalonService service : services) {
+        for (SalonService service : services) {
             result.put(service, byServiceId.get(service.getId()));
         }
 

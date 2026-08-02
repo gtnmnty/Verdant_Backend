@@ -7,7 +7,7 @@ import com.verdant.salon_ecomm.dtos.product.events.ProductCreatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductDeletedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
-import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;

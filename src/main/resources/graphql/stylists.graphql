@@ -15,6 +15,7 @@ extend type Mutation {
     createStylist(input: CreateStylistInput!): Stylist!
     updateStylist(id: ID!, input: UpdateStylistInput!): Stylist!
     deleteStylist(id: ID!): AdminStylistsDto!
+    deleteStylists(ids: [ID!]!): [AdminStylistsDto!]!
     updateStylistStatus(id: ID!, status: StylistAccountStatus!): Stylist!
     assignStylistToServices(stylistId: ID!, serviceIds: [ID!]!): Stylist!
 }

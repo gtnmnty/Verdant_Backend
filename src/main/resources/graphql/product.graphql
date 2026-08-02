@@ -15,8 +15,24 @@ extend type Query {
         page: Int = 1
         pageSize: Int = 6
     ): AdminProductPage!
-    adminProduct(id: ID!): AdminProductDto
+    adminProductDetail(id: ID!): AdminProductDto
     productFavorites(first: Int = 10, after: String): CatalogItemConnection!
+}
+
+extend type Mutation {
+    createProduct(input: CreateProductInput!): AdminProductDto!
+    updateProduct(input: UpdateProductInput!): AdminProductDto!
+    deleteProduct(id: ID!): Boolean!
+    toggleProductStatus(id: ID!): AdminProductDto!
+    toggleFavoriteProduct(targetId: ID!, targetType: ItemType!): CatalogItem!
+    deleteProducts(ids: [ID!]!): [AdminProductDto!]!
+}
+
+enum CollectionSort {
+    NEWEST
+    OLDEST
+    PRICE_LOW_TO_HIGH
+    PRICE_HIGH_TO_LOW
 }
 
 type Product implements CatalogItem {
@@ -39,17 +55,6 @@ type Product implements CatalogItem {
     inStock: Boolean!
 }
 
-extend type Mutation {
-    toggleFavorite(targetId: ID!, targetType: ItemType!): CatalogItem!
-}
-
-enum CollectionSort {
-    NEWEST
-    OLDEST
-    PRICE_LOW_TO_HIGH
-    PRICE_HIGH_TO_LOW
-}
-
 type ProductPage {
     items: [Product!]!
     page: Int!
@@ -69,13 +74,6 @@ type AdminProductPage {
 type CatalogItemConnection {
     items: [CatalogItem!]!
     pageInfo: PageInfo!
-}
-
-extend type Mutation {
-    createProduct(input: CreateProductInput!): AdminProductDto!
-    updateProduct(input: UpdateProductInput!): AdminProductDto!
-    deleteProduct(id: ID!): Boolean!
-    toggleProductStatus(id: ID!): AdminProductDto!
 }
 
 type AdminProductDto {

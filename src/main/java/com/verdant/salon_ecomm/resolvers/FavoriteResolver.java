@@ -20,7 +20,7 @@ public class FavoriteResolver {
 
   @MutationMapping
   @PreAuthorize("isAuthenticated()")
-  public Product toggleFavorite(@Argument String targetId, @Argument ItemType targetType) {
+  public Product toggleFavoriteProduct(@Argument String targetId, @Argument ItemType targetType) {
     requireType(targetType, ItemType.PRODUCT);
     return favoriteService.toggleProduct(UUID.fromString(targetId));
   }

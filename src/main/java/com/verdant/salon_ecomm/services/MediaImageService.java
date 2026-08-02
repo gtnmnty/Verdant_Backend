@@ -3,7 +3,6 @@ package com.verdant.salon_ecomm.services;
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
 import com.verdant.salon_ecomm.entities.MediaImage;
-import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.ItemType;

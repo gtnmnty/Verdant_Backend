@@ -39,6 +39,25 @@ public class ProductResolver {
         return productService.getProductDetail(UUID.fromString(id));
     }
 
+    @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'MANAGER', 'OWNER')")
+    public AdminProductPage adminProducts(
+        @Argument String category,
+        @Argument String search,
+        @Argument CollectionSort sort,
+        @Argument CollectionStatus status,
+        @Argument int page,
+        @Argument int pageSize
+    ) {
+        return productService.getAdminProducts(category, search, sort, status, page, pageSize);
+    }
+
+    @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'MANAGER', 'OWNER')")
+    public AdminProductDto adminProductDetail(@Argument String id) {
+        return productService.getAdminProduct(UUID.fromString(id));
+    }
+
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public AdminProductDto createProduct(@Argument CreateProductInput input) {
@@ -61,24 +80,5 @@ public class ProductResolver {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public List<Product> deleteProducts(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
         return productService.deleteProducts(ids, principal.getId());
-    }
-
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'MANAGER', 'OWNER')")
-    public AdminProductPage adminProducts(
-        @Argument String category,
-        @Argument String search,
-        @Argument CollectionSort sort,
-        @Argument CollectionStatus status,
-        @Argument int page,
-        @Argument int pageSize
-    ) {
-        return productService.getAdminProducts(category, search, sort, status, page, pageSize);
-    }
-
-    @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'MANAGER', 'OWNER')")
-    public AdminProductDto adminProduct(@Argument String id) {
-        return productService.getAdminProduct(UUID.fromString(id));
     }
 }

@@ -2,7 +2,6 @@ package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
-import com.verdant.salon_ecomm.dtos.cart.CartItemDto;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.AddToCartInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.RemoveCartItemsInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.SelectedCartItemsInput;
@@ -16,9 +15,6 @@ import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
-
-import java.util.List;
-import java.util.UUID;
 
 @Controller
 @RequiredArgsConstructor

@@ -10,8 +10,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface FavoriteRepository extends JpaRepository<Favorite, UUID> {
-    List<Favorite> findByUserId(UUID userId);
     Optional<Favorite> findByUserIdAndTargetIdAndTargetType(UUID userId, UUID targetId, ItemType targetType);
-    void deleteByUserIdAndTargetIdAndTargetType(UUID userId, UUID targetId, ItemType targetType);
     List<Favorite> findByUserIdAndTargetIdInAndTargetType(UUID userId, Collection<UUID> targetIds, ItemType targetType);
 }

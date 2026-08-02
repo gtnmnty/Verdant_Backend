@@ -52,13 +52,13 @@ public class SalonServiceResolver {
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto create(@Argument CreateServiceInput input, @AuthenticationPrincipal User principal){
+    public AdminServiceDto createService(@Argument CreateServiceInput input, @AuthenticationPrincipal User principal){
         return salonService.createServiceInput(input, principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto update(@Argument UpdateServiceInput input, @AuthenticationPrincipal User principal){
+    public AdminServiceDto updateService(@Argument UpdateServiceInput input, @AuthenticationPrincipal User principal){
         return salonService.updateServiceInput(input, principal.getId());
     }
 
@@ -74,7 +74,7 @@ public class SalonServiceResolver {
         return salonService.deleteServices(ids, principal.getId());
     }
 
-    @MutationMapping
+    @QueryMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServicePage adminServices(
         @Argument String category, @Argument String search,
@@ -84,7 +84,7 @@ public class SalonServiceResolver {
         return salonService.getAdminServices(category, search, sort, status, page, pageSize);
     }
 
-    @MutationMapping
+    @QueryMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServiceDto adminServiceDetail(@Argument UUID id){
         return salonService.getAdminServiceDto(id);

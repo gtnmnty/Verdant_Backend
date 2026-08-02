@@ -12,8 +12,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.UUID;
-
 @Component
 public class ProductAuditListener {
 
@@ -93,7 +91,7 @@ public class ProductAuditListener {
         int count = event.products().size();
         auditLogService.record(
             AuditEntityType.PRODUCT,
-            event.products().get(0).getId(),
+            event.products().getFirst().getId(),
             AuditActionType.BULK_DELETED,
             count + " products deleted",
             "Bulk deleted by staff",
