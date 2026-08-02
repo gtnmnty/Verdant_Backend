@@ -16,6 +16,7 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ProductSpec;
 import com.verdant.salon_ecomm.utils.EnumUtils;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
+import com.verdant.salon_ecomm.utils.IsEmpty;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
@@ -226,23 +227,21 @@ public class ProductService {
         }
 
         List<Product> products = productRepository.findAllById(ids);
+        List<UUID> productIds = products.stream().map(Product::getId).toList();
 
-        for (Product product : products) {
-            List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(
-                ItemType.PRODUCT, product.getId()
-            );
-            for (MediaImage image : images) {
-                cloudinaryService.delete(image.getPublicId());
-            }
-            mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.PRODUCT, product.getId());
-        }
+        List<MediaImage> images = mediaImageRepository
+            .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.PRODUCT, productIds);
+        List<String> publicIds = images.stream().map(MediaImage::getPublicId).toList();
 
+        mediaImageRepository.deleteByEntityTypeAndEntityIdIn(ItemType.PRODUCT, productIds);
         productRepository.deleteAll(products);
 
         if (!products.isEmpty()) {
             User actor = actorId != null ? userRepository.findById(actorId).orElse(null) : null;
             eventPublisher.publishEvent(new ProductsBulkDeletedEvent(products, actor));
         }
+
+        IsEmpty.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
 
         return products;
     }

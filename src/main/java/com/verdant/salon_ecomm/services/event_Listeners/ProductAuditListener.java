@@ -27,12 +27,12 @@ public class ProductAuditListener {
     public void onProductCreated(ProductCreatedEvent event) {
         Product product = event.product();
         auditLogService.record(
-                AuditEntityType.PRODUCT,
-                product.getId(),
-                AuditActionType.CREATED,
-                "Product " + product.getName() + " created",
-                "SKU " + product.getSku(),
-                event.actor()
+            AuditEntityType.PRODUCT,
+            product.getId(),
+            AuditActionType.CREATED,
+            "Product " + product.getName() + " created",
+            "SKU " + product.getSku(),
+            event.actor()
         );
     }
 
@@ -42,34 +42,34 @@ public class ProductAuditListener {
 
         if (event.stockChanged()) {
             auditLogService.record(
-                    AuditEntityType.PRODUCT,
-                    product.getId(),
-                    AuditActionType.RESTOCKED,
-                    "Product " + product.getName() + " stock changed",
-                    event.previousStockQuantity() + " -> " + product.getStockQuantity(),
-                    event.actor()
+                AuditEntityType.PRODUCT,
+                product.getId(),
+                AuditActionType.UPDATED,
+                "Product " + product.getName() + " stock changed",
+                event.previousStockQuantity() + " -> " + product.getStockQuantity(),
+                event.actor()
             );
         }
 
         if (event.statusChanged()) {
             auditLogService.record(
-                    AuditEntityType.PRODUCT,
-                    product.getId(),
-                    AuditActionType.UPDATED,
-                    "Product " + product.getName() + " status changed",
-                    event.previousStatus() + " -> " + product.getStatus(),
-                    event.actor()
+                AuditEntityType.PRODUCT,
+                product.getId(),
+                AuditActionType.UPDATED,
+                "Product " + product.getName() + " status changed",
+                event.previousStatus() + " -> " + product.getStatus(),
+                event.actor()
             );
         }
 
         if (!event.stockChanged() && !event.statusChanged()) {
             auditLogService.record(
-                    AuditEntityType.PRODUCT,
-                    product.getId(),
-                    AuditActionType.UPDATED,
-                    "Product " + product.getName() + " updated",
-                    null,
-                    event.actor()
+                AuditEntityType.PRODUCT,
+                product.getId(),
+                AuditActionType.UPDATED,
+                "Product " + product.getName() + " updated",
+                null,
+                event.actor()
             );
         }
     }
@@ -78,12 +78,12 @@ public class ProductAuditListener {
     public void onProductDeleted(ProductDeletedEvent event) {
         Product product = event.product();
         auditLogService.record(
-                AuditEntityType.PRODUCT,
-                product.getId(),
-                AuditActionType.DELETED,
-                "Product " + product.getName() + " deleted",
-                null,
-                event.actor()
+            AuditEntityType.PRODUCT,
+            product.getId(),
+            AuditActionType.DELETED,
+            "Product " + product.getName() + " deleted",
+            null,
+            event.actor()
         );
     }
 
@@ -92,12 +92,12 @@ public class ProductAuditListener {
         if (event.products().isEmpty()) return;
         int count = event.products().size();
         auditLogService.record(
-                AuditEntityType.PRODUCT,
-                event.products().get(0).getId(),
-                AuditActionType.BULK_DELETED,
-                count + " products deleted",
-                "Bulk deleted by staff",
-                event.actor()
+            AuditEntityType.PRODUCT,
+            event.products().get(0).getId(),
+            AuditActionType.BULK_DELETED,
+            count + " products deleted",
+            "Bulk deleted by staff",
+            event.actor()
         );
     }
 }

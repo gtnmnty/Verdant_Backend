@@ -18,6 +18,7 @@ import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.StylistRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
+import com.verdant.salon_ecomm.utils.IsEmpty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -155,97 +156,7 @@ public class SalonServicesService {
         return toAdminDto(service);
     }
 
-    public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
-        return new SalonServiceDto(
-            service.getId(),
-            service.getName(),
-            service.getSubName(),
-            service.getItemCatalog(),
-            service.getPrice(),
-            service.getDurationMinutes(),
-            service.getDescription(),
-            service.getBadge(),
-            primaryImage != null ? toImageDTO(primaryImage) : null
-        );
-    }
-
-    public AdminServiceDto toAdminDto(SalonService service) {
-        List<MediaImage> images = mediaImageRepository
-            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
-                ItemType.SALON_SERVICE, service.getId()
-            );
-
-        return toAdminDto(service, images);
-    }
-
-    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images) {
-        return new AdminServiceDto(
-            service.getId().toString(),
-            service.getName(),
-            service.getSubName(),
-            service.getItemCatalog().name(),
-            service.getPrice(),
-            service.getDurationMinutes(),
-            service.getStatus(),
-            service.getDescription(),
-            service.getBadge(),
-            service.getTags(),
-            service.getInfo(),
-            service.getReviewCount(),
-            service.getAverageRating(),
-            service.getIsHomeService(),
-            service.isFeatured(),
-            images.stream().map(this::toImageDTO).toList(),
-            service.getStylists().stream().map(this::toStylistSummaryDto).toList(),
-            service.getCreatedAt(),
-            service.getUpdatedAt()
-        );
-    }
-
-    private MediaImageDto toImageDTO(MediaImage image) {
-        return new MediaImageDto(
-            image.getId().toString(),
-            image.getUrl(),
-            image.getPublicId(),
-            image.isPrimary(),
-            image.getSortOrder()
-        );
-    }
-
-    private Sort toSort(ServiceSort sort) {
-        if (sort == null) {
-            return Sort.by(Sort.Direction.DESC, "createdAt");
-        }
-
-        return switch (sort) {
-            case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
-            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
-            case PRICE_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "price");
-            case PRICE_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "price");
-            case DURATION_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "durationMinutes");
-            case DURATION_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "durationMinutes");
-        };
-    }
-
-    private StylistSummaryDto toStylistSummaryDto(Stylist stylist) {
-        return new StylistSummaryDto(
-            stylist.getId().toString(),
-            stylist.getName(),
-            stylist.getAvatarUrl(),
-            stylist.getStatus()
-        );
-    }
-
-    private List<Stylist> resolveStylists(Set<UUID> stylistIds) {
-        List<Stylist> stylists = stylistRepository.findAllById(stylistIds);
-
-        if (stylists.size() != stylistIds.size()) {
-            throw new ResourceNotFoundException("One or more stylists not found");
-        }
-
-        return stylists;
-    }
-
+    // ----- Mutations -----
     @Transactional
     public AdminServiceDto createServiceInput(CreateServiceInput input, UUID actorId) {
         List<Stylist> stylists = resolveStylists(input.stylistIds());
@@ -380,10 +291,6 @@ public class SalonServicesService {
         return dto;
     }
 
-    private User resolveActor(UUID actorId) {
-        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
-    }
-
     @Transactional
     public List<SalonService> deleteServices(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
@@ -391,15 +298,13 @@ public class SalonServicesService {
         }
 
         List<SalonService> services = serviceRepository.findAllById(ids);
+        List<UUID> serviceIds = services.stream().map(SalonService::getId).toList();
 
-        for (SalonService service : services) {
-            List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.SALON_SERVICE, service.getId());
-            for (MediaImage image : images) {
-                cloudinaryService.delete(image.getPublicId());
-            }
-            mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, service.getId());
-        }
+        List<MediaImage> images = mediaImageRepository
+            .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.SALON_SERVICE, serviceIds);
+        List<String> publicIds = images.stream().map(MediaImage::getPublicId).toList();
 
+        mediaImageRepository.deleteByEntityTypeAndEntityIdIn(ItemType.SALON_SERVICE, serviceIds);
         serviceRepository.deleteAll(services);
 
         if (!services.isEmpty()) {
@@ -407,6 +312,103 @@ public class SalonServicesService {
             eventPublisher.publishEvent(new SalonServicesBulkDeletedEvent(services, actor));
         }
 
+        IsEmpty.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
+
         return services;
+    }
+
+    public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
+        return new SalonServiceDto(
+            service.getId(),
+            service.getName(),
+            service.getSubName(),
+            service.getItemCatalog(),
+            service.getPrice(),
+            service.getDurationMinutes(),
+            service.getDescription(),
+            service.getBadge(),
+            primaryImage != null ? toImageDTO(primaryImage) : null
+        );
+    }
+
+    public AdminServiceDto toAdminDto(SalonService service) {
+        List<MediaImage> images = mediaImageRepository
+            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
+                ItemType.SALON_SERVICE, service.getId()
+            );
+
+        return toAdminDto(service, images);
+    }
+
+    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images) {
+        return new AdminServiceDto(
+            service.getId().toString(),
+            service.getName(),
+            service.getSubName(),
+            service.getItemCatalog().name(),
+            service.getPrice(),
+            service.getDurationMinutes(),
+            service.getStatus(),
+            service.getDescription(),
+            service.getBadge(),
+            service.getTags(),
+            service.getInfo(),
+            service.getReviewCount(),
+            service.getAverageRating(),
+            service.getIsHomeService(),
+            service.isFeatured(),
+            images.stream().map(this::toImageDTO).toList(),
+            service.getStylists().stream().map(this::toStylistSummaryDto).toList(),
+            service.getCreatedAt(),
+            service.getUpdatedAt()
+        );
+    }
+
+    private MediaImageDto toImageDTO(MediaImage image) {
+        return new MediaImageDto(
+            image.getId().toString(),
+            image.getUrl(),
+            image.getPublicId(),
+            image.isPrimary(),
+            image.getSortOrder()
+        );
+    }
+
+    private Sort toSort(ServiceSort sort) {
+        if (sort == null) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        return switch (sort) {
+            case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case PRICE_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "price");
+            case PRICE_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "price");
+            case DURATION_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "durationMinutes");
+            case DURATION_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "durationMinutes");
+        };
+    }
+
+    private StylistSummaryDto toStylistSummaryDto(Stylist stylist) {
+        return new StylistSummaryDto(
+            stylist.getId().toString(),
+            stylist.getName(),
+            stylist.getAvatarUrl(),
+            stylist.getStatus()
+        );
+    }
+
+    private List<Stylist> resolveStylists(Set<UUID> stylistIds) {
+        List<Stylist> stylists = stylistRepository.findAllById(stylistIds);
+
+        if (stylists.size() != stylistIds.size()) {
+            throw new ResourceNotFoundException("One or more stylists not found");
+        }
+
+        return stylists;
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 }

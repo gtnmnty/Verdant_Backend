@@ -55,7 +55,8 @@ public class FavoriteService {
             added = true;
         }
 
-        User user = userRepository.getReferenceById(userId);
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         eventPublisher.publishEvent(
             new FavoriteToggledEvent(user, ItemType.PRODUCT, productId, product.getName(), added)
         );
@@ -73,6 +74,7 @@ public class FavoriteService {
         Optional<Favorite> existing = favoriteRepository
             .findByUserIdAndTargetIdAndTargetType(userId, serviceId, ItemType.SALON_SERVICE);
 
+
         boolean added;
         if (existing.isPresent()) {
             favoriteRepository.delete(existing.get());
@@ -88,7 +90,8 @@ public class FavoriteService {
             added = true;
         }
 
-        User user = userRepository.getReferenceById(userId);
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         eventPublisher.publishEvent(
             new FavoriteToggledEvent(user, ItemType.SALON_SERVICE, serviceId, service.getName(), added)
         );

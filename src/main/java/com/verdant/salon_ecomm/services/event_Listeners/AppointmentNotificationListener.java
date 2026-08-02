@@ -42,7 +42,6 @@ public class AppointmentNotificationListener {
     @Async
     @Retryable(
         retryFor = Exception.class,
-        maxAttempts = 3,
         backoff = @Backoff(delay = 1000, multiplier = 2.0)
     )
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -137,7 +136,6 @@ public class AppointmentNotificationListener {
     @Async
     @Retryable(
         retryFor = Exception.class,
-        maxAttempts = 3,
         backoff = @Backoff(delay = 1000, multiplier = 2.0)
     )
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -199,11 +197,11 @@ public class AppointmentNotificationListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkCancelled(AppointmentsBulkCancelledEvent event) {
-        List<Appointment> appointments = event.appointments();
-        if (appointments == null || appointments.isEmpty()) return;
+        UUID actorId = actorIdOrNull(event.actor());
+        String actorName = actorNameOrNull(event.actor());
 
-        UUID actorId = event.actor() != null ? event.actor().getId() : null;
-        String actorName = event.actor() != null ? event.actor().getFullName() : null;
+        List<Appointment> appointments = nullSafeAppointments(event);
+        if (appointments.isEmpty()) return;
 
         for (Appointment appointment : appointments) {
             notificationService.create(new NotificationCreateDto(
@@ -228,9 +226,11 @@ public class AppointmentNotificationListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkDeleted(AppointmentsBulkDeletedEvent event) {
+        UUID actorId = actorIdOrNull(event.actor());
+        String actorName = actorNameOrNull(event.actor());
+
         List<Appointment> appointments = event.appointments();
-        UUID actorId = event.actor() != null ? event.actor().getId() : null;
-        String actorName = event.actor() != null ? event.actor().getFullName() : null;
+        if (appointments == null || appointments.isEmpty()) return;
 
         for (Appointment appointment : appointments) {
             notificationService.create(new NotificationCreateDto(
@@ -286,13 +286,26 @@ public class AppointmentNotificationListener {
             return "";
         }
 
-        // Split by comma, trim whitespace, and filter out sensitive fields
-        return java.util.Arrays.stream(fullSummary.split(","))
+        // Split by semicolon, trim whitespace, and filter out sensitive fields
+        return java.util.Arrays.stream(fullSummary.split(";"))
             .map(String::trim)
             .filter(change -> {
                 String lowerChange = change.toLowerCase();
                 return !lowerChange.startsWith("customer") && !lowerChange.startsWith("notes");
             })
             .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private UUID actorIdOrNull(User actor) {
+        return actor != null ? actor.getId() : null;
+    }
+
+    private String actorNameOrNull(User actor) {
+        return actor != null ? actor.getFullName() : null;
+    }
+
+    private List<Appointment> nullSafeAppointments(AppointmentsBulkCancelledEvent event) {
+        List<Appointment> appointments = event.appointments();
+        return appointments != null ? appointments : List.of();
     }
 }

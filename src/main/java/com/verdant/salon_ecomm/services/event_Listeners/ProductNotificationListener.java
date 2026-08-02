@@ -25,7 +25,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductNotificationListener {
 
-    // Staff who should hear about catalog/stock changes.
     private static final List<AccountRole> STAFF_ROLES = List.of(
         AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
     );
@@ -104,7 +103,7 @@ public class ProductNotificationListener {
     public void onProductsBulkDeleted(ProductsBulkDeletedEvent event) {
         if (event.products().isEmpty()) return;
 
-        notifyStaff(event.products().get(0), NotificationType.BULK_ACTION_PERFORMED, "Bulk product deletion",
+        notifyStaff(event.products().getFirst(), NotificationType.BULK_ACTION_PERFORMED, "Bulk product deletion",
             event.products().size() + " products were deleted"
                 + (event.actor() != null ? " by " + event.actor().getFullName() : "") + ".",
             event.actor());

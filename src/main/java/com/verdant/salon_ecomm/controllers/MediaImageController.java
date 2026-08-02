@@ -1,12 +1,14 @@
 package com.verdant.salon_ecomm.controllers;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.services.MediaImageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -47,10 +49,10 @@ public class MediaImageController {
     public ResponseEntity<MediaImageDto> setImagePrimary(
         @PathVariable UUID serviceId,
         @PathVariable UUID imageId,
-        UUID actorId
+        @AuthenticationPrincipal User principal
     ) {
         MediaImageDto result = mediaImageService
-            .setPrimary(ItemType.SALON_SERVICE, imageId, serviceId, actorId);
+            .setPrimary(ItemType.SALON_SERVICE, imageId, serviceId, principal.getId());
         return ResponseEntity.ok(result);
     }
 }

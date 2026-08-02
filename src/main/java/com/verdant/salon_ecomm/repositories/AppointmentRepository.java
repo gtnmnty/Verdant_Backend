@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,4 +77,15 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     long countByUser_IdAndStatusInAndScheduledAtAfter(
         UUID userId, List<AppointmentStatus> statuses, OffsetDateTime after);
+
+    // Used to block branch deletion when a branch still has active (not completed/
+    // cancelled) appointments — one IN-clause query for the whole batch.
+    @Query("""
+            SELECT DISTINCT a.branch.id FROM Appointment a
+            WHERE a.branch.id IN :branchIds AND a.status IN :activeStatuses
+        """)
+    List<UUID> findDistinctBranchIdsWithActiveAppointments(
+        @Param("branchIds") Collection<UUID> branchIds,
+        @Param("activeStatuses") List<AppointmentStatus> activeStatuses
+    );
 }
