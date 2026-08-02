@@ -2,18 +2,22 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.product.*;
+import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.CollectionSort;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
+import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ProductSpec;
 import com.verdant.salon_ecomm.utils.EnumUtils;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,6 +39,8 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final MediaImageRepository mediaImageRepository;
     private final CloudinaryService cloudinaryService;
+    private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProductPage getProducts(
         String category, String search,
@@ -211,6 +217,34 @@ public class ProductService {
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.PRODUCT, id);
         productRepository.delete(product);
         return true;
+    }
+
+    @Transactional
+    public List<Product> deleteProducts(List<UUID> ids, UUID actorId) {
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("No product ids were provided.");
+        }
+
+        List<Product> products = productRepository.findAllById(ids);
+
+        for (Product product : products) {
+            List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(
+                ItemType.PRODUCT, product.getId()
+            );
+            for (MediaImage image : images) {
+                cloudinaryService.delete(image.getPublicId());
+            }
+            mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.PRODUCT, product.getId());
+        }
+
+        productRepository.deleteAll(products);
+
+        if (!products.isEmpty()) {
+            User actor = actorId != null ? userRepository.findById(actorId).orElse(null) : null;
+            eventPublisher.publishEvent(new ProductsBulkDeletedEvent(products, actor));
+        }
+
+        return products;
     }
 
 }

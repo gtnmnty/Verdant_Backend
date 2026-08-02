@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
+import java.util.List;
 import java.util.UUID;
 
 @Controller
@@ -33,9 +34,9 @@ public class SalonServiceResolver {
 
     @SchemaMapping(typeName = "SalonService", field = "durationInMinutes")
     public Integer durationInMinutes(Object serviceObj) {
-        if (serviceObj instanceof com.verdant.salon_ecomm.dtos.service.SalonServiceDto dto) {
+        if (serviceObj instanceof SalonServiceDto dto) {
             return dto.durationInMinutes();
-        } else if (serviceObj instanceof com.verdant.salon_ecomm.entities.SalonService entity) {
+        } else if (serviceObj instanceof SalonService entity) {
             return entity.getDurationMinutes();
         }
         throw new IllegalArgumentException(
@@ -65,6 +66,12 @@ public class SalonServiceResolver {
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminServiceDto deleteService(@Argument UUID id, @AuthenticationPrincipal User principal){
         return salonService.deleteService(id, principal.getId());
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public List<SalonService> deleteServices(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+        return salonService.deleteServices(ids, principal.getId());
     }
 
     @MutationMapping

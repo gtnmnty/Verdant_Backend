@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
 import com.verdant.salon_ecomm.dtos.stylists.StylistSummaryDto;
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.SalonService;
@@ -51,7 +52,7 @@ public class SalonServicesService {
     public ServicePage getSalonServices(
         String category, String search, ServiceSort sort,
         int page, int pageSize
-    ){
+    ) {
         int normalizePage = Math.max(page - 1, 0) + 1;
         int normalizePageSize = Math.max(pageSize, 1);
 
@@ -94,11 +95,11 @@ public class SalonServicesService {
         );
     }
 
-    public SalonService getServiceDetail(UUID id){
+    public SalonService getServiceDetail(UUID id) {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
-        if(service.getStatus() != CollectionStatus.ACTIVE){
+        if (service.getStatus() != CollectionStatus.ACTIVE) {
             throw new ResourceNotFoundException("Service not found");
         }
 
@@ -109,7 +110,7 @@ public class SalonServicesService {
         String category, String search, ServiceSort sort,
         CollectionStatus status,
         int page, int pageSize
-    ){
+    ) {
         int normalizePage = Math.max(page - 1, 0) + 1;
         int normalizePageSize = Math.max(pageSize, 1);
 
@@ -147,7 +148,7 @@ public class SalonServicesService {
         );
     }
 
-    public AdminServiceDto getAdminServiceDto(UUID id){
+    public AdminServiceDto getAdminServiceDto(UUID id) {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
@@ -168,7 +169,7 @@ public class SalonServicesService {
         );
     }
 
-    public AdminServiceDto toAdminDto(SalonService service){
+    public AdminServiceDto toAdminDto(SalonService service) {
         List<MediaImage> images = mediaImageRepository
             .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
                 ItemType.SALON_SERVICE, service.getId()
@@ -177,7 +178,7 @@ public class SalonServicesService {
         return toAdminDto(service, images);
     }
 
-    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images){
+    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images) {
         return new AdminServiceDto(
             service.getId().toString(),
             service.getName(),
@@ -201,7 +202,7 @@ public class SalonServicesService {
         );
     }
 
-    private MediaImageDto toImageDTO(MediaImage image){
+    private MediaImageDto toImageDTO(MediaImage image) {
         return new MediaImageDto(
             image.getId().toString(),
             image.getUrl(),
@@ -211,18 +212,18 @@ public class SalonServicesService {
         );
     }
 
-    private Sort toSort(ServiceSort sort){
+    private Sort toSort(ServiceSort sort) {
         if (sort == null) {
             return Sort.by(Sort.Direction.DESC, "createdAt");
         }
 
         return switch (sort) {
-            case NEWEST ->  Sort.by(Sort.Direction.DESC, "createdAt");
-            case OLDEST ->  Sort.by(Sort.Direction.ASC, "createdAt");
-            case PRICE_LOW_TO_HIGH ->  Sort.by(Sort.Direction.ASC, "price");
-            case PRICE_HIGH_TO_LOW ->   Sort.by(Sort.Direction.DESC, "price");
-            case DURATION_LOW_TO_HIGH ->  Sort.by(Sort.Direction.ASC, "durationMinutes");
-            case DURATION_HIGH_TO_LOW ->  Sort.by(Sort.Direction.DESC, "durationMinutes");
+            case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case PRICE_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "price");
+            case PRICE_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "price");
+            case DURATION_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "durationMinutes");
+            case DURATION_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "durationMinutes");
         };
     }
 
@@ -277,7 +278,7 @@ public class SalonServicesService {
 
     @Transactional
     public AdminServiceDto updateServiceInput(UpdateServiceInput input, UUID actorId) {
-        SalonService service =  serviceRepository.findById(input.id())
+        SalonService service = serviceRepository.findById(input.id())
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
         String previousName = service.getName();
@@ -343,6 +344,7 @@ public class SalonServicesService {
                 "isFeatured", String.valueOf(previousIsFeatured), String.valueOf(saved.isFeatured())
             ));
         }
+
         Set<UUID> newStylistIds = saved.getStylists().stream().map(Stylist::getId).collect(Collectors.toSet());
         if (!Objects.equals(previousStylistIds, newStylistIds)) {
             changes.add(new SalonServiceUpdatedEvent.FieldChange(
@@ -380,5 +382,31 @@ public class SalonServicesService {
 
     private User resolveActor(UUID actorId) {
         return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
+    }
+
+    @Transactional
+    public List<SalonService> deleteServices(List<UUID> ids, UUID actorId) {
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("No service ids were provided.");
+        }
+
+        List<SalonService> services = serviceRepository.findAllById(ids);
+
+        for (SalonService service : services) {
+            List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.SALON_SERVICE, service.getId());
+            for (MediaImage image : images) {
+                cloudinaryService.delete(image.getPublicId());
+            }
+            mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, service.getId());
+        }
+
+        serviceRepository.deleteAll(services);
+
+        if (!services.isEmpty()) {
+            User actor = resolveActor(actorId);
+            eventPublisher.publishEvent(new SalonServicesBulkDeletedEvent(services, actor));
+        }
+
+        return services;
     }
 }

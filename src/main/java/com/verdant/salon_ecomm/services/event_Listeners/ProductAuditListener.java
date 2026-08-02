@@ -4,6 +4,7 @@ import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.dtos.product.events.ProductCreatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductDeletedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductUpdatedEvent;
+import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
@@ -40,15 +41,13 @@ public class ProductAuditListener {
         Product product = event.product();
 
         if (event.stockChanged()) {
-            AuditActionType stockAction = product.getStockQuantity() > event.previousStockQuantity()
-                ? AuditActionType.RESTOCKED : AuditActionType.UPDATED;
             auditLogService.record(
-                AuditEntityType.PRODUCT,
-                product.getId(),
-                stockAction,
-                "Product " + product.getName() + " stock changed",
-                event.previousStockQuantity() + " -> " + product.getStockQuantity(),
-                event.actor()
+                    AuditEntityType.PRODUCT,
+                    product.getId(),
+                    AuditActionType.RESTOCKED,
+                    "Product " + product.getName() + " stock changed",
+                    event.previousStockQuantity() + " -> " + product.getStockQuantity(),
+                    event.actor()
             );
         }
 
@@ -84,6 +83,20 @@ public class ProductAuditListener {
                 AuditActionType.DELETED,
                 "Product " + product.getName() + " deleted",
                 null,
+                event.actor()
+        );
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onProductsBulkDeleted(ProductsBulkDeletedEvent event) {
+        if (event.products().isEmpty()) return;
+        int count = event.products().size();
+        auditLogService.record(
+                AuditEntityType.PRODUCT,
+                event.products().get(0).getId(),
+                AuditActionType.BULK_DELETED,
+                count + " products deleted",
+                "Bulk deleted by staff",
                 event.actor()
         );
     }

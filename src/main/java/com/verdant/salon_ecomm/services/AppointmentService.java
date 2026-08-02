@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.cloudinary.provisioning.Account;
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.appointment.*;
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
@@ -15,6 +16,7 @@ import com.verdant.salon_ecomm.exceptions.AppointmentConflictException;
 import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
+import com.verdant.salon_ecomm.models.enums.AccountRole;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AppointmentSpec;
@@ -232,14 +234,18 @@ public class AppointmentService {
 
     @Transactional
     public List<Appointment> cancelAppointments(List<UUID> ids, UUID actorId) {
+        User actor = resolveActor(actorId);
+        boolean isStaffOrAdmin = isStaffOrAdmin(actor); // Use your existing helper or role check
+
         List<Appointment> eligible = appointmentRepository.findAllById(ids).stream()
             .filter(a -> a.getStatus() != AppointmentStatus.COMPLETED && a.getStatus() != AppointmentStatus.CANCELLED)
+            .filter(a -> isStaffOrAdmin || (a.getUser() != null && a.getUser().getId().equals(actorId)))
             .toList();
+
         eligible.forEach(a -> a.setStatus(AppointmentStatus.CANCELLED));
         List<Appointment> saved = appointmentRepository.saveAll(eligible);
 
         if (!saved.isEmpty()) {
-            User actor = resolveActor(actorId);
             eventPublisher.publishEvent(new AppointmentsBulkCancelledEvent(saved, actor));
         }
 
@@ -333,8 +339,10 @@ public class AppointmentService {
             previousGuests, previousNotes, previousServiceType, previousBranch, previousHomeAddress
         );
 
-        User actor = resolveActor(currentUserId);
-        eventPublisher.publishEvent(new AppointmentUpdatedEvent(saved, actor, changes));
+        if (!changes.isEmpty()) {
+            User actor = resolveActor(currentUserId);
+            eventPublisher.publishEvent(new AppointmentUpdatedEvent(saved, actor, changes));
+        }
 
         return saved;
     }
@@ -540,5 +548,16 @@ public class AppointmentService {
         if (serviceType == AppointmentServiceType.HOME_SERVICE && !hasHomeAddress) {
             throw new InvalidAppointmentException("homeAddress is required for home service appointments");
         }
+    }
+
+    private boolean isStaffOrAdmin(User actor) {
+        if (actor == null || actor.getRole() == null) {
+            return false;
+        }
+
+        return switch (actor.getRole()) {
+            case ADMIN, MANAGER, RECEPTIONIST, OWNER -> true;
+            default -> false;
+        };
     }
 }

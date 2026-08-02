@@ -27,7 +27,8 @@ public class MediaImageController {
         @RequestParam("files") List<MultipartFile> files,
         @RequestParam(value = "isPrimary", required = false, defaultValue = "false") boolean isPrimary
     ) {
-        List<MediaImageDto> results = mediaImageService.addImages(ItemType.SALON_SERVICE, serviceId, files, isPrimary);
+        List<MediaImageDto> results = mediaImageService
+            .addImages(ItemType.SALON_SERVICE, serviceId, files, isPrimary);
         return ResponseEntity.status(HttpStatus.CREATED).body(results);
     }
 
@@ -45,9 +46,11 @@ public class MediaImageController {
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
     public ResponseEntity<MediaImageDto> setImagePrimary(
         @PathVariable UUID serviceId,
-        @PathVariable UUID imageId
+        @PathVariable UUID imageId,
+        UUID actorId
     ) {
-        MediaImageDto result = mediaImageService.setPrimary(ItemType.SALON_SERVICE, imageId, serviceId);
+        MediaImageDto result = mediaImageService
+            .setPrimary(ItemType.SALON_SERVICE, imageId, serviceId, actorId);
         return ResponseEntity.ok(result);
     }
 }

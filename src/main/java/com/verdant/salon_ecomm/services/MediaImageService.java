@@ -41,8 +41,9 @@ public class MediaImageService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    public List<MediaImageDto> addImages(ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary) {
-
+    public List<MediaImageDto> addImages(
+        ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary
+    ) {
         validateEntityExists(entityType, entityId);
         validateFiles(files);
 
