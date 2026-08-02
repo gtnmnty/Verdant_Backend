@@ -13,8 +13,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SalonServiceRepository extends JpaRepository<SalonService, UUID>, JpaSpecificationExecutor<SalonService> {
-    List<SalonService> findByItemCatalog(ItemCatalog itemCatalog);
-
     @Modifying
     @Query("UPDATE SalonService s SET s.reviewCount = :count, s.averageRating = :avg WHERE s.id = :id")
     int updateReviewAggregates(@Param("id") UUID id, @Param("count") int count, @Param("avg") BigDecimal avg);

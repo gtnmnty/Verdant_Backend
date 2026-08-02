@@ -5,7 +5,7 @@ import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Appointment;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
-import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.services.AppointmentService;
 import lombok.RequiredArgsConstructor;

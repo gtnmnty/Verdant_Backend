@@ -7,7 +7,7 @@ import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
-import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
@@ -84,10 +84,9 @@ public class OrderNotificationListener {
             };
 
             NotificationPriority priority = switch (status) {
-                case FAILED -> NotificationPriority.CRITICAL;
+                case FAILED, REFUNDED, CANCELLED -> NotificationPriority.CRITICAL;
                 case PAID -> NotificationPriority.INFO;
                 case PENDING, REQUIRES_ACTION, PROCESSED -> NotificationPriority.WARNING;
-                case REFUNDED, CANCELLED -> NotificationPriority.WARNING;
             };
 
             // Payment status matters most to the customer directly.
@@ -144,7 +143,7 @@ public class OrderNotificationListener {
             ));
         }
 
-        notifyStaff(event.orders().get(0), NotificationType.BULK_ACTION_PERFORMED, "Bulk order deletion",
+        notifyStaff(event.orders().getFirst(), NotificationType.BULK_ACTION_PERFORMED, "Bulk order deletion",
             event.orders().size() + " orders were deleted" + (actorName != null ? " by " + actorName : "") + ".",
             actorId, actorName);
     }

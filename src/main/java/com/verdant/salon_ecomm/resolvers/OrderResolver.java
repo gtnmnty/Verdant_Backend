@@ -9,7 +9,7 @@ import com.verdant.salon_ecomm.entities.Address;
 import com.verdant.salon_ecomm.entities.Order;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
-import com.verdant.salon_ecomm.models.enums.AccountRole;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.orders.*;
 import com.verdant.salon_ecomm.repositories.OrderItemRepository;

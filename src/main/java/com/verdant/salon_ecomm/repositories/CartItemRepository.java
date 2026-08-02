@@ -15,8 +15,6 @@ public interface CartItemRepository extends JpaRepository<CartItem, UUID>, JpaSp
 
     List<CartItem> findByUser_IdOrderByAddedAtDesc(UUID userId);
 
-    List<CartItem> findByIdInAndUser_Id(List<UUID> ids, UUID userId);
-
     Optional<CartItem> findByIdAndUser_Id(UUID id, UUID userId);
 
     // Used to merge quantities when the same product + delivery option is added again
@@ -25,8 +23,4 @@ public interface CartItemRepository extends JpaRepository<CartItem, UUID>, JpaSp
     @Override
     @EntityGraph(attributePaths = "product")
     List<CartItem> findAll(Specification<CartItem> spec);
-
-    long countByUser_Id(UUID userId);
-
-    void deleteByIdInAndUser_Id(List<UUID> ids, UUID userId);
 }

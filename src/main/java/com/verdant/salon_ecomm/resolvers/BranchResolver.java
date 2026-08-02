@@ -4,7 +4,6 @@ import com.verdant.salon_ecomm.dtos.branch.AdminBranchDto;
 import com.verdant.salon_ecomm.dtos.branch.AdminBranchPage;
 import com.verdant.salon_ecomm.dtos.branch.CreateBranchInput;
 import com.verdant.salon_ecomm.dtos.branch.UpdateBranchInput;
-import com.verdant.salon_ecomm.entities.Branch;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import com.verdant.salon_ecomm.services.BranchService;

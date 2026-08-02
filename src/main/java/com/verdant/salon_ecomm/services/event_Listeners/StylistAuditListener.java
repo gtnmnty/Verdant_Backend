@@ -108,7 +108,7 @@ public class StylistAuditListener {
         int count = event.stylists().size();
         auditLogService.record(
             AuditEntityType.STYLIST,
-            event.stylists().get(0).getId(),
+            event.stylists().getFirst().getId(),
             AuditActionType.BULK_DELETED,
             count + " stylists deleted",
             "Bulk deleted by staff",

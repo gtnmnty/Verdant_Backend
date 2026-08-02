@@ -171,19 +171,6 @@ public class StylistsService {
     }
 
     @Transactional
-    public AdminStylistsDto deleteStylist(UUID id, UUID actorId) {
-        Stylist stylist = stylistRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
-
-        stylistRepository.deleteById(id);
-
-        User actor = resolveActor(actorId);
-        eventPublisher.publishEvent(new StylistDeletedEvent(stylist, actor));
-
-        return toAdminDto(stylist);
-    }
-
-    @Transactional
     public Stylist updateStylistStatus(UUID id, StylistAccountStatus status, UUID actorId) {
         Stylist stylist = stylistRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
@@ -219,8 +206,17 @@ public class StylistsService {
         return saved;
     }
 
-    private User resolveActor(UUID actorId) {
-        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
+    @Transactional
+    public AdminStylistsDto deleteStylist(UUID id, UUID actorId) {
+        Stylist stylist = stylistRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
+
+        stylistRepository.deleteById(id);
+
+        User actor = resolveActor(actorId);
+        eventPublisher.publishEvent(new StylistDeletedEvent(stylist, actor));
+
+        return toAdminDto(stylist);
     }
 
     @Transactional
@@ -230,7 +226,7 @@ public class StylistsService {
         }
 
         List<Stylist> stylists = stylistRepository.findAllById(ids);
-        stylistRepository.deleteAll(stylists);
+        stylistRepository.deleteAllByIdInBatch(ids);
 
         if (!stylists.isEmpty()) {
             User actor = resolveActor(actorId);
@@ -238,6 +234,10 @@ public class StylistsService {
         }
 
         return stylists;
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 
     private AdminStylistsDto toAdminDto(Stylist stylist) {

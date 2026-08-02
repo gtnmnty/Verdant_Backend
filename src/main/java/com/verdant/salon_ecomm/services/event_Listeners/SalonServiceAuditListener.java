@@ -80,7 +80,7 @@ public class SalonServiceAuditListener {
         int count = event.services().size();
         auditLogService.record(
             AuditEntityType.SALON_SERVICE,
-            event.services().get(0).getId(),
+            event.services().getFirst().getId(),
             AuditActionType.BULK_DELETED,
             count + " services deleted",
             "Bulk deleted by staff",

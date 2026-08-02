@@ -15,16 +15,20 @@ import java.util.concurrent.CompletableFuture;
 public class ReviewAdminResolver {
 
     @SchemaMapping(typeName = "AdminReviewDto", field = "itemName")
-    public CompletableFuture<String> itemName(AdminReviewDto review,
-                                              DataLoader<ReviewTargetKey, ReviewTargetInfo> reviewTargetInfoLoader) {
+    public CompletableFuture<String> itemName(
+        AdminReviewDto review,
+        DataLoader<ReviewTargetKey, ReviewTargetInfo> reviewTargetInfoLoader
+    ) {
         return reviewTargetInfoLoader
             .load(new ReviewTargetKey(review.itemType(), review.targetId()))
             .thenApply(ReviewTargetInfo::itemName);
     }
 
     @SchemaMapping(typeName = "AdminReviewDto", field = "serviceType")
-    public CompletableFuture<AppointmentServiceType> serviceType(AdminReviewDto review,
-                                                                 DataLoader<ReviewTargetKey, ReviewTargetInfo> reviewTargetInfoLoader) {
+    public CompletableFuture<AppointmentServiceType> serviceType(
+        AdminReviewDto review,
+        DataLoader<ReviewTargetKey, ReviewTargetInfo> reviewTargetInfoLoader
+    ) {
         if (review.itemType() != ItemType.SALON_SERVICE) {
             return CompletableFuture.completedFuture(null);
         }
@@ -34,8 +38,10 @@ public class ReviewAdminResolver {
     }
 
     @SchemaMapping(typeName = "AdminReviewDto", field = "serviceName")
-    public CompletableFuture<String> serviceName(AdminReviewDto review,
-                                                 DataLoader<ReviewTargetKey, ReviewTargetInfo> reviewTargetInfoLoader) {
+    public CompletableFuture<String> serviceName(
+        AdminReviewDto review,
+        DataLoader<ReviewTargetKey, ReviewTargetInfo> reviewTargetInfoLoader
+    ) {
         if (review.itemType() != ItemType.SALON_SERVICE) {
             return CompletableFuture.completedFuture(null);
         }

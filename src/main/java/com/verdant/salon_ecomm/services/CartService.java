@@ -6,7 +6,6 @@ import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.CartItemNotFoundException;
 import com.verdant.salon_ecomm.exceptions.InvalidQuantityException;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
-import com.verdant.salon_ecomm.dtos.cart.CartItemDto;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.AddToCartInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.UpdateDeliveryOptionInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.UpdateQuantityInput;

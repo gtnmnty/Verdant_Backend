@@ -1,6 +1,7 @@
 extend type Query {
     services(
         category: String
+        search: String
         sort: ServiceSort = NEWEST
         page: Int = 1
         pageSize: Int = 6
@@ -14,14 +15,16 @@ extend type Query {
         page: Int = 1
         pageSize: Int = 6
     ): AdminServicePage!
-    adminService(id: ID!): AdminServiceDto
+    adminServiceDetail(id: ID!): AdminServiceDto
     serviceFavorites(first: Int = 10, after: String): CatalogItemConnection!
 }
 
 extend type Mutation {
     createService(input: CreateServiceInput!): AdminServiceDto!
     updateService(input: UpdateServiceInput!): AdminServiceDto!
+    toggleFavoriteService(targetId: ID!, targetType: ItemType!): CatalogItem!
     deleteService(id: ID!): AdminServiceDto!
+    deleteServices(ids: [ID!]!): [AdminServiceDto!]!
 }
 
 enum ServiceSort {
