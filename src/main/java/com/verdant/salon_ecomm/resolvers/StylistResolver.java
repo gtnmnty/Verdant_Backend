@@ -64,7 +64,7 @@ public class StylistResolver {
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public List<Stylist> deleteStylists(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+    public List<AdminStylistsDto> deleteStylists(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
         return stylistsService.deleteStylists(ids, principal.getId());
     }
 

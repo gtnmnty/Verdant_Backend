@@ -31,15 +31,15 @@ public class MediaImageResolver {
     }
 
     @MutationMapping
-    public boolean removeImage(@Argument ItemType itemType, @Argument UUID imageId,  @Argument UUID serviceId) {
-        return mediaImageService.removeImage(itemType ,imageId, serviceId);
+    public boolean removeImage(@Argument ItemType entityType, @Argument UUID imageId, @Argument UUID entityId) {
+        return mediaImageService.removeImage(entityType, imageId, entityId);
     }
 
     @MutationMapping
     public MediaImageDto setImagePrimary(
-        @Argument ItemType itemType, @Argument UUID imageId, @Argument UUID serviceId,
+        @Argument ItemType entityType, @Argument UUID imageId, @Argument UUID entityId,
         @AuthenticationPrincipal User principal
     ) {
-        return mediaImageService.setPrimary(itemType, imageId, serviceId, principal.getId());
+        return mediaImageService.setPrimary(entityType, imageId, entityId, principal.getId());
     }
 }
