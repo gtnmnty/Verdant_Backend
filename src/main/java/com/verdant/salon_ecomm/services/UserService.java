@@ -12,10 +12,7 @@ import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.UserMapper;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
-import com.verdant.salon_ecomm.repositories.AppointmentRepository;
-import com.verdant.salon_ecomm.repositories.OrderRepository;
-import com.verdant.salon_ecomm.repositories.ReviewRepository;
-import com.verdant.salon_ecomm.repositories.UserRepository;
+import com.verdant.salon_ecomm.repositories.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,13 +24,16 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
-    private final OrderRepository orderRepository;
-    private final AppointmentRepository appointmentRepository;
-    private final ReviewRepository reviewRepository;
+    private final CartItemRepository cartItemRepository;
+    private final FavoriteRepository favoriteRepository;
+    private final NotificationRepository notificationRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     public UserDto.Profile getUserById(UUID id) {
         return userRepository.findById(id)
@@ -130,27 +130,36 @@ public class UserService {
     public void deleteUserById(UUID id) {
         var user = findUserOrThrow(id);
 
-        // Same integrity issue as the admin bulk-delete path: User rows are
-        // referenced by Order/Appointment/Review with no cascade. A hard delete
-        // here would either crash with a raw FK violation or (if the constraint
-        // somehow allowed it) orphan that history. Block with a clear message
-        // instead — a real "delete my account" flow should anonymize the user
-        // and keep the row for order/audit integrity rather than removing it,
-        // but that's a larger feature than a bug fix; flagging it rather than
-        // silently building it here.
-        Set<UUID> ids = Set.of(id);
-        boolean hasOrders = !orderRepository.findDistinctUserIdsWithOrders(ids).isEmpty();
-        boolean hasAppointments = !appointmentRepository.findDistinctUserIdsWithAppointments(ids).isEmpty();
-        boolean hasReviews = !reviewRepository.findDistinctUserIdsWithReviews(ids).isEmpty();
+        // Personal data revoked/cleaned up immediately regardless of history.
+        cartItemRepository.deleteByUserId(id);
+        favoriteRepository.deleteByUserId(id);
+        notificationRepository.deleteByUserId(id);
+        refreshTokenRepository.deleteByUserId(id);
+        passwordResetTokenRepository.deleteByUserId(id);
 
-        if (hasOrders || hasAppointments || hasReviews) {
-            throw new ForbiddenException(
-                "Your account has order, appointment, or review history and can't be deleted. "
-                    + "Contact support to close your account."
-            );
-        }
+        // Anonymize rather than delete the row itself: Order/Appointment/Review
+        // reference this user with no cascade, and retain financial/audit/trust
+        // significance independent of the account. Scrubbing identity here keeps
+        // those FKs intact and that history queryable, without exposing any of
+        // the account holder's personal data going forward.
+        user.setFullName("Deleted User");
+        user.setEmail("deleted-" + user.getId() + "@deleted.verdant.local");
+        user.setPhone(null);
+        user.setAddress(null);
+        user.setAvatarUrl(null);
+        user.setAvatarPublicId(null);
+        user.setStripeCustomerId(null);
+        user.setStripePmId(null);
+        user.setDisplayBrand(null);
+        user.setDisplayLast4(null);
+        user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+        user.setStatus(AccountStatus.DELETED);
+        user.setEnabled(false);
+        user.setEmailVerified(false);
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiration(null);
 
-        userRepository.delete(user);
+        userRepository.save(user);
 
         eventPublisher.publishEvent(new UserDeletedEvent(user));
     }
