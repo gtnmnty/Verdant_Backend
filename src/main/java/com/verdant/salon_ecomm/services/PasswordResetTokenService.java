@@ -4,6 +4,7 @@ import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.entities.PasswordResetToken;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.PasswordResetTokenRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -67,25 +68,34 @@ public class PasswordResetTokenService {
             throw new ForbiddenException("Invalid or expired reset link.");
         }
 
-        PasswordResetToken token = tokenRepository.findByTokenHash(hash(rawToken))
-            .orElseThrow(() -> new ForbiddenException("Invalid or expired reset link."));
+        String tokenHash = hash(rawToken);
+               OffsetDateTime claimTime = OffsetDateTime.now();
 
-        if (!token.isUsable()) {
+        // Atomically claim the token: only one concurrent caller can flip
+        // used_at from NULL to a value, closing the check-then-act race.
+        int claimed = tokenRepository.markUsedIfActive(tokenHash, claimTime);
+        if (claimed == 0) {
             throw new ForbiddenException("Invalid or expired reset link.");
         }
+
+        PasswordResetToken token = tokenRepository.findByTokenHash(tokenHash)
+            .orElseThrow(() -> new ForbiddenException("Invalid or expired reset link."));
 
         User user = userRepository.findById(token.getUser().getId())
             .orElseThrow(() -> new ForbiddenException("Invalid or expired reset link."));
 
+        if (AccountStatus.BANNED.equals(user.getStatus())) {
+            throw new ForbiddenException("Account is " + user.getStatus().toString().toLowerCase());
+        }
+
+        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 8) {
+            throw new ForbiddenException("Password does not meet the minimum requirements.");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
-        OffsetDateTime now = OffsetDateTime.now();
-        token.setUsedAt(now);
-        tokenRepository.save(token);
-        // Belt-and-suspenders: also invalidate any other tokens issued for this
-        // user (e.g. if two reset emails were requested before either was used).
-        tokenRepository.invalidateAllActiveTokensForUser(user.getId(), now);
+        tokenRepository.invalidateAllActiveTokensForUser(user.getId(), claimTime);
 
         // Reuses the same audit + security-notification path as a self-service
         // password change, since from the account's perspective it's the same

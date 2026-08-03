@@ -27,10 +27,11 @@ public class MediaImageController {
     public ResponseEntity<List<MediaImageDto>> addImages(
         @PathVariable UUID serviceId,
         @RequestParam("files") List<MultipartFile> files,
-        @RequestParam(value = "isPrimary", required = false, defaultValue = "false") boolean isPrimary
+        @RequestParam(value = "isPrimary", required = false, defaultValue = "false") boolean isPrimary,
+        @AuthenticationPrincipal User principal
     ) {
         List<MediaImageDto> results = mediaImageService
-            .addImages(ItemType.SALON_SERVICE, serviceId, files, isPrimary);
+            .addImages(ItemType.SALON_SERVICE, serviceId, files, isPrimary, principal.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(results);
     }
 

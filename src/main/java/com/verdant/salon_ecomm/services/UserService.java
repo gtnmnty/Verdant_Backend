@@ -110,10 +110,8 @@ public class UserService {
     public void updateUserPassword(UUID id, ChangePasswordRequest request) {
         var user = findUserOrThrow(id);
 
-        // BUG FIX: only SUSPENDED was blocked — a BANNED account could still walk
-        // through the "forgot my password" flow and set a brand new password.
         if (AccountStatus.SUSPENDED.equals(user.getStatus()) || AccountStatus.BANNED.equals(user.getStatus())) {
-            throw new ForbiddenException("Account is suspended");
+            throw new ForbiddenException("Account is " + user.getStatus().toString().toLowerCase());
         }
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {

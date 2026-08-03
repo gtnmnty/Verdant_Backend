@@ -25,9 +25,10 @@ public class MediaImageResolver {
         @Argument ItemType entityType,
         @Argument UUID entityId,
         @Argument List<MultipartFile> image,
-        @Argument Boolean isPrimary
+        @Argument Boolean isPrimary,
+        @Argument UUID actorId
     ) {
-        return mediaImageService.addImages(entityType, entityId, image, isPrimary);
+        return mediaImageService.addImages(entityType, entityId, image, isPrimary, actorId);
     }
 
     @MutationMapping

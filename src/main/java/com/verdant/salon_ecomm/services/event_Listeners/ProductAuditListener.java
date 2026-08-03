@@ -40,11 +40,13 @@ public class ProductAuditListener {
         Product product = event.product();
 
         if (event.stockChanged()) {
+            boolean isRestock = product.getStockQuantity() > event.previousStockQuantity();
+
             auditLogService.record(
                 AuditEntityType.PRODUCT,
                 product.getId(),
-                AuditActionType.RESTOCKED,
-                "Product " + product.getName() + " stock changed",
+                isRestock ? AuditActionType.RESTOCKED : AuditActionType.STOCK_ADJUSTED,
+                "Product " + product.getName() + (isRestock ? " restocked" : " stock decreased"),
                 event.previousStockQuantity() + " -> " + product.getStockQuantity(),
                 event.actor()
             );

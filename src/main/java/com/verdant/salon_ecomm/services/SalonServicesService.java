@@ -100,6 +100,10 @@ public class SalonServicesService {
             .filter(id -> cursorId == null || id.compareTo(cursorId) > 0)
             .toList();
 
+        if (first < 0) {
+            throw new IllegalArgumentException("first must be non-negative");
+        }
+
         List<UUID> pageIds = serviceIds.stream().limit(first).toList();
         boolean hasNextPage = serviceIds.size() > pageIds.size();
 
@@ -285,6 +289,7 @@ public class SalonServicesService {
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
         List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
+        AdminServiceDto dto = serviceMapper.toAdminDto(service);
 
         for (MediaImage image : images) {
             cloudinaryService.delete(image.getPublicId());
@@ -292,8 +297,6 @@ public class SalonServicesService {
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
         serviceRepository.deleteById(id);
-
-        AdminServiceDto dto = serviceMapper.toAdminDto(service);
 
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceDeletedEvent(service, actor));
