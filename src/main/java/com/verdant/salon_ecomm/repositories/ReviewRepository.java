@@ -20,22 +20,23 @@ import java.util.UUID;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecificationExecutor<Review> {
 
-        Optional<Review> findByUser_IdAndTargetTypeAndTargetId(UUID userId, ItemType targetType, UUID targetId);
+    Optional<Review> findByUser_IdAndTargetTypeAndTargetId(UUID userId, ItemType targetType, UUID targetId);
 
-        @Query("SELECT COALESCE(AVG(r.stars), 0) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
-        BigDecimal findAverageRatingByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
+    @Query("SELECT COALESCE(AVG(r.stars), 0) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
+    BigDecimal findAverageRatingByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
 
-        @Query("SELECT COUNT(r) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
-        int countByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
+    int countByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
 
-        // Overrides JpaSpecificationExecutor's default findAll(spec, pageable) to
-        // attach an EntityGraph — Review.user is @ManyToOne(LAZY), and this call
-        // site (ReviewService.getReviews, customer-facing paginated list) always
-        // needs the reviewer's name, so it's eager-fetched here specifically
-        // rather than flipping the entity's default fetch type globally.
-        @Override
-        @EntityGraph(attributePaths = {"user"})
-        Page<Review> findAll(Specification<Review> spec, @NonNull Pageable pageable);
+    // Overrides JpaSpecificationExecutor's default findAll(spec, pageable) to
+    // attach an EntityGraph — Review.user is @ManyToOne(LAZY), and this call
+    // site (ReviewService.getReviews, customer-facing paginated list) always
+    // needs the reviewer's name, so it's eager-fetched here specifically
+    // rather than flipping the entity's default fetch type globally.
+    @Override
+    @EntityGraph(attributePaths = {"user"})
+    Page<Review> findAll(Specification<Review> spec, @NonNull Pageable pageable);
 
-        List<UUID> findDistinctUserIdsWithReviews(Set<UUID> requestedIds);
+    @Query("SELECT DISTINCT r.user.id FROM Review r WHERE r.user.id IN :requestedIds")
+    List<UUID> findDistinctUserIdsWithReviews(@Param("requestedIds") Set<UUID> requestedIds);
 }

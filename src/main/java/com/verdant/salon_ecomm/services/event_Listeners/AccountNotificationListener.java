@@ -119,9 +119,13 @@ public class AccountNotificationListener {
         UUID actorId = event.actor() != null ? event.actor().getId() : null;
         String actorName = event.actor() != null ? event.actor().getFullName() : null;
 
+        // No referenceAccountId here: deleteAllInBatch() already hard-deleted
+        // these users before this AFTER_COMMIT listener runs, so any account id
+        // from this batch would be a dangling reference (FK violation, or a
+        // silent broken link if unconstrained).
         notifyStaffBulk("Bulk account deletion",
             event.accounts().size() + " accounts were deleted" + (actorName != null ? " by " + actorName : "") + ".",
-            event.accounts().getFirst().getId(), actorId, actorName);
+            null, actorId, actorName);
     }
 
     // ── Helpers ──────────────────────────────────────────

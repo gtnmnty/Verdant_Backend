@@ -80,7 +80,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         UUID userId, List<AppointmentStatus> statuses, OffsetDateTime after);
 
     // Used to block branch deletion when a branch still has active (not completed/
-    // cancelled) appointments — one IN-clause query for the whole batch.
+    // canceled) appointments — one IN-clause query for the whole batch.
     @Query("""
             SELECT DISTINCT a.branch.id FROM Appointment a
             WHERE a.branch.id IN :branchIds AND a.status IN :activeStatuses
@@ -90,5 +90,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         @Param("activeStatuses") List<AppointmentStatus> activeStatuses
     );
 
-    List<UUID> findDistinctUserIdsWithAppointments(Set<UUID> requestedIds);
+    @Query("SELECT DISTINCT a.user.id FROM Appointment a WHERE a.user.id IN :requestedIds")
+    List<UUID> findDistinctUserIdsWithAppointments(@Param("requestedIds") Set<UUID> requestedIds);
 }

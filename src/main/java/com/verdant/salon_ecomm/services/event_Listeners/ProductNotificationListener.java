@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.dtos.product.events.ProductCreatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductDeletedEvent;
+import com.verdant.salon_ecomm.dtos.product.events.ProductImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
@@ -25,6 +26,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductNotificationListener {
 
+    // Staff who should hear about catalog/stock changes.
     private static final List<AccountRole> STAFF_ROLES = List.of(
         AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
     );
@@ -74,6 +76,15 @@ public class ProductNotificationListener {
 
         notifyStaff(product, NotificationType.PRODUCT_DELETED, "Product deleted",
             product.getName() + " was removed from the catalog",
+            event.actor());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onProductImageUpdated(ProductImageUpdatedEvent event) {
+        Product product = event.product();
+
+        notifyStaff(product, NotificationType.PRODUCT_IMAGE_UPDATED, "Product image updated",
+            "Primary image for \"" + product.getName() + "\" was changed.",
             event.actor());
     }
 

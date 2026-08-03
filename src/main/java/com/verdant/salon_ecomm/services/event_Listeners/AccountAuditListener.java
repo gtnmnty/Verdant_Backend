@@ -14,6 +14,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.stream.Collectors;
+
 @Component
 @RequiredArgsConstructor
 public class AccountAuditListener {
@@ -59,7 +61,7 @@ public class AccountAuditListener {
             AuditActionType.SECURITY,
             "Password reset requested for " + event.email(),
             "Reset link issued by staff",
-            null
+            event.actor()
         );
     }
 
@@ -69,12 +71,16 @@ public class AccountAuditListener {
         if (event.accounts().isEmpty()) return;
         int count = event.accounts().size();
 
+        String affectedAccounts = event.accounts().stream()
+            .map(account -> account.getFullName() + " (" + account.getId() + ")")
+            .collect(Collectors.joining(", "));
+
         auditLogService.record(
             AuditEntityType.ACCOUNT,
             event.accounts().getFirst().getId(),
             AuditActionType.STATUS_CHANGED,
             count + " accounts suspended",
-            "Bulk suspended by staff",
+            "Bulk suspended by staff. Affected accounts: " + affectedAccounts,
             event.actor()
         );
     }
@@ -84,12 +90,19 @@ public class AccountAuditListener {
         if (event.accounts().isEmpty()) return;
         int count = event.accounts().size();
 
+        // Captured before the transaction commits (event.accounts() holds the
+        // in-memory entities from before deleteAllInBatch), so full identifying
+        // detail is preserved even though the rows themselves are now gone.
+        String affectedAccounts = event.accounts().stream()
+            .map(account -> account.getFullName() + " (" + account.getId() + ")")
+            .collect(Collectors.joining(", "));
+
         auditLogService.record(
             AuditEntityType.ACCOUNT,
             event.accounts().getFirst().getId(),
             AuditActionType.BULK_DELETED,
             count + " accounts deleted",
-            "Bulk deleted by staff",
+            "Bulk deleted by staff. Deleted accounts: " + affectedAccounts,
             event.actor()
         );
     }

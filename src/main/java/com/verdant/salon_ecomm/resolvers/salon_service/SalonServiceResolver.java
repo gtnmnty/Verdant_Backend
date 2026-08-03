@@ -53,7 +53,9 @@ public class SalonServiceResolver {
 
     @QueryMapping
     public CatalogItemConnection serviceFavorites(
-        @Argument Integer first, @Argument String after, @AuthenticationPrincipal User principal
+        @Argument Integer first,
+        @Argument String after,
+        @AuthenticationPrincipal User principal
     ) {
         return salonService.getFavoriteServices(principal.getId(), first, after);
     }

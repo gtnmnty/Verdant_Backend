@@ -9,7 +9,26 @@ extend type Mutation {
     sendPasswordReset(id: ID!): Boolean!
     suspendAccounts(ids: [ID!]!): [Account!]!
     deleteAccounts(ids: [ID!]!): [ID!]!
+    redeemPasswordReset(token: String!, newPassword: String!): Boolean!
 }
+
+enum AccountRole {
+    OWNER
+    MANAGER
+    ADMIN
+    STYLIST
+    RECEPTIONIST
+    CUSTOMER
+}
+
+enum AccountStatus {
+    UNVERIFIED
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+    BANNED
+}
+
 
 type Account {
     id: ID!
@@ -39,23 +58,6 @@ type AccountPage {
     totalPages: Int!
     page: Int!
     pageSize: Int!
-}
-
-enum AccountRole {
-    OWNER
-    MANAGER
-    ADMIN
-    STYLIST
-    RECEPTIONIST
-    CUSTOMER
-}
-
-enum AccountStatus {
-    UNVERIFIED
-    ACTIVE
-    INACTIVE
-    SUSPENDED
-    BANNED
 }
 
 input CreateAccountInput {

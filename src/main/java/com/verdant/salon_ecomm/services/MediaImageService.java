@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
+import com.verdant.salon_ecomm.dtos.product.events.ProductImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.User;
@@ -39,10 +40,9 @@ public class MediaImageService {
     );
 
     @Transactional
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
-    public List<MediaImageDto> addImages(
-        ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary
-    ) {
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public List<MediaImageDto> addImages(ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary) {
+
         validateEntityExists(entityType, entityId);
         validateFiles(files);
 
@@ -95,11 +95,11 @@ public class MediaImageService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
-    public boolean removeImage(ItemType entityType, UUID imageId, UUID entityId) {
+    public boolean removeImage(ItemType itemType, UUID imageId, UUID serviceId) {
         MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
-            imageId, entityId, entityType
+            imageId, serviceId, itemType
         ).orElseThrow(() -> new ResourceNotFoundException(
-                "Image not found for this entity"
+                "Image not found for this service specification"
             )
         );
 
@@ -111,9 +111,9 @@ public class MediaImageService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
-    public MediaImageDto setPrimary(ItemType entityType, UUID imageId, UUID entityId, UUID actorId) {
+    public MediaImageDto setPrimary(ItemType itemType, UUID imageId, UUID serviceId, UUID actorId) {
         MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
-            imageId, entityId, entityType
+            imageId, serviceId, itemType
         ).orElseThrow(() -> new ResourceNotFoundException("Image not found"));
 
         mediaImageRepository.clearPrimaryFlag(image.getEntityType(), image.getEntityId());
@@ -121,10 +121,15 @@ public class MediaImageService {
 
         MediaImageDto dto = toImageDTO(mediaImageRepository.save(image));
 
-        if (entityType == ItemType.SALON_SERVICE) {
-            salonServiceRepository.findById(entityId).ifPresent(service -> {
+        if (itemType == ItemType.SALON_SERVICE) {
+            salonServiceRepository.findById(serviceId).ifPresent(service -> {
                 User actor = resolveActor(actorId);
                 eventPublisher.publishEvent(new SalonServiceImageUpdatedEvent(service, actor));
+            });
+        } else if (itemType == ItemType.PRODUCT) {
+            productRepository.findById(serviceId).ifPresent(product -> {
+                User actor = resolveActor(actorId);
+                eventPublisher.publishEvent(new ProductImageUpdatedEvent(product, actor));
             });
         }
 

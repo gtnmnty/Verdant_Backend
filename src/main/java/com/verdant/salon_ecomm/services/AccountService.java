@@ -1,11 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.dtos.account.AccountDetailDto;
-import com.verdant.salon_ecomm.dtos.account.AccountFilterInput;
-import com.verdant.salon_ecomm.dtos.account.AccountPage;
-import com.verdant.salon_ecomm.dtos.account.AccountDto;
-import com.verdant.salon_ecomm.dtos.account.CreateAccountInput;
-import com.verdant.salon_ecomm.dtos.account.UpdateAccountInput;
+import com.verdant.salon_ecomm.dtos.account.*;
 import com.verdant.salon_ecomm.dtos.account.events.AccountCreatedEvent;
 import com.verdant.salon_ecomm.dtos.account.events.AccountPasswordResetRequestedEvent;
 import com.verdant.salon_ecomm.dtos.account.events.AccountUpdatedEvent;
@@ -54,6 +49,7 @@ public class AccountService {
     private final OrderRepository orderRepository;
     private final AppointmentRepository appointmentRepository;
     private final ReviewRepository reviewRepository;
+    private final PasswordResetTokenService passwordResetTokenService;
 
     // Safety cap for bulk mutations — protects against an unbounded payload
     // locking rows / holding the transaction open too long.
@@ -79,8 +75,8 @@ public class AccountService {
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, Sort.by("fullName").ascending());
 
         String search = filter != null ? filter.search() : null;
-        AccountRole role = filter != null ? filter.role() : null;
-        AccountStatus status = filter != null ? filter.status() : null;
+        var role = filter != null ? filter.role() : null;
+        var status = filter != null ? filter.status() : null;
 
         Specification<User> spec = AccountSpec.filterAccounts(status, role, search);
 
@@ -120,8 +116,9 @@ public class AccountService {
 
         eventPublisher.publishEvent(new AccountCreatedEvent(saved, actor));
 
+        String resetToken = passwordResetTokenService.issueToken(saved);
         eventPublisher.publishEvent(
-            new AccountPasswordResetRequestedEvent(saved.getId(), saved.getEmail(), UUID.randomUUID().toString())
+            new AccountPasswordResetRequestedEvent(saved.getId(), saved.getEmail(), resetToken, actor)
         );
 
         return accountMapper.toDetailResponse(saved);
@@ -198,10 +195,9 @@ public class AccountService {
     @Transactional
     public boolean sendPasswordReset(UUID id, User actor) {
         User user = findAccountOrThrow(id);
-        // See createAccount() note: token is generated but not persisted anywhere
-        // yet in this codebase, so it cannot currently be validated on redemption.
+        String resetToken = passwordResetTokenService.issueToken(user);
         eventPublisher.publishEvent(
-            new AccountPasswordResetRequestedEvent(user.getId(), user.getEmail(), UUID.randomUUID().toString())
+            new AccountPasswordResetRequestedEvent(user.getId(), user.getEmail(), resetToken, actor)
         );
         return true;
     }
