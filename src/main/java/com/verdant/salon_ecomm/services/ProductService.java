@@ -130,34 +130,7 @@ public class ProductService {
         );
     }
 
-    public AdminProductDto getAdminProduct(UUID id) {
-        Product product = productRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
-
-        return toAdminDTO(product);
-    }
-
-    private MediaImageDto toImageDTO(MediaImage image) {
-        return new MediaImageDto(
-            image.getId().toString(),
-            image.getUrl(),
-            image.getPublicId(),
-            image.isPrimary(),
-            image.getSortOrder()
-        );
-    }
-
-    private Sort toSort(CollectionSort sort) {
-        CollectionSort safeSort = sort != null ? sort : CollectionSort.NEWEST;
-
-        return switch (safeSort) {
-            case NEWEST -> Sort.by("createdAt").descending();
-            case OLDEST -> Sort.by("createdAt").ascending();
-            case PRICE_LOW_TO_HIGH -> Sort.by("price").ascending();
-            case PRICE_HIGH_TO_LOW -> Sort.by("price").descending();
-        };
-    }
-
+    // ------ Mutations -----
     @Transactional
     public AdminProductDto createProduct(CreateProductInput input) {
         Product product = Product.builder()
@@ -245,5 +218,34 @@ public class ProductService {
 
         return products;
     }
+
+    public AdminProductDto getAdminProduct(UUID id) {
+        Product product = productRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        return toAdminDTO(product);
+    }
+
+    private MediaImageDto toImageDTO(MediaImage image) {
+        return new MediaImageDto(
+            image.getId().toString(),
+            image.getUrl(),
+            image.getPublicId(),
+            image.isPrimary(),
+            image.getSortOrder()
+        );
+    }
+
+    private Sort toSort(CollectionSort sort) {
+        CollectionSort safeSort = sort != null ? sort : CollectionSort.NEWEST;
+
+        return switch (safeSort) {
+            case NEWEST -> Sort.by("createdAt").descending();
+            case OLDEST -> Sort.by("createdAt").ascending();
+            case PRICE_LOW_TO_HIGH -> Sort.by("price").ascending();
+            case PRICE_HIGH_TO_LOW -> Sort.by("price").descending();
+        };
+    }
+
 
 }

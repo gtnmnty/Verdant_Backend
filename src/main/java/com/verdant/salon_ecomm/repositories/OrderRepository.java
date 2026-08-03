@@ -8,7 +8,9 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecificationExecutor<Order> {
@@ -21,4 +23,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     Long getNextOrderCodeSequenceValue();
 
     Optional<Order> findByStripePaymentIntentId(String paymentIntentId);
+
+    List<UUID> findDistinctUserIdsWithOrders(Set<UUID> requestedIds);
 }

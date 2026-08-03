@@ -80,6 +80,8 @@ public class StylistsService {
         return toAdminDto(stylist);
     }
 
+    // ---------- Mutations ----------
+
     @Transactional
     public Stylist createStylist(CreateStylistInput input, UUID actorId) {
         Branch branch = branchRepository.findById(UUID.fromString(input.branchId()))
@@ -220,7 +222,7 @@ public class StylistsService {
     }
 
     @Transactional
-    public List<Stylist> deleteStylists(List<UUID> ids, UUID actorId) {
+    public List<AdminStylistsDto> deleteStylists(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("No stylist ids were provided.");
         }
@@ -233,9 +235,11 @@ public class StylistsService {
             eventPublisher.publishEvent(new StylistsBulkDeletedEvent(stylists, actor));
         }
 
-        return stylists;
+        return stylists.stream().map(this::toAdminDto).toList();
     }
 
+    // ---------- Helpers ----------
+    
     private User resolveActor(UUID actorId) {
         return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }

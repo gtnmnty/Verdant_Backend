@@ -13,7 +13,9 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecificationExecutor<Review> {
@@ -34,4 +36,6 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
         @Override
         @EntityGraph(attributePaths = {"user"})
         Page<Review> findAll(Specification<Review> spec, @NonNull Pageable pageable);
+
+        List<UUID> findDistinctUserIdsWithReviews(Set<UUID> requestedIds);
 }

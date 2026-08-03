@@ -39,7 +39,7 @@ public class MediaImageService {
     );
 
     @Transactional
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
     public List<MediaImageDto> addImages(
         ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary
     ) {
@@ -95,11 +95,11 @@ public class MediaImageService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
-    public boolean removeImage(ItemType itemType, UUID imageId, UUID serviceId) {
+    public boolean removeImage(ItemType entityType, UUID imageId, UUID entityId) {
         MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
-            imageId, serviceId, itemType
+            imageId, entityId, entityType
         ).orElseThrow(() -> new ResourceNotFoundException(
-                "Image not found for this service specification"
+                "Image not found for this entity"
             )
         );
 
@@ -111,9 +111,9 @@ public class MediaImageService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
-    public MediaImageDto setPrimary(ItemType itemType, UUID imageId, UUID serviceId, UUID actorId) {
+    public MediaImageDto setPrimary(ItemType entityType, UUID imageId, UUID entityId, UUID actorId) {
         MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
-            imageId, serviceId, itemType
+            imageId, entityId, entityType
         ).orElseThrow(() -> new ResourceNotFoundException("Image not found"));
 
         mediaImageRepository.clearPrimaryFlag(image.getEntityType(), image.getEntityId());
@@ -121,8 +121,8 @@ public class MediaImageService {
 
         MediaImageDto dto = toImageDTO(mediaImageRepository.save(image));
 
-        if (itemType == ItemType.SALON_SERVICE) {
-            salonServiceRepository.findById(serviceId).ifPresent(service -> {
+        if (entityType == ItemType.SALON_SERVICE) {
+            salonServiceRepository.findById(entityId).ifPresent(service -> {
                 User actor = resolveActor(actorId);
                 eventPublisher.publishEvent(new SalonServiceImageUpdatedEvent(service, actor));
             });

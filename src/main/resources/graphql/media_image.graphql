@@ -7,8 +7,8 @@ extend type Mutation {
         image: [Upload!]!
         isPrimary: Boolean
     ): [MediaImageDto!]!
-    removeImage(itemType: ItemType!, imageId: ID!, serviceId: ID): Boolean!
-    setImagePrimary(itemType: ItemType!, imageId: ID!, serviceId: ID): MediaImageDto!
+    removeImage(entityType: ItemType!, imageId: ID!, entityId: ID): Boolean!
+    setImagePrimary(entityType: ItemType!, imageId: ID!, entityId: ID): MediaImageDto!
 }
 
 type MediaImageDto {

@@ -1,0 +1,83 @@
+extend type Query {
+    accounts(filter: AccountFilterInput, page: Int!, pageSize: Int!): AccountPage!
+    account(id: ID!): AccountDetail!
+}
+
+extend type Mutation {
+    createAccount(input: CreateAccountInput!): AccountDetail!
+    updateAccount(id: ID!, input: UpdateAccountInput!): AccountDetail!
+    sendPasswordReset(id: ID!): Boolean!
+    suspendAccounts(ids: [ID!]!): [Account!]!
+    deleteAccounts(ids: [ID!]!): [ID!]!
+}
+
+type Account {
+    id: ID!
+    fullName: String!
+    email: String!
+    phone: String
+    avatarUrl: String
+    role: AccountRole!
+    status: AccountStatus!
+}
+
+type AccountDetail {
+    id: ID!
+    fullName: String!
+    email: String!
+    phone: String
+    address: Address
+    avatarUrl: String
+    role: AccountRole!
+    status: AccountStatus!
+    createdAt: DateTime!
+}
+
+type AccountPage {
+    content: [Account!]!
+    totalElements: Int!
+    totalPages: Int!
+    page: Int!
+    pageSize: Int!
+}
+
+enum AccountRole {
+    OWNER
+    MANAGER
+    ADMIN
+    STYLIST
+    RECEPTIONIST
+    CUSTOMER
+}
+
+enum AccountStatus {
+    UNVERIFIED
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+    BANNED
+}
+
+input CreateAccountInput {
+    fullName: String!
+    email: String!
+    phone: String
+    address: AddressInput
+    role: AccountRole!
+    status: AccountStatus
+}
+
+input UpdateAccountInput {
+    fullName: String
+    email: String
+    phone: String
+    address: AddressInput
+    role: AccountRole
+    status: AccountStatus
+}
+
+input AccountFilterInput {
+    search: String
+    role: AccountRole
+    status: AccountStatus
+}

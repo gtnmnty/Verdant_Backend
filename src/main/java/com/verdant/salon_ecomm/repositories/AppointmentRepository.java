@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
@@ -88,4 +89,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         @Param("branchIds") Collection<UUID> branchIds,
         @Param("activeStatuses") List<AppointmentStatus> activeStatuses
     );
+
+    List<UUID> findDistinctUserIdsWithAppointments(Set<UUID> requestedIds);
 }

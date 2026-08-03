@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
@@ -7,16 +8,11 @@ import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
 import com.verdant.salon_ecomm.dtos.stylists.StylistSummaryDto;
-import com.verdant.salon_ecomm.entities.MediaImage;
-import com.verdant.salon_ecomm.entities.SalonService;
-import com.verdant.salon_ecomm.entities.Stylist;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.dtos.PageInfo;
+import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.*;
-import com.verdant.salon_ecomm.repositories.MediaImageRepository;
-import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
-import com.verdant.salon_ecomm.repositories.StylistRepository;
-import com.verdant.salon_ecomm.repositories.UserRepository;
+import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
 import com.verdant.salon_ecomm.utils.IsEmpty;
 import lombok.RequiredArgsConstructor;
@@ -30,11 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +40,7 @@ public class SalonServicesService {
     private final StylistRepository stylistRepository;
     private final CloudinaryService cloudinaryService;
     private final UserRepository userRepository;
+    private final FavoriteRepository favoriteRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public ServicePage getSalonServices(
@@ -107,6 +100,35 @@ public class SalonServicesService {
         return service;
     }
 
+    public CatalogItemConnection getFavoriteServices(UUID userId, int first, String after) {
+        UUID cursorId = (after != null && !after.isBlank())
+            ? UUID.fromString(new String(Base64.getDecoder().decode(after)))
+            : null;
+
+        List<Favorite> favorites = favoriteRepository
+            .findByUserIdAndTargetType(userId, ItemType.SALON_SERVICE);
+
+        List<UUID> serviceIds = favorites.stream()
+            .map(Favorite::getTargetId)
+            .sorted()
+            .filter(id -> cursorId == null || id.compareTo(cursorId) > 0)
+            .toList();
+
+        List<UUID> pageIds = serviceIds.stream().limit(first).toList();
+        boolean hasNextPage = serviceIds.size() > pageIds.size();
+
+        List<SalonService> services = serviceRepository.findAllById(pageIds);
+
+        String endCursor = pageIds.isEmpty()
+            ? null
+            : Base64.getEncoder().encodeToString(pageIds.getLast().toString().getBytes());
+
+        return new CatalogItemConnection(
+            new ArrayList<>(services),
+            new PageInfo(hasNextPage, endCursor)
+        );
+    }
+
     public AdminServicePage getAdminServices(
         String category, String search, ServiceSort sort,
         CollectionStatus status,
@@ -156,7 +178,7 @@ public class SalonServicesService {
         return toAdminDto(service);
     }
 
-    // ----- Mutations -----
+    // ---------- Mutations ----------
     @Transactional
     public AdminServiceDto createServiceInput(CreateServiceInput input, UUID actorId) {
         List<Stylist> stylists = resolveStylists(input.stylistIds());
@@ -316,6 +338,8 @@ public class SalonServicesService {
 
         return services;
     }
+
+    // ---------- Helpers ----------
 
     public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
         return new SalonServiceDto(

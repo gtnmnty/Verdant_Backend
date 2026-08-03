@@ -58,17 +58,19 @@ public enum NotificationType {
     STYLIST_ADDED,
     STYLIST_UPDATED,
     STYLIST_DEACTIVATED,
-    STYLIST_DELETED,
     STYLIST_IMAGE_UPDATED,
+    STYLIST_DELETED,
 
     // ── Accounts ─────────────────────────────────
     ACCOUNT_CREATED,
     ACCOUNT_UPDATED,
     ACCOUNT_ADDRESS_CHANGED,
     ACCOUNT_STATUS_CHANGED,
+    ACCOUNT_DELETED,
     PHONE_NUMBER_CHANGED,
     EMAIL_CHANGED,
     PASSWORD_CHANGED,
+    PASSWORD_RESET_REQUESTED,
     NEW_LOGIN_DETECTED,
 
     // ── Reviews ──────────────────────────────────
@@ -84,4 +86,5 @@ public enum NotificationType {
 
     // ── System / Audit ───────────────────────────
     BULK_ACTION_PERFORMED
+
 }

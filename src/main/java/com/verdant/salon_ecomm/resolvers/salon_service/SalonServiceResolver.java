@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.resolvers.salon_service;
 
+import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.User;
@@ -48,6 +49,13 @@ public class SalonServiceResolver {
     @QueryMapping
     public SalonService service(@Argument UUID id){
         return salonService.getServiceDetail(id);
+    }
+
+    @QueryMapping
+    public CatalogItemConnection serviceFavorites(
+        @Argument Integer first, @Argument String after, @AuthenticationPrincipal User principal
+    ) {
+        return salonService.getFavoriteServices(principal.getId(), first, after);
     }
 
     @MutationMapping
