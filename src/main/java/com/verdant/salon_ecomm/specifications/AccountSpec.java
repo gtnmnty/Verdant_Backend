@@ -29,16 +29,23 @@ public class AccountSpec {
 
     public static Specification<User> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.toLowerCase() + "%";
+        String escaped = search.toLowerCase(java.util.Locale.ROOT)
+            .replace("!", "!!")
+            .replace("%", "!%")
+            .replace("_", "!_");
+        String pattern = "%" + escaped + "%";
         return (root, query, cb) -> cb.or(
-            cb.like(cb.lower(root.get("fullName")), pattern),
-            cb.like(cb.lower(root.get("email")), pattern),
-            cb.like(cb.lower(root.get("phone")), pattern)
+            cb.like(cb.lower(root.get("fullName")), pattern, '!'),
+            cb.like(cb.lower(root.get("email")), pattern, '!'),
+            cb.like(cb.lower(root.get("phone")), pattern, '!')
         );
     }
 
     public static Specification<User> hasEmail(String email) {
-        if (email == null || email.isBlank()) return null;
+        if (email == null || email.isBlank()) {
+            // Never match; keeps callers of `exists(...)` correct for empty input.
+            return (root, query, cb) -> cb.disjunction();
+        }
         return (root, query, cb) -> cb.equal(cb.lower(root.get("email")), email.toLowerCase());
     }
 }

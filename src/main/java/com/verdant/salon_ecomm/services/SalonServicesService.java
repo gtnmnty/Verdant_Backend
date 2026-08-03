@@ -1,16 +1,15 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
-import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
-import com.verdant.salon_ecomm.dtos.stylists.StylistSummaryDto;
 import com.verdant.salon_ecomm.dtos.PageInfo;
 import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.mappers.SalonServiceMapper;
 import com.verdant.salon_ecomm.models.enums.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
@@ -42,6 +41,7 @@ public class SalonServicesService {
     private final UserRepository userRepository;
     private final FavoriteRepository favoriteRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final SalonServiceMapper serviceMapper;
 
     public ServicePage getSalonServices(
         String category, String search, ServiceSort sort,
@@ -57,31 +57,8 @@ public class SalonServicesService {
             pageable
         );
 
-        List<SalonService> services = result.getContent();
-        if (services.isEmpty()) {
-            return new ServicePage(
-                List.of(),
-                normalizePage,
-                normalizePageSize,
-                (int) result.getTotalElements(),
-                result.getTotalPages()
-            );
-        }
-
-        List<UUID> serviceIds = services.stream().map(SalonService::getId).toList();
-
-        List<MediaImage> primaryImages = mediaImageRepository
-            .findByEntityTypeAndEntityIdInAndIsPrimaryTrue(ItemType.SALON_SERVICE, serviceIds);
-
-        Map<UUID, MediaImage> primaryImageMap = primaryImages.stream()
-            .collect(Collectors.toMap(MediaImage::getEntityId, img -> img));
-
-        List<SalonServiceDto> items = services.stream()
-            .map(service -> toDto(service, primaryImageMap.get(service.getId())))
-            .toList();
-
         return new ServicePage(
-            items,
+            result.getContent(),
             normalizePage,
             normalizePageSize,
             (int) result.getTotalElements(),
@@ -108,8 +85,17 @@ public class SalonServicesService {
         List<Favorite> favorites = favoriteRepository
             .findByUserIdAndTargetType(userId, ItemType.SALON_SERVICE);
 
-        List<UUID> serviceIds = favorites.stream()
+        List<UUID> favoriteTargetIds = favorites.stream()
             .map(Favorite::getTargetId)
+            .toList();
+
+        Map<UUID, SalonService> serviceById = favoriteTargetIds.isEmpty()
+            ? Map.of()
+            : serviceRepository.findAllById(favoriteTargetIds).stream()
+            .filter(service -> service.getStatus() == CollectionStatus.ACTIVE)
+            .collect(Collectors.toMap(SalonService::getId, service -> service));
+
+        List<UUID> serviceIds = serviceById.keySet().stream()
             .sorted()
             .filter(id -> cursorId == null || id.compareTo(cursorId) > 0)
             .toList();
@@ -117,7 +103,9 @@ public class SalonServicesService {
         List<UUID> pageIds = serviceIds.stream().limit(first).toList();
         boolean hasNextPage = serviceIds.size() > pageIds.size();
 
-        List<SalonService> services = serviceRepository.findAllById(pageIds);
+        List<SalonService> services = pageIds.stream()
+            .map(serviceById::get)
+            .toList();
 
         String endCursor = pageIds.isEmpty()
             ? null
@@ -158,7 +146,7 @@ public class SalonServicesService {
             .collect(Collectors.groupingBy(MediaImage::getEntityId));
 
         List<AdminServiceDto> services = result.getContent().stream()
-            .map(service -> toAdminDto(
+            .map(service -> serviceMapper.toAdminDto(
                 service,
                 imagesByServiceId.getOrDefault(service.getId(), List.of())
             ))
@@ -175,7 +163,7 @@ public class SalonServicesService {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
-        return toAdminDto(service);
+        return serviceMapper.toAdminDto(service);
     }
 
     // ---------- Mutations ----------
@@ -206,7 +194,7 @@ public class SalonServicesService {
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
 
-        return toAdminDto(saved);
+        return serviceMapper.toAdminDto(saved);
     }
 
     @Transactional
@@ -288,7 +276,7 @@ public class SalonServicesService {
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceUpdatedEvent(saved, actor, changes));
 
-        return toAdminDto(saved);
+        return serviceMapper.toAdminDto(saved);
     }
 
     @Transactional
@@ -305,7 +293,7 @@ public class SalonServicesService {
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
         serviceRepository.deleteById(id);
 
-        AdminServiceDto dto = toAdminDto(service);
+        AdminServiceDto dto = serviceMapper.toAdminDto(service);
 
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceDeletedEvent(service, actor));
@@ -341,63 +329,6 @@ public class SalonServicesService {
 
     // ---------- Helpers ----------
 
-    public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
-        return new SalonServiceDto(
-            service.getId(),
-            service.getName(),
-            service.getSubName(),
-            service.getItemCatalog(),
-            service.getPrice(),
-            service.getDurationMinutes(),
-            service.getDescription(),
-            service.getBadge(),
-            primaryImage != null ? toImageDTO(primaryImage) : null
-        );
-    }
-
-    public AdminServiceDto toAdminDto(SalonService service) {
-        List<MediaImage> images = mediaImageRepository
-            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
-                ItemType.SALON_SERVICE, service.getId()
-            );
-
-        return toAdminDto(service, images);
-    }
-
-    public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images) {
-        return new AdminServiceDto(
-            service.getId().toString(),
-            service.getName(),
-            service.getSubName(),
-            service.getItemCatalog().name(),
-            service.getPrice(),
-            service.getDurationMinutes(),
-            service.getStatus(),
-            service.getDescription(),
-            service.getBadge(),
-            service.getTags(),
-            service.getInfo(),
-            service.getReviewCount(),
-            service.getAverageRating(),
-            service.getIsHomeService(),
-            service.isFeatured(),
-            images.stream().map(this::toImageDTO).toList(),
-            service.getStylists().stream().map(this::toStylistSummaryDto).toList(),
-            service.getCreatedAt(),
-            service.getUpdatedAt()
-        );
-    }
-
-    private MediaImageDto toImageDTO(MediaImage image) {
-        return new MediaImageDto(
-            image.getId().toString(),
-            image.getUrl(),
-            image.getPublicId(),
-            image.isPrimary(),
-            image.getSortOrder()
-        );
-    }
-
     private Sort toSort(ServiceSort sort) {
         if (sort == null) {
             return Sort.by(Sort.Direction.DESC, "createdAt");
@@ -411,15 +342,6 @@ public class SalonServicesService {
             case DURATION_LOW_TO_HIGH -> Sort.by(Sort.Direction.ASC, "durationMinutes");
             case DURATION_HIGH_TO_LOW -> Sort.by(Sort.Direction.DESC, "durationMinutes");
         };
-    }
-
-    private StylistSummaryDto toStylistSummaryDto(Stylist stylist) {
-        return new StylistSummaryDto(
-            stylist.getId().toString(),
-            stylist.getName(),
-            stylist.getAvatarUrl(),
-            stylist.getStatus()
-        );
     }
 
     private List<Stylist> resolveStylists(Set<UUID> stylistIds) {

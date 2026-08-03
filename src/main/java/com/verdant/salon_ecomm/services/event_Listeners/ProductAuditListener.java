@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.services.event_Listeners;
 import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.dtos.product.events.ProductCreatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductDeletedEvent;
+import com.verdant.salon_ecomm.dtos.product.events.ProductImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
@@ -42,7 +43,7 @@ public class ProductAuditListener {
             auditLogService.record(
                 AuditEntityType.PRODUCT,
                 product.getId(),
-                AuditActionType.UPDATED,
+                AuditActionType.RESTOCKED,
                 "Product " + product.getName() + " stock changed",
                 event.previousStockQuantity() + " -> " + product.getStockQuantity(),
                 event.actor()
@@ -80,6 +81,19 @@ public class ProductAuditListener {
             product.getId(),
             AuditActionType.DELETED,
             "Product " + product.getName() + " deleted",
+            null,
+            event.actor()
+        );
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onProductImageUpdated(ProductImageUpdatedEvent event) {
+        Product product = event.product();
+        auditLogService.record(
+            AuditEntityType.PRODUCT,
+            product.getId(),
+            AuditActionType.IMAGE_UPDATED,
+            "Product " + product.getName() + " primary image changed",
             null,
             event.actor()
         );

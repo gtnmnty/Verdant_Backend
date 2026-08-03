@@ -143,7 +143,6 @@ public class OrderService {
         if (input.phone() == null || input.phone().isBlank()) {
             throw new IllegalArgumentException("Customer phone number is required for admin order creation");
         }
-
         if (input.items() == null || input.items().isEmpty()) {
             throw new IllegalArgumentException("At least one item is required");
         }

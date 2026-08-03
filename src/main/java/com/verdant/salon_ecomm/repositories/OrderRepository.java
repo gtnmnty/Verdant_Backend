@@ -24,5 +24,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
 
     Optional<Order> findByStripePaymentIntentId(String paymentIntentId);
 
-    List<UUID> findDistinctUserIdsWithOrders(Set<UUID> requestedIds);
+    @Query("SELECT DISTINCT o.user.id FROM Order o WHERE o.user.id IN :requestedIds")
+    List<UUID> findDistinctUserIdsWithOrders(@Param("requestedIds") Set<UUID> requestedIds);
 }

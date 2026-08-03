@@ -9,7 +9,9 @@ public record AccountUpdatedEvent(User account, User actor, List<FieldChange> ch
     public record FieldChange(String field, String oldValue, String newValue, boolean sensitive) {
         @Override
         public String toString() {
-            return field + ": " + oldValue + " -> " + newValue;
+            return sensitive
+                ? field + ": updated"
+                : field + ": " + oldValue + " -> " + newValue;
         }
     }
 
