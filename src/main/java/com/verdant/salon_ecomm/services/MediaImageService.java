@@ -40,9 +40,12 @@ public class MediaImageService {
     );
 
     @Transactional
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    public List<MediaImageDto> addImages(ItemType entityType, UUID entityId, List<MultipartFile> files, Boolean isPrimary) {
-
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER')")
+    public List<MediaImageDto> addImages(
+        ItemType entityType, UUID entityId,
+        List<MultipartFile> files, Boolean isPrimary,
+        UUID actorId
+    ) {
         validateEntityExists(entityType, entityId);
         validateFiles(files);
 
@@ -60,6 +63,7 @@ public class MediaImageService {
         List<MediaImageDto> results = new ArrayList<>();
         List<String> uploadedPublicIds = new ArrayList<>();
         int sortOrder = (int) currentCount;
+        boolean primarySet = false;
 
         try {
             for (MultipartFile file : files) {
@@ -67,6 +71,7 @@ public class MediaImageService {
                 uploadedPublicIds.add(uploaded.publicId());
 
                 boolean isThisPrimary = primary && results.isEmpty();
+                if (isThisPrimary) primarySet = true;
 
                 MediaImage image = MediaImage.builder()
                     .entityType(entityType)
@@ -90,6 +95,17 @@ public class MediaImageService {
             throw ex;
         }
 
+        if (primarySet) {
+            User actor = resolveActor(actorId);
+            if (entityType == ItemType.SALON_SERVICE) {
+                salonServiceRepository.findById(entityId).ifPresent(service ->
+                    eventPublisher.publishEvent(new SalonServiceImageUpdatedEvent(service, actor)));
+            } else if (entityType == ItemType.PRODUCT) {
+                productRepository.findById(entityId).ifPresent(product ->
+                    eventPublisher.publishEvent(new ProductImageUpdatedEvent(product, actor)));
+            }
+        }
+
         return results;
     }
 
@@ -99,7 +115,7 @@ public class MediaImageService {
         MediaImage image = mediaImageRepository.findByIdAndEntityIdAndEntityType(
             imageId, serviceId, itemType
         ).orElseThrow(() -> new ResourceNotFoundException(
-                "Image not found for this service specification"
+                "Image not found for " + itemType + " " + serviceId
             )
         );
 
@@ -116,7 +132,10 @@ public class MediaImageService {
             imageId, serviceId, itemType
         ).orElseThrow(() -> new ResourceNotFoundException("Image not found"));
 
-        mediaImageRepository.clearPrimaryFlag(image.getEntityType(), image.getEntityId());
+        // Excludes the selected image from the bulk clear so its own row is never
+        // touched — avoids the dirty-checking no-op where setPrimary(true) is
+        // skipped by Hibernate because the in-memory value already matched.
+        mediaImageRepository.clearPrimaryFlagExcept(image.getEntityType(), image.getEntityId(), imageId);
         image.setPrimary(true);
 
         MediaImageDto dto = toImageDTO(mediaImageRepository.save(image));

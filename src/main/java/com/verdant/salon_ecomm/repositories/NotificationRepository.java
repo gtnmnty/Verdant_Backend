@@ -51,4 +51,7 @@ public interface NotificationRepository
 
     // ── Bulk delete, scoped to owner so a user can't delete another's notif ──
     void deleteByIdInAndUser_Id(List<UUID> ids, UUID userId);
+
+    @Modifying
+    void deleteByUserId(UUID userId);
 }

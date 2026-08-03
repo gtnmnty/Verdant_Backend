@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.entities.RefreshToken;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,4 +19,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM RefreshToken r WHERE r.token = :token")
     Optional<RefreshToken> findByTokenForUpdate(@Param("token") String token);
+
+    @Modifying
+    void deleteByUserId(UUID userId);
 }

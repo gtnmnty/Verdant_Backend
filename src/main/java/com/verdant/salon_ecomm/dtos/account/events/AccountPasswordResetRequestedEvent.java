@@ -9,4 +9,13 @@ public record AccountPasswordResetRequestedEvent(
     String email,
     String resetToken,
     User actor
-) {}
+) {
+    @Override
+    public String toString() {
+        return "AccountPasswordResetRequestedEvent[accountId=" + accountId
+            + ", email=" + email
+            + ", resetToken=[REDACTED]"
+            + ", actor=" + actor
+            + "]";
+    }
+}
