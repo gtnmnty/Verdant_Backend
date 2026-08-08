@@ -31,7 +31,7 @@ public class AuditLogService {
             .findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable)
             .map(auditLogMapper::toDto);
 
-        return new AuditLogPage(page.getContent(), (int) page.getTotalElements(), page.hasNext());
+        return new AuditLogPage(page.getContent(), Math.toIntExact(page.getTotalElements()), page.hasNext());
     }
 
     public AuditLogPage getDashboardFeed(Pageable pageable) {

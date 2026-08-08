@@ -29,7 +29,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -92,13 +94,23 @@ public class ProductService {
             pageable
         );
 
+        List<UUID> productIds = result.getContent().stream()
+            .map(Product::getId)
+            .toList();
+
+        Map<UUID, List<MediaImage>> imagesByProduct = mediaImageRepository
+            .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.PRODUCT, productIds)
+            .stream()
+            .collect(Collectors.groupingBy(MediaImage::getEntityId));
+
         List<AdminProductDto> items = result.getContent().stream()
-            .map(productMapper::toAdminDTO)
+            .map(product -> productMapper.toAdminDTO(
+                product, imagesByProduct.getOrDefault(product.getId(), List.of())))
             .toList();
 
         return new AdminProductPage(
             items, normalizePage, normalizePageSize,
-            (int) result.getTotalElements(),
+            Math.toIntExact(result.getTotalElements()),
             result.getTotalPages()
         );
     }
@@ -209,6 +221,5 @@ public class ProductService {
             case PRICE_HIGH_TO_LOW -> Sort.by("price").descending();
         };
     }
-
 
 }

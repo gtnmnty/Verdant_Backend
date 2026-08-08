@@ -115,7 +115,7 @@ type Notification {
 }
 
 type NotificationGroup {
-    date: DateTime!
+    date: Date!
     notifications: [Notification!]!
 }
 

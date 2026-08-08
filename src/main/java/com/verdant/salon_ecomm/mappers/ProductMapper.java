@@ -18,10 +18,8 @@ public class ProductMapper {
 
     private final MediaImageRepository mediaImageRepository;
 
-    public AdminProductDto toAdminDTO(Product product) {
-        List<MediaImage> images = mediaImageRepository
-            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.PRODUCT, product.getId());
 
+    public AdminProductDto toAdminDTO(Product product, List<MediaImage> images) {
         return new AdminProductDto(
             product.getId().toString(),
             product.getName(),
@@ -43,6 +41,12 @@ public class ProductMapper {
             product.getCreatedAt(),
             product.getUpdatedAt()
         );
+    }
+
+    public AdminProductDto toAdminDTO(Product product) {
+        List<MediaImage> images = mediaImageRepository
+            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.PRODUCT, product.getId());
+        return toAdminDTO(product, images);
     }
 
     private MediaImageDto toImageDTO(MediaImage image) {

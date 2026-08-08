@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.dtos.user.events.UserDeletedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserProfileUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserRegisteredEvent;
+import com.verdant.salon_ecomm.entities.PendingCleanUpJob;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.DuplicateEmailException;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
@@ -15,12 +16,15 @@ import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -34,6 +38,8 @@ public class UserService {
     private final NotificationRepository notificationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final CleanUpJobRepository cleanUpJobRepository;
+
     private final CloudinaryService cloudinaryService;
     private final PaymentService paymentService;
 
@@ -44,7 +50,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserDto.Summary registerUser(RegisterUserDto request){
+    public UserDto.Summary registerUser(RegisterUserDto request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
         if (userRepository.existsByEmail(normalizedEmail)) {
@@ -65,7 +71,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserDto.Profile updateUserProfile(UUID id, UpdateUserRequest request){
+    public UserDto.Profile updateUserProfile(UUID id, UpdateUserRequest request) {
         var user = findUserOrThrow(id);
 
         if (request.getEmail() != null) {
@@ -134,18 +140,15 @@ public class UserService {
         var user = userRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
 
-        // Capture external-resource identifiers before they're scrubbed below.
         String avatarPublicId = user.getAvatarPublicId();
         String stripeCustomerId = user.getStripeCustomerId();
 
-        // Personal data revoked/cleaned up immediately regardless of history.
         cartItemRepository.deleteByUserId(id);
         favoriteRepository.deleteByUserId(id);
         notificationRepository.deleteByUserId(id);
         refreshTokenRepository.deleteByUserId(id);
         passwordResetTokenRepository.deleteByUserId(id);
 
-        // Anonymize rather than delete the row itself
         user.setFullName("Deleted User");
         user.setEmail("deleted-" + user.getId() + "@deleted.verdant.local");
         user.setPhone(null);
@@ -165,21 +168,46 @@ public class UserService {
 
         userRepository.save(user);
 
-        // External cleanup must complete before the deletion event fires, so
-        // downstream listeners never observe "deleted" while the avatar/customer
-        // still exist upstream.
-        if (avatarPublicId != null) {
-            cloudinaryService.delete(avatarPublicId);
+        // Record what still needs cleaning up externally. This commits atomically
+        // with the user deletion — if this transaction commits, we're guaranteed
+        // to eventually process (and retry) the external cleanup, even if the
+        // app crashes right after this method returns.
+        if (avatarPublicId != null || stripeCustomerId != null) {
+            cleanUpJobRepository.save(PendingCleanUpJob.builder()
+                .userId(id)
+                .avatarPublicId(avatarPublicId)
+                .stripeCustomerId(stripeCustomerId)
+                .build());
         }
-        if (stripeCustomerId != null) {
-            paymentService.deleteStripeCustomer(stripeCustomerId);
-        }
-
-        eventPublisher.publishEvent(new UserDeletedEvent(user));
     }
 
+
+    @Scheduled(fixedDelay = 60_000)
+    @Transactional
+    public void processPendingCleanupJobs() {
+        for (PendingCleanUpJob job : cleanUpJobRepository.findByProcessedFalse()) {
+            try {
+                if (job.getAvatarPublicId() != null) {
+                    cloudinaryService.delete(job.getAvatarPublicId());
+                }
+                if (job.getStripeCustomerId() != null) {
+                    paymentService.deleteStripeCustomer(job.getStripeCustomerId());
+                }
+                cleanUpJobRepository.markProcessed(job.getId());
+
+                userRepository.findById(job.getUserId())
+                    .ifPresent(user -> eventPublisher.publishEvent(new UserDeletedEvent(user)));
+            } catch (Exception e) {
+                cleanUpJobRepository.incrementRetryCount(job.getId());
+                log.error("Cleanup job {} failed for user {} (retry {})",
+                    job.getId(), job.getUserId(), job.getRetryCount() + 1, e);
+            }
+        }
+    }
+
+
     // Callback or global
-    private User findUserOrThrow(UUID id){
+    private User findUserOrThrow(UUID id) {
         return userRepository.findById(id)
             .orElseThrow(
                 () -> new ResourceNotFoundException("User not found with id: " + id)
