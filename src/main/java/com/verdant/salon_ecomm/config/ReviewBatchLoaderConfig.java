@@ -66,7 +66,7 @@ public class ReviewBatchLoaderConfig {
                     AppointmentServiceType type = Boolean.TRUE.equals(service.getIsHomeService())
                         ? AppointmentServiceType.HOME_SERVICE
                         : AppointmentServiceType.IN_SALON;
-                    result.put(key, new ReviewTargetInfo(service.getName(), type, service.getName()));
+                    result.put(key, new ReviewTargetInfo(service.getName(), type, service.getSubName()));
                 } else {
                     result.put(key, new ReviewTargetInfo("[Deleted service]", null, null));
                 }

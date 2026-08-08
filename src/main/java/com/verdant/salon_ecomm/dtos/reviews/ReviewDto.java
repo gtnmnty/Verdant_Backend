@@ -4,9 +4,9 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ReviewDto(
-        UUID id,
-        ReviewUserDto user,
-        short stars,
-        String text,
-        OffsetDateTime createdAt
+    UUID id,
+    ReviewUserDto user,
+    short stars,
+    String text,
+    OffsetDateTime createdAt
 ) {}

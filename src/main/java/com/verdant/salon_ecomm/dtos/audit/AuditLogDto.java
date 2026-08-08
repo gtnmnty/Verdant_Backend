@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.dtos;
+package com.verdant.salon_ecomm.dtos.audit;
 
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 

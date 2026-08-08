@@ -81,10 +81,10 @@ public class PasswordResetTokenService {
         PasswordResetToken token = tokenRepository.findByTokenHash(tokenHash)
             .orElseThrow(() -> new ForbiddenException("Invalid or expired reset link."));
 
-        User user = userRepository.findById(token.getUser().getId())
+        User user = userRepository.findByIdForUpdate(token.getUser().getId())
             .orElseThrow(() -> new ForbiddenException("Invalid or expired reset link."));
 
-        if (AccountStatus.BANNED.equals(user.getStatus())) {
+        if (AccountStatus.BANNED.equals(user.getStatus()) || AccountStatus.DELETED.equals(user.getStatus())) {
             throw new ForbiddenException("Account is " + user.getStatus().toString().toLowerCase());
         }
 

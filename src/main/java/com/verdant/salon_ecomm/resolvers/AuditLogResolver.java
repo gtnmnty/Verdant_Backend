@@ -1,10 +1,9 @@
 package com.verdant.salon_ecomm.resolvers;
 
-import com.verdant.salon_ecomm.dtos.AuditLogDto;
+import com.verdant.salon_ecomm.dtos.audit.AuditLogPage;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
@@ -20,7 +19,7 @@ public class AuditLogResolver {
 
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     @QueryMapping
-    public Page<AuditLogDto> auditLogForEntity(
+    public AuditLogPage auditLogForEntity(
         @Argument AuditEntityType entityType,
         @Argument String entityId,
         @Argument int page,
@@ -32,7 +31,7 @@ public class AuditLogResolver {
 
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN', 'RECEPTIONIST')")
     @QueryMapping
-    public Page<AuditLogDto> auditDashboardFeed(@Argument int page, @Argument int size) {
+    public AuditLogPage auditDashboardFeed(@Argument int page, @Argument int size) {
         PageRequest pageable = createValidatedPageRequest(page, size);
         return auditLogService.getDashboardFeed(pageable);
     }

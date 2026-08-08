@@ -2,7 +2,6 @@ package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.entities.SalonService;
-import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.services.FavoriteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -16,26 +15,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FavoriteResolver {
 
-  private final FavoriteService favoriteService;
+    private final FavoriteService favoriteService;
 
-  @MutationMapping
-  @PreAuthorize("isAuthenticated()")
-  public Product toggleFavoriteProduct(@Argument String targetId, @Argument ItemType targetType) {
-    requireType(targetType, ItemType.PRODUCT);
-    return favoriteService.toggleProduct(UUID.fromString(targetId));
-  }
-
-  @MutationMapping
-  @PreAuthorize("isAuthenticated()")
-  public SalonService toggleFavoriteService(@Argument String targetId, @Argument ItemType targetType) {
-    requireType(targetType, ItemType.SALON_SERVICE);
-    return favoriteService.toggleSalon(UUID.fromString(targetId));
-  }
-
-  private void requireType(ItemType actual, ItemType expected) {
-    if (actual != expected) {
-      throw new IllegalArgumentException(
-          "Unsupported target type: " + actual + ". Only " + expected + " is currently supported.");
+    @MutationMapping
+    @PreAuthorize("isAuthenticated()")
+    public Product toggleFavoriteProduct(@Argument String targetId) {
+        return favoriteService.toggleProduct(UUID.fromString(targetId));
     }
-  }
+
+    @MutationMapping
+    @PreAuthorize("isAuthenticated()")
+    public SalonService toggleFavoriteService(@Argument String targetId) {
+        return favoriteService.toggleSalon(UUID.fromString(targetId));
+    }
 }

@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.controllers;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +12,7 @@ import java.sql.Connection;
 
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class HealthController {
 
     @Autowired

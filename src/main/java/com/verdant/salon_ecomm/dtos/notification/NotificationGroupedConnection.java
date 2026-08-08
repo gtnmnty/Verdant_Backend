@@ -2,8 +2,8 @@ package com.verdant.salon_ecomm.dtos.notification;
 
 import java.util.List;
 
-public record NotificationPageDto(
-    List<NotificationResponseDto> content,
+public record NotificationGroupedConnection(
+    List<NotificationGroupDto> groups,
     boolean hasNextPage,
-    long unreadCount
+    String endCursor
 ) {}

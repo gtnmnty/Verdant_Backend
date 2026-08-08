@@ -77,9 +77,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    RoleHierarchy roleHierarchy() {
+    static RoleHierarchy roleHierarchy() {
         return RoleHierarchyImpl.withDefaultRolePrefix()
-            .role("OWNER").implies("ADMIN")
+            .role("OWNER").implies("MANAGER")
+            .role("MANAGER").implies("ADMIN")
+            .role("MANAGER").implies("RECEPTIONIST")
             .build();
     }
 

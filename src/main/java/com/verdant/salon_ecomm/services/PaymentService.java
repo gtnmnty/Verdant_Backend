@@ -98,6 +98,17 @@ public class PaymentService {
         return paymentMapper.toDto(intent);
     }
 
+    public void deleteStripeCustomer(String stripeCustomerId) {
+        if (stripeCustomerId == null) {
+            return;
+        }
+        try {
+            stripeClient.customers().delete(stripeCustomerId);
+        } catch (StripeException ex) {
+            throw new PaymentException("Failed to delete Stripe customer " + stripeCustomerId, ex);
+        }
+    }
+
     // ---------- Webhook handling ----------
 
     @Transactional

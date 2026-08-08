@@ -12,10 +12,10 @@ import java.util.UUID;
 public class StylistsSpec {
 
     public static Specification<Stylist> filter(
-        StylistAccountStatus status, String branch, String search, List<UUID> services
+        StylistAccountStatus status, UUID branchId, String search, List<UUID> services
     ) {
         return Specification.allOf(
-            hasBranch(branch), hasSearch(search),
+            hasBranch(branchId), hasSearch(search),
             hasStatus(status), hasServiceOf(services)
         );
     }
@@ -29,13 +29,13 @@ public class StylistsSpec {
             cb.equal(root.get("status"), status);
     }
 
-    public static Specification<Stylist> hasBranch(String branchId) {
-        if (branchId == null || branchId.isBlank()) {
+    public static Specification<Stylist> hasBranch(UUID branchId) {
+        if (branchId == null) {
             return null;
         }
 
         return (root, query, cb) ->
-            cb.equal(root.get("branch").get("id"), UUID.fromString(branchId));
+            cb.equal(root.get("branch").get("id"), branchId);
     }
 
     public static Specification<Stylist> hasSearch(String search) {
@@ -57,6 +57,7 @@ public class StylistsSpec {
         }
 
         return (root, query, cb) -> {
+            assert query != null;
             query.distinct(true);
             Join<Stylist, SalonService> join = root.join("services");
             return join.get("id").in(services);

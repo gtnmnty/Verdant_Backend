@@ -5,7 +5,9 @@ import com.verdant.salon_ecomm.models.enums.notification.NotificationSortField;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.SortDirection;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 public record NotificationQueryDto(
     NotificationReadFilter readFilter,
@@ -13,6 +15,7 @@ public record NotificationQueryDto(
     List<NotificationType> types,
     NotificationSortField sortField,
     SortDirection sortDirection,
-    Integer page,
+    OffsetDateTime cursorCreatedAt,
+    UUID cursorId,
     Integer size
 ) {}

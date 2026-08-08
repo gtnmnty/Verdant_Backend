@@ -34,6 +34,8 @@ public class UserService {
     private final NotificationRepository notificationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final CloudinaryService cloudinaryService;
+    private final PaymentService paymentService;
 
     public UserDto.Profile getUserById(UUID id) {
         return userRepository.findById(id)
@@ -110,7 +112,8 @@ public class UserService {
     public void updateUserPassword(UUID id, ChangePasswordRequest request) {
         var user = findUserOrThrow(id);
 
-        if (AccountStatus.SUSPENDED.equals(user.getStatus()) || AccountStatus.BANNED.equals(user.getStatus())) {
+        if (AccountStatus.SUSPENDED.equals(user.getStatus()) || AccountStatus.BANNED.equals(user.getStatus())
+            || AccountStatus.DELETED.equals(user.getStatus())) {
             throw new ForbiddenException("Account is " + user.getStatus().toString().toLowerCase());
         }
 
@@ -128,7 +131,12 @@ public class UserService {
 
     @Transactional
     public void deleteUserById(UUID id) {
-        var user = findUserOrThrow(id);
+        var user = userRepository.findByIdForUpdate(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
+
+        // Capture external-resource identifiers before they're scrubbed below.
+        String avatarPublicId = user.getAvatarPublicId();
+        String stripeCustomerId = user.getStripeCustomerId();
 
         // Personal data revoked/cleaned up immediately regardless of history.
         cartItemRepository.deleteByUserId(id);
@@ -137,11 +145,7 @@ public class UserService {
         refreshTokenRepository.deleteByUserId(id);
         passwordResetTokenRepository.deleteByUserId(id);
 
-        // Anonymize rather than delete the row itself: Order/Appointment/Review
-        // reference this user with no cascade, and retain financial/audit/trust
-        // significance independent of the account. Scrubbing identity here keeps
-        // those FKs intact and that history queryable, without exposing any of
-        // the account holder's personal data going forward.
+        // Anonymize rather than delete the row itself
         user.setFullName("Deleted User");
         user.setEmail("deleted-" + user.getId() + "@deleted.verdant.local");
         user.setPhone(null);
@@ -160,6 +164,16 @@ public class UserService {
         user.setVerificationCodeExpiration(null);
 
         userRepository.save(user);
+
+        // External cleanup must complete before the deletion event fires, so
+        // downstream listeners never observe "deleted" while the avatar/customer
+        // still exist upstream.
+        if (avatarPublicId != null) {
+            cloudinaryService.delete(avatarPublicId);
+        }
+        if (stripeCustomerId != null) {
+            paymentService.deleteStripeCustomer(stripeCustomerId);
+        }
 
         eventPublisher.publishEvent(new UserDeletedEvent(user));
     }
