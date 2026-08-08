@@ -1,12 +1,12 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.entities.MediaImage;
 import com.verdant.salon_ecomm.entities.Product;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.mappers.ProductMapper;
 import com.verdant.salon_ecomm.models.enums.CollectionSort;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemType;
@@ -28,7 +28,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,6 +37,7 @@ import java.util.UUID;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final ProductMapper productMapper;
     private final MediaImageRepository mediaImageRepository;
     private final CloudinaryService cloudinaryService;
     private final UserRepository userRepository;
@@ -77,33 +77,6 @@ public class ProductService {
         return product;
     }
 
-    private AdminProductDto toAdminDTO(Product product) {
-        List<MediaImage> images = mediaImageRepository
-            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.PRODUCT, product.getId());
-
-        return new AdminProductDto(
-            product.getId().toString(),
-            product.getName(),
-            product.getItemCatalog().name(),
-            product.getDescription(),
-            product.getPrice(),
-            product.getSalePrice(),
-            product.getSku(),
-            images.stream().map(this::toImageDTO).toList(),
-            product.getTags() != null ? product.getTags() : List.of(),
-            product.getInfo() != null ? Arrays.asList(product.getInfo()) : List.of(),
-            product.getBadge(),
-            product.isFeatured(),
-            product.getStatus(),
-            product.getStockQuantity(),
-            product.getLowStockThreshold(),
-            product.getReviewCount(),
-            product.getAverageRating(),
-            product.getCreatedAt(),
-            product.getUpdatedAt()
-        );
-    }
-
     public AdminProductPage getAdminProducts(
         String category, String search,
         CollectionSort sort,
@@ -120,7 +93,7 @@ public class ProductService {
         );
 
         List<AdminProductDto> items = result.getContent().stream()
-            .map(this::toAdminDTO)
+            .map(productMapper::toAdminDTO)
             .toList();
 
         return new AdminProductPage(
@@ -151,7 +124,7 @@ public class ProductService {
             .averageRating(BigDecimal.ZERO)
             .build();
 
-        return toAdminDTO(productRepository.save(product));
+        return productMapper.toAdminDTO(productRepository.save(product));
     }
 
     @Transactional
@@ -174,7 +147,7 @@ public class ProductService {
         if (input.isFeatured() != null) product.setFeatured(input.isFeatured());
         if (input.status() != null) product.setStatus(input.status());
 
-        return toAdminDTO(productRepository.save(product));
+        return productMapper.toAdminDTO(productRepository.save(product));
     }
 
     @Transactional
@@ -223,17 +196,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        return toAdminDTO(product);
-    }
-
-    private MediaImageDto toImageDTO(MediaImage image) {
-        return new MediaImageDto(
-            image.getId().toString(),
-            image.getUrl(),
-            image.getPublicId(),
-            image.isPrimary(),
-            image.getSortOrder()
-        );
+        return productMapper.toAdminDTO(product);
     }
 
     private Sort toSort(CollectionSort sort) {

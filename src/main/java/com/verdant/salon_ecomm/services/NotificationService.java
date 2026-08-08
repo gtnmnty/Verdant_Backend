@@ -17,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +31,6 @@ import static com.verdant.salon_ecomm.models.enums.notification.NotificationSort
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
-    private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 20;
     private static final NotificationReadFilter DEFAULT_READ_FILTER = NotificationReadFilter.ALL;
     private static final NotificationSortField DEFAULT_SORT_FIELD = CREATED_AT;
@@ -45,22 +45,19 @@ public class NotificationService {
         NotificationQueryDto resolved = applyDefaults(query);
         Pageable pageable = buildPageable(resolved);
 
-        Page<Notification> result = notificationRepository.findAll(
-            NotificationSpec.forUserWithFilters(userId, resolved),
-            pageable
-        );
+        Specification<Notification> spec = NotificationSpec.forUserWithFilters(userId, resolved)
+            .and(keysetPredicate(resolved));
 
-        List<NotificationResponseDto> content = notificationMapper.toResponseDtoList(result.getContent());
+        Page<Notification> raw = notificationRepository.findAll(spec, pageable);
+
+        List<Notification> rows = raw.getContent();
+        boolean hasNextPage = rows.size() > resolved.size();
+        List<Notification> pageRows = hasNextPage ? rows.subList(0, resolved.size()) : rows;
+
+        List<NotificationResponseDto> content = notificationMapper.toResponseDtoList(pageRows);
         long unreadCount = notificationRepository.countByUser_IdAndIsReadFalse(userId);
 
-        return new NotificationPageDto(
-            content,
-            result.getNumber(),
-            result.getSize(),
-            result.getTotalElements(),
-            result.getTotalPages(),
-            unreadCount
-        );
+        return new NotificationPageDto(content, hasNextPage, unreadCount);
     }
 
     @Transactional(readOnly = true)
@@ -78,7 +75,7 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public long getUnreadCount(UUID userId) {
+    public int getUnreadCount(UUID userId) {
         return notificationRepository.countByUser_IdAndIsReadFalse(userId);
     }
 
@@ -125,7 +122,7 @@ public class NotificationService {
         if (query == null) {
             return new NotificationQueryDto(
                 DEFAULT_READ_FILTER, null, null, DEFAULT_SORT_FIELD, DEFAULT_SORT_DIRECTION,
-                DEFAULT_PAGE, DEFAULT_SIZE
+                null, null, DEFAULT_SIZE
             );
         }
         return new NotificationQueryDto(
@@ -134,13 +131,13 @@ public class NotificationService {
             query.types(),
             query.sortField() != null ? query.sortField() : DEFAULT_SORT_FIELD,
             query.sortDirection() != null ? query.sortDirection() : DEFAULT_SORT_DIRECTION,
-            query.page() != null ? query.page() : DEFAULT_PAGE,
+            query.cursorCreatedAt(),
+            query.cursorId(),
             query.size() != null ? query.size() : DEFAULT_SIZE
         );
     }
 
     private Pageable buildPageable(NotificationQueryDto query) {
-        int normalizedPage = Math.max(0, query.page());
         int normalizedSize = Math.clamp(query.size(), 1, 100);
 
         Sort.Direction direction = query.sortDirection() == SortDirection.ASC
@@ -149,11 +146,41 @@ public class NotificationService {
 
         String property = switch (query.sortField()) {
             case CREATED_AT -> "createdAt";
+            // TODO: PRIORITY / TYPE / IS_READ aren't wired for keyset pagination yet —
+            // the resolver never requests them today, but if that changes, each needs
+            // its own cursor field + tiebreak predicate below, same as createdAt.
             case PRIORITY -> "priority";
             case TYPE -> "type";
             case IS_READ -> "isRead";
         };
 
-        return PageRequest.of(normalizedPage, normalizedSize, Sort.by(direction, property));
+        // fetch one extra row to cheaply detect hasNextPage without a COUNT query
+        return PageRequest.of(0, normalizedSize + 1,
+            Sort.by(direction, property).and(Sort.by(direction, "id")));
+    }
+
+    private Specification<Notification> keysetPredicate(NotificationQueryDto query) {
+        return (root, cq, cb) -> {
+            if (query.cursorCreatedAt() == null || query.cursorId() == null) {
+                return cb.conjunction(); // first page — no cursor filter
+            }
+            boolean desc = query.sortDirection() != SortDirection.ASC;
+
+            // (createdAt < cursor) OR (createdAt = cursor AND id < cursorId)   [DESC]
+            // (createdAt > cursor) OR (createdAt = cursor AND id > cursorId)  [ASC]
+            var createdAtPath = root.<OffsetDateTime>get("createdAt");
+            var idPath = root.<UUID>get("id");
+
+            var strictCompare = desc
+                ? cb.lessThan(createdAtPath, query.cursorCreatedAt())
+                : cb.greaterThan(createdAtPath, query.cursorCreatedAt());
+
+            var tieCompare = cb.and(
+                cb.equal(createdAtPath, query.cursorCreatedAt()),
+                desc ? cb.lessThan(idPath, query.cursorId()) : cb.greaterThan(idPath, query.cursorId())
+            );
+
+            return cb.or(strictCompare, tieCompare);
+        };
     }
 }

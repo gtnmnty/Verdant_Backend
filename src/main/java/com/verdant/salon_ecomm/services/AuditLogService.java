@@ -1,9 +1,10 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.dtos.audit.AuditLogDto;
+import com.verdant.salon_ecomm.dtos.audit.AuditLogPage;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.entities.AuditLog;
-import com.verdant.salon_ecomm.dtos.AuditLogDto;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.mappers.AuditLogMapper;
 import com.verdant.salon_ecomm.repositories.AuditLogRepository;
@@ -25,14 +26,20 @@ public class AuditLogService {
 
     // ---------- Queries ----------
 
-    public Page<AuditLogDto> getForEntity(AuditEntityType entityType, String entityId, Pageable pageable) {
-        return auditLogRepository
+    public AuditLogPage getForEntity(AuditEntityType entityType, String entityId, Pageable pageable) {
+        Page<AuditLogDto> page = auditLogRepository
             .findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable)
             .map(auditLogMapper::toDto);
+
+        return new AuditLogPage(page.getContent(), (int) page.getTotalElements(), page.hasNext());
     }
 
-    public Page<AuditLogDto> getDashboardFeed(Pageable pageable) {
-        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable).map(auditLogMapper::toDto);
+    public AuditLogPage getDashboardFeed(Pageable pageable) {
+        Page<AuditLogDto> page = auditLogRepository
+            .findAllByOrderByCreatedAtDesc(pageable)
+            .map(auditLogMapper::toDto);
+
+        return new AuditLogPage(page.getContent(), (int) page.getTotalElements(), page.hasNext());
     }
 
     // ---------- Mutations ----------

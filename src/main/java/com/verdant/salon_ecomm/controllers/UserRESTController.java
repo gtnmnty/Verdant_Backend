@@ -6,6 +6,7 @@ import com.verdant.salon_ecomm.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -32,6 +33,7 @@ public class UserRESTController {
     }
 
     @PutMapping("/update-profile")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserDto.Profile> updateProfile(
         @AuthenticationPrincipal User principal,
         @Valid @RequestBody UpdateUserRequest request
@@ -41,6 +43,7 @@ public class UserRESTController {
     }
 
     @PutMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> changePassword(
         @AuthenticationPrincipal User principal,
         @Valid @RequestBody ChangePasswordRequest request
@@ -50,6 +53,7 @@ public class UserRESTController {
     }
 
     @DeleteMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserDto> deleteAccount(@AuthenticationPrincipal User principal){
         userService.deleteUserById(principal.getId());
         return ResponseEntity.noContent().build();

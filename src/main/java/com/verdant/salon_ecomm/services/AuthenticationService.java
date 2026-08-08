@@ -67,7 +67,7 @@ public class AuthenticationService {
         return userRepository.save(user);
     }
 
-    public AuthResult authenticate(LogInUserDto input) throws InvalidCrendetialsException {
+    public AuthResult authenticate(LogInUserDto input) throws InvalidCredentialsException {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -83,7 +83,7 @@ public class AuthenticationService {
                 )
             );
         } catch (BadCredentialsException e) {
-            throw new InvalidCrendetialsException("Invalid credentials.");
+            throw new InvalidCredentialsException("Invalid credentials.");
         }
 
         String accessToken = jwtService.generateToken(user);

@@ -16,37 +16,37 @@ import java.util.List;
 import java.util.UUID;
 
 public interface NotificationRepository
-        extends JpaRepository<Notification, UUID>, JpaSpecificationExecutor<Notification> {
+    extends JpaRepository<Notification, UUID>, JpaSpecificationExecutor<Notification> {
 
     @NonNull
     Page<Notification> findAll(Specification<Notification> spec, @NonNull Pageable pageable);
 
-    long countByUser_IdAndIsReadFalse(UUID userId);
+    int countByUser_IdAndIsReadFalse(UUID userId);
 
     List<Notification> findByIdInAndUser_Id(List<UUID> ids, UUID userId);
 
     // ── Bulk mark-as-read ─────────────────────────────────
     @Modifying
     @Query("""
-            UPDATE Notification n
-            SET n.isRead = true, n.readAt = :readAt
-            WHERE n.id IN :ids AND n.user.id = :userId
-            """)
+        UPDATE Notification n
+        SET n.isRead = true, n.readAt = :readAt
+        WHERE n.id IN :ids AND n.user.id = :userId
+        """)
     void markAsReadByIdsAndUser(
-            @Param("ids") List<UUID> ids,
-            @Param("userId") UUID userId,
-            @Param("readAt") OffsetDateTime readAt
+        @Param("ids") List<UUID> ids,
+        @Param("userId") UUID userId,
+        @Param("readAt") OffsetDateTime readAt
     );
 
     @Modifying
     @Query("""
-            UPDATE Notification n
-            SET n.isRead = true, n.readAt = :readAt
-            WHERE n.user.id = :userId AND n.isRead = false
-            """)
+        UPDATE Notification n
+        SET n.isRead = true, n.readAt = :readAt
+        WHERE n.user.id = :userId AND n.isRead = false
+        """)
     void markAllAsReadByUser(
-            @Param("userId") UUID userId,
-            @Param("readAt") OffsetDateTime readAt
+        @Param("userId") UUID userId,
+        @Param("readAt") OffsetDateTime readAt
     );
 
     // ── Bulk delete, scoped to owner so a user can't delete another's notif ──

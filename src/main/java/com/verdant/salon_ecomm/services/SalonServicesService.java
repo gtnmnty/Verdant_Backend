@@ -288,8 +288,9 @@ public class SalonServicesService {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
-        List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
-        AdminServiceDto dto = serviceMapper.toAdminDto(service);
+        List<MediaImage> images = mediaImageRepository
+            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.SALON_SERVICE, id);
+        AdminServiceDto dto = serviceMapper.toAdminDto(service, images);
 
         for (MediaImage image : images) {
             cloudinaryService.delete(image.getPublicId());

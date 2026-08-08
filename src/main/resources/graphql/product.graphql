@@ -23,8 +23,7 @@ extend type Mutation {
     createProduct(input: CreateProductInput!): AdminProductDto!
     updateProduct(input: UpdateProductInput!): AdminProductDto!
     deleteProduct(id: ID!): Boolean!
-    toggleProductStatus(id: ID!): AdminProductDto!
-    toggleFavoriteProduct(targetId: ID!, targetType: ItemType!): CatalogItem!
+    toggleFavoriteProduct(targetId: ID!): CatalogItem!
     deleteProducts(ids: [ID!]!): [AdminProductDto!]!
 }
 

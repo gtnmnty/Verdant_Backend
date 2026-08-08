@@ -10,6 +10,8 @@ public record NotificationGraphQLTypes() {
 
     public record NotificationConnection(List<NotificationEdge> edges, PageInfo pageInfo, long unreadCount) {}
 
+    public record NotificationGroupedConnection(List<NotificationGroupDto> groups, PageInfo pageInfo) {}
+
     public record MarkAsReadResult(List<UUID> updatedIds) {}
 
     public record DeleteNotificationsResult(List<UUID> deletedIds) {}

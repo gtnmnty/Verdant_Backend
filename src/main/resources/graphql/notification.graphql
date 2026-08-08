@@ -40,7 +40,7 @@ enum NotificationType {
     BRANCH_ADDED
     BRANCH_UPDATED
     BRANCH_DELETED
-    
+
     LEAVE_REQUEST_SUBMITTED
     LEAVE_REQUEST_APPROVED
     LEAVE_REQUEST_REJECTED
@@ -49,7 +49,7 @@ enum NotificationType {
     STYLIST_DEACTIVATED
     STYLIST_DELETED
     STYLIST_IMAGE_UPDATED
-    
+
     ACCOUNT_CREATED
     ACCOUNT_UPDATED
     ACCOUNT_ADDRESS_CHANGED
@@ -58,15 +58,15 @@ enum NotificationType {
     EMAIL_CHANGED
     PASSWORD_CHANGED
     NEW_LOGIN_DETECTED
-    
+
     REVIEW_RECEIVED
     REVIEW_REPLIED
-    
+
     PROMO_CODE_ISSUED
     LOYALTY_POINTS_EARNED
     LOYALTY_POINTS_EXPIRING
     MEMBERSHIP_TIER_UPGRADED
-    
+
     BULK_ACTION_PERFORMED
 }
 
@@ -130,6 +130,11 @@ type NotificationConnection {
     unreadCount: Int!
 }
 
+type NotificationGroupedConnection {
+    groups: [NotificationGroup!]!
+    pageInfo: PageInfo!
+}
+
 type MarkAsReadResult {
     updatedIds: [UUID!]!
 }
@@ -167,7 +172,7 @@ extend type Query {
         filter: NotificationFilterInput
         first: Int = 20
         after: String
-    ): [NotificationGroup!]!
+    ): NotificationGroupedConnection!
 
     notificationUnreadCount: Int!
 }

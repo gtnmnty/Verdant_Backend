@@ -10,7 +10,7 @@ extend type Query {
     adminServices(
         category: String
         search: String
-        sort: CollectionSort = NEWEST
+        sort: ServiceSort = NEWEST
         status: CollectionStatus
         page: Int = 1
         pageSize: Int = 6
@@ -22,7 +22,7 @@ extend type Query {
 extend type Mutation {
     createService(input: CreateServiceInput!): AdminServiceDto!
     updateService(input: UpdateServiceInput!): AdminServiceDto!
-    toggleFavoriteService(targetId: ID!, targetType: ItemType!): CatalogItem!
+    toggleFavoriteService(targetId: ID!): CatalogItem!
     deleteService(id: ID!): AdminServiceDto!
     deleteServices(ids: [ID!]!): [AdminServiceDto!]!
 }

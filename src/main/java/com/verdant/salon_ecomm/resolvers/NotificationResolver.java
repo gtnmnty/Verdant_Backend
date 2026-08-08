@@ -1,9 +1,8 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.notification.*;
-import com.verdant.salon_ecomm.models.enums.notification.NotificationReadFilter;
+import com.verdant.salon_ecomm.mappers.NotificationMapper;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationSortField;
-import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.SortDirection;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.services.NotificationPublisher;
@@ -18,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import reactor.core.publisher.Flux;
 
+import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +28,7 @@ public class NotificationResolver {
 
     private final NotificationService notificationService;
     private final NotificationPublisher notificationPublisher;
+    private final NotificationMapper notificationMapper;
 
     // ── Queries ────────────────────────────────────────────
 
@@ -40,46 +41,49 @@ public class NotificationResolver {
         @AuthenticationPrincipal User principal
     ) {
         UUID userId = principal.getId();
-
         int size = first != null ? first : 20;
-        int page = decodeCursorToPage(after, size);
+        CursorPosition cursor = decodeCursor(after);
 
-        NotificationQueryDto queryDto = toQueryDto(filter, page, size);
+        NotificationQueryDto queryDto = toQueryDto(filter, cursor, size);
         NotificationPageDto result = notificationService.getNotifications(userId, queryDto);
 
         List<NotificationGraphQLTypes.NotificationEdge> edges = result.content().stream()
-            .map(dto -> new NotificationGraphQLTypes.NotificationEdge(
-                encodeCursor(result.page(), result.content().indexOf(dto)), dto))
+            .map(dto -> new NotificationGraphQLTypes.NotificationEdge(encodeCursor(dto), dto))
             .toList();
 
-        boolean hasNextPage = (result.page() + 1) < result.totalPages();
         String endCursor = edges.isEmpty() ? null : edges.getLast().cursor();
 
         return new NotificationGraphQLTypes.NotificationConnection(
-            edges, new NotificationGraphQLTypes.PageInfo(hasNextPage, endCursor), result.unreadCount()
+            edges, new NotificationGraphQLTypes.PageInfo(result.hasNextPage(), endCursor), result.unreadCount()
         );
     }
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
-    public List<NotificationGroupDto> notificationsGroupedByDate(
+    public NotificationGraphQLTypes.NotificationGroupedConnection notificationsGroupedByDate(
         @Argument NotificationFilterInputArgs filter,
         @Argument Integer first,
         @Argument String after,
         @AuthenticationPrincipal User principal
     ) {
         UUID userId = principal.getId();
-
         int size = first != null ? first : 20;
-        int page = decodeCursorToPage(after, size);
+        CursorPosition cursor = decodeCursor(after);
 
-        NotificationQueryDto queryDto = toQueryDto(filter, page, size);
-        return notificationService.getNotificationsGroupedByDate(userId, queryDto);
+        NotificationQueryDto queryDto = toQueryDto(filter, cursor, size);
+        NotificationPageDto result = notificationService.getNotifications(userId, queryDto);
+
+        List<NotificationGroupDto> grouped = notificationMapper.toGroupedByDate(result.content());
+        String endCursor = result.content().isEmpty() ? null : encodeCursor(result.content().getLast());
+
+        return new NotificationGraphQLTypes.NotificationGroupedConnection(
+            grouped, new NotificationGraphQLTypes.PageInfo(result.hasNextPage(), endCursor)
+        );
     }
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
-    public long notificationUnreadCount(@AuthenticationPrincipal User principal) {
+    public int notificationUnreadCount(@AuthenticationPrincipal User principal) {
         return notificationService.getUnreadCount(principal.getId());
     }
 
@@ -156,6 +160,7 @@ public class NotificationResolver {
         List<UUID> deletedIds = notificationService.delete(principal.getId(), ids);
         return new NotificationGraphQLTypes.DeleteNotificationsResult(deletedIds);
     }
+    
 
     // ── Subscription ───────────────────────────────────────
 
@@ -167,35 +172,34 @@ public class NotificationResolver {
 
     // ── Helpers ──────────────────────────────────────────
 
-    public record NotificationFilterInputArgs(
-        NotificationReadFilter readFilter,
-        String search,
-        List<NotificationType> types
-    ) {
-    }
-
-    private NotificationQueryDto toQueryDto(NotificationFilterInputArgs filter, int page, int size) {
+    private NotificationQueryDto toQueryDto(NotificationFilterInputArgs filter, CursorPosition cursor, int size) {
         return new NotificationQueryDto(
             filter != null ? filter.readFilter() : null,
             filter != null ? filter.search() : null,
             filter != null ? filter.types() : null,
             NotificationSortField.CREATED_AT,
             SortDirection.DESC,
-            page,
+            cursor != null ? cursor.createdAt() : null,
+            cursor != null ? cursor.id() : null,
             size
         );
     }
 
-    private String encodeCursor(int page, int indexInPage) {
-        return Base64.getEncoder().encodeToString((page + ":" + indexInPage).getBytes());
+    private record CursorPosition(OffsetDateTime createdAt, UUID id) {}
+
+    private String encodeCursor(NotificationResponseDto dto) {
+        String raw = dto.createdAt().toString() + ":" + dto.id();
+        return Base64.getEncoder().encodeToString(raw.getBytes());
     }
 
-    private int decodeCursorToPage(String cursor, int size) {
+    private CursorPosition decodeCursor(String cursor) {
         if (cursor == null || cursor.isBlank()) {
-            return 0;
+            return null;
         }
         String decoded = new String(Base64.getDecoder().decode(cursor));
-        String pageStr = decoded.split(":")[0];
-        return Integer.parseInt(pageStr) + 1;
+        int sep = decoded.lastIndexOf(':');
+        OffsetDateTime createdAt = OffsetDateTime.parse(decoded.substring(0, sep));
+        UUID id = UUID.fromString(decoded.substring(sep + 1));
+        return new CursorPosition(createdAt, id);
     }
 }

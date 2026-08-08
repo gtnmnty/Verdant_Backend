@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.exceptions;
 
 import com.verdant.salon_ecomm.dtos.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +40,7 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handleConstraintViolation(ConstraintViolationException ex, DataFetchingEnvironment env) {
         String message = ex.getConstraintViolations().stream()
-            .map(v -> v.getMessage())
+            .map(ConstraintViolation::getMessage)
             .collect(Collectors.joining("; "));
 
         return GraphqlErrorBuilder.newError(env)
@@ -61,7 +62,7 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handleAccessDenied(AccessDeniedException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message("You do not have permission to perform this action.")
+            .message(ex.getMessage())
             .errorType(ErrorType.FORBIDDEN)
             .extensions(Map.of("code", "FORBIDDEN", "status", 403))
             .build();
@@ -137,7 +138,7 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message("Something went wrong on our server.")
+            .message(ex.getMessage())
             .errorType(ErrorType.INTERNAL_ERROR)
             .extensions(Map.of("code", "INTERNAL_ERROR", "status", 500))
             .build();
@@ -197,8 +198,8 @@ public class GlobalExceptionHandler {
     }
 
     // Wrong password or login credentials
-    @ExceptionHandler(InvalidCrendetialsException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCrendetialsException ex, HttpServletRequest request) {
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
             .body(new ErrorResponse(OffsetDateTime.now(),
                 401,
@@ -259,7 +260,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationRest(ConstraintViolationException ex, HttpServletRequest request) {
         String message = ex.getConstraintViolations().stream()
-            .map(v -> v.getMessage())
+            .map(ConstraintViolation::getMessage)
             .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
             .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", message, request.getRequestURI()));
@@ -269,7 +270,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex, HttpServletRequest request) {
         ErrorResponse error = new ErrorResponse(
             OffsetDateTime.now(), 413, "Payload Too Large",
-            "Uploaded file(s) exceed the maximum allowed size.", request.getRequestURI()
+            ex.getMessage(), request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error);
     }
@@ -307,6 +308,30 @@ public class GlobalExceptionHandler {
             ));
     }
 
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                401,
+                "Unauthorized",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                403,
+                "Forbidden",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
+
     // Catch-all fallback: keep this last among the REST handlers
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
@@ -314,7 +339,7 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 500,
                 "Internal Server Error",
-                "Something went wrong on our server.",
+                ex.getMessage(),
                 request.getRequestURI()
             ));
     }

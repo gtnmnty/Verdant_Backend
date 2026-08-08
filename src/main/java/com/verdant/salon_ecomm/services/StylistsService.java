@@ -49,7 +49,7 @@ public class StylistsService {
     private final ApplicationEventPublisher eventPublisher;
 
     public AdminStylistsPage getStylists(
-        StylistAccountStatus status, String branch, String search,
+        StylistAccountStatus status, UUID branchId, String search,
         List<UUID> services, StylistSort sort,
         int page, int pageSize
     ) {
@@ -59,7 +59,7 @@ public class StylistsService {
         Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
         Page<Stylist> result = stylistRepository.findAll(
-            StylistsSpec.filter(status, branch, search, services),
+            StylistsSpec.filter(status, branchId, search, services),
             pageable
         );
 

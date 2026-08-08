@@ -29,7 +29,7 @@ public class StylistResolver {
     @QueryMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     public AdminStylistsPage adminStylists(
-        @Argument StylistAccountStatus status, @Argument String branchId, @Argument String search,
+        @Argument StylistAccountStatus status, @Argument UUID branchId, @Argument String search,
         @Argument List<UUID> serviceIds, @Argument StylistSort sort,
         @Argument int page, @Argument int pageSize
     ) {
