@@ -22,12 +22,21 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    // Stable per-JVM identity used to claim cleanup jobs, so only this
+    // instance processes the batch it claimed. Doesn't need to survive
+    // restarts — an unfinished claim just expires and gets picked up by
+    // whichever instance runs the next scheduled pass.
+    private final String instanceId = UUID.randomUUID().toString();
+    private static final int CLEANUP_BATCH_SIZE = 50;
+    private static final long CLEANUP_LEASE_MINUTES = 5;
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
@@ -172,20 +181,22 @@ public class UserService {
         // with the user deletion — if this transaction commits, we're guaranteed
         // to eventually process (and retry) the external cleanup, even if the
         // app crashes right after this method returns.
-        if (avatarPublicId != null || stripeCustomerId != null) {
-            cleanUpJobRepository.save(PendingCleanUpJob.builder()
-                .userId(id)
-                .avatarPublicId(avatarPublicId)
-                .stripeCustomerId(stripeCustomerId)
-                .build());
-        }
+        cleanUpJobRepository.save(PendingCleanUpJob.builder()
+            .userId(id)
+            .avatarPublicId(avatarPublicId)
+            .stripeCustomerId(stripeCustomerId)
+            .build());
+
     }
 
 
     @Scheduled(fixedDelay = 60_000)
     @Transactional
     public void processPendingCleanupJobs() {
-        for (PendingCleanUpJob job : cleanUpJobRepository.findByProcessedFalse()) {
+        OffsetDateTime leaseExpiry = OffsetDateTime.now().plusMinutes(CLEANUP_LEASE_MINUTES);
+        cleanUpJobRepository.claimBatch(instanceId, leaseExpiry, CLEANUP_BATCH_SIZE);
+
+        for (PendingCleanUpJob job : cleanUpJobRepository.findByClaimedByAndProcessedFalse(instanceId)) {
             try {
                 if (job.getAvatarPublicId() != null) {
                     cloudinaryService.delete(job.getAvatarPublicId());
