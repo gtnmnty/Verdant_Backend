@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.notification.*;
+import com.verdant.salon_ecomm.exceptions.InvalidCursorException;
 import com.verdant.salon_ecomm.mappers.NotificationMapper;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationSortField;
 import com.verdant.salon_ecomm.models.enums.notification.SortDirection;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Controller;
 import reactor.core.publisher.Flux;
 
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -196,10 +198,28 @@ public class NotificationResolver {
         if (cursor == null || cursor.isBlank()) {
             return null;
         }
-        String decoded = new String(Base64.getDecoder().decode(cursor));
+
+        String decoded;
+        try {
+            decoded = new String(Base64.getDecoder().decode(cursor));
+        } catch (IllegalArgumentException e) {
+            throw new InvalidCursorException(cursor);
+        }
+
         int sep = decoded.lastIndexOf(':');
-        OffsetDateTime createdAt = OffsetDateTime.parse(decoded.substring(0, sep));
-        UUID id = UUID.fromString(decoded.substring(sep + 1));
+        if (sep <= 0 || sep == decoded.length() - 1) {
+            throw new InvalidCursorException(cursor);
+        }
+
+        OffsetDateTime createdAt;
+        UUID id;
+        try {
+            createdAt = OffsetDateTime.parse(decoded.substring(0, sep));
+            id = UUID.fromString(decoded.substring(sep + 1));
+        } catch (DateTimeParseException | IllegalArgumentException e) {
+            throw new InvalidCursorException(cursor);
+        }
+
         return new CursorPosition(createdAt, id);
     }
 }

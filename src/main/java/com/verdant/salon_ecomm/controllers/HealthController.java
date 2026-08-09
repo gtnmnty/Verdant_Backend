@@ -16,7 +16,7 @@ import java.sql.Connection;
 public class HealthController {
 
     @Autowired
-    private DataSource dataSource;
+    private final DataSource dataSource;
 
     @GetMapping("/db-test")
     public ResponseEntity<String> testDb() {

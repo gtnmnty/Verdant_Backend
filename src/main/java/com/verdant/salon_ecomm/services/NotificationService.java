@@ -43,6 +43,7 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public NotificationPageDto getNotifications(UUID userId, NotificationQueryDto query) {
         NotificationQueryDto resolved = applyDefaults(query);
+        int pageSize = Math.clamp(resolved.size(), 1, 100);
         Pageable pageable = buildPageable(resolved);
 
         Specification<Notification> spec = NotificationSpec.forUserWithFilters(userId, resolved)
@@ -51,8 +52,8 @@ public class NotificationService {
         Page<Notification> raw = notificationRepository.findAll(spec, pageable);
 
         List<Notification> rows = raw.getContent();
-        boolean hasNextPage = rows.size() > resolved.size();
-        List<Notification> pageRows = hasNextPage ? rows.subList(0, resolved.size()) : rows;
+        boolean hasNextPage = rows.size() > pageSize;
+        List<Notification> pageRows = hasNextPage ? rows.subList(0, pageSize) : rows;
 
         List<NotificationResponseDto> content = notificationMapper.toResponseDtoList(pageRows);
         long unreadCount = notificationRepository.countByUser_IdAndIsReadFalse(userId);

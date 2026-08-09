@@ -57,7 +57,6 @@ public class StylistsSpec {
         }
 
         return (root, query, cb) -> {
-            assert query != null;
             query.distinct(true);
             Join<Stylist, SalonService> join = root.join("services");
             return join.get("id").in(services);

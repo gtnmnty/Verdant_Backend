@@ -2,7 +2,6 @@ package com.verdant.salon_ecomm.exceptions;
 
 import com.verdant.salon_ecomm.dtos.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +18,6 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -27,24 +25,25 @@ public class GlobalExceptionHandler {
     // =========================================================================
     // GraphQL exception handlers (@GraphQlExceptionHandler)
     // Ordered most-specific first; catchAllException is the fallback.
+    // Messages are static/controlled — never echo ex.getMessage() to the
+    // client, since underlying exceptions can carry internal details
+    // (field paths, SQL fragments, stack info). Extensions.code stays
+    // machine-readable for the frontend to branch on.
     // =========================================================================
 
     @GraphQlExceptionHandler
     public GraphQLError handleIllegalArgument(IllegalArgumentException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("Invalid request.")
             .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "INVALID_ARGUMENT", "status", 400))
             .build();
     }
 
     @GraphQlExceptionHandler
     public GraphQLError handleConstraintViolation(ConstraintViolationException ex, DataFetchingEnvironment env) {
-        String message = ex.getConstraintViolations().stream()
-            .map(ConstraintViolation::getMessage)
-            .collect(Collectors.joining("; "));
-
         return GraphqlErrorBuilder.newError(env)
-            .message(message)
+            .message("Validation failed.")
             .errorType(ErrorType.BAD_REQUEST)
             .extensions(Map.of("code", "VALIDATION_ERROR", "status", 400))
             .build();
@@ -53,7 +52,7 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handleNotFoundGraphQL(ResourceNotFoundException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("The requested resource was not found.")
             .errorType(ErrorType.NOT_FOUND)
             .extensions(Map.of("code", "NOT_FOUND", "status", 404))
             .build();
@@ -62,7 +61,7 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handleAccessDenied(AccessDeniedException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("You do not have permission to perform this action.")
             .errorType(ErrorType.FORBIDDEN)
             .extensions(Map.of("code", "FORBIDDEN", "status", 403))
             .build();
@@ -72,7 +71,8 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handleAccessPoint(ForbiddenException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("You do not have permission to perform this action.")
+            .errorType(ErrorType.FORBIDDEN)
             .extensions(Map.of("code", "FORBIDDEN", "status", 403))
             .build();
     }
@@ -81,7 +81,8 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handlePaymentFailure(PaymentException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("Payment could not be processed.")
+            .errorType(ErrorType.BAD_REQUEST)
             .extensions(Map.of("code", "PAYMENT_FAILED", "status", 402))
             .build();
     }
@@ -90,7 +91,8 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError handleAppointmentConflict(AppointmentConflictException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("This appointment slot is no longer available.")
+            .errorType(ErrorType.BAD_REQUEST)
             .extensions(Map.of("code", "APPOINTMENT_CONFLICT", "status", 409))
             .build();
     }
@@ -99,7 +101,7 @@ public class GlobalExceptionHandler {
     public GraphQLError handleInvalidAppointment(InvalidAppointmentException ex) {
         return GraphQLError.newError()
             .errorType(ErrorType.BAD_REQUEST)
-            .message(ex.getMessage())
+            .message("Invalid appointment request.")
             .build();
     }
 
@@ -109,7 +111,7 @@ public class GlobalExceptionHandler {
     public GraphQLError handleCartItemNotFound(CartItemNotFoundException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
             .errorType(ErrorType.BAD_REQUEST)
-            .message(ex.getMessage())
+            .message("That item is not in your cart.")
             .extensions(Map.of("code", "CART_ITEM_NOT_FOUND", "status", 400))
             .build();
     }
@@ -119,7 +121,7 @@ public class GlobalExceptionHandler {
     public GraphQLError handleInvalidQuantity(InvalidQuantityException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
             .errorType(ErrorType.BAD_REQUEST)
-            .message(ex.getMessage())
+            .message("Invalid item quantity.")
             .extensions(Map.of("code", "INVALID_QUANTITY", "status", 400))
             .build();
     }
@@ -129,8 +131,18 @@ public class GlobalExceptionHandler {
     public GraphQLError handleInsufficientStockException(InsufficientStockException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
             .errorType(ErrorType.BAD_REQUEST)
-            .message(ex.getMessage())
+            .message("Insufficient stock for this item.")
             .extensions(Map.of("code", "INSUFFICIENT_STOCK", "status", 409))
+            .build();
+    }
+
+    // Malformed pagination cursor (e.g. NotificationResolver.decodeCursor)
+    @GraphQlExceptionHandler(InvalidCursorException.class)
+    public GraphQLError handleInvalidCursor(InvalidCursorException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .errorType(ErrorType.BAD_REQUEST)
+            .message("Invalid pagination cursor.")
+            .extensions(Map.of("code", "INVALID_CURSOR", "status", 400))
             .build();
     }
 
@@ -138,7 +150,7 @@ public class GlobalExceptionHandler {
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message(ex.getMessage())
+            .message("Something went wrong")
             .errorType(ErrorType.INTERNAL_ERROR)
             .extensions(Map.of("code", "INTERNAL_ERROR", "status", 500))
             .build();
@@ -147,6 +159,7 @@ public class GlobalExceptionHandler {
     // =========================================================================
     // REST exception handlers (@ExceptionHandler)
     // Ordered most-specific first; handleGeneric is the fallback.
+    // Messages are static/controlled — see note above.
     // =========================================================================
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -156,7 +169,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 404,
                 "Not Found",
-                ex.getMessage(),
+                "The requested resource was not found.",
                 request.getRequestURI()
             ));
     }
@@ -168,7 +181,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 409,
                 "Account already verified",
-                ex.getMessage(),
+                "This account has already been verified.",
                 request.getRequestURI()
             ));
     }
@@ -180,7 +193,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 403,
                 "Forbidden",
-                ex.getMessage(),
+                "This account has not been verified yet.",
                 request.getRequestURI()
             ));
     }
@@ -192,7 +205,7 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 409,
                 "EMAIL_REGISTERED",
-                ex.getMessage(),
+                "This email address is already registered.",
                 request.getRequestURI()
             ));
     }
@@ -204,7 +217,7 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 401,
                 "Unauthorized",
-                ex.getMessage(),
+                "Invalid email or password.",
                 request.getRequestURI()
             ));
     }
@@ -216,7 +229,7 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 401,
                 "JWT Token expired",
-                ex.getMessage(),
+                "Your session has expired. Please log in again.",
                 request.getRequestURI()
             ));
     }
@@ -228,7 +241,7 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 400,
                 "TOKEN_EXPIRED",
-                ex.getMessage(),
+                "This verification code has expired.",
                 request.getRequestURI()));
     }
 
@@ -236,14 +249,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidVerificationCodeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidVerificationCode(InvalidVerificationCodeException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", ex.getMessage(), request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", "Invalid verification code.", request.getRequestURI()));
     }
 
     // RefreshToken Expired
     @ExceptionHandler(RefreshTokenExpiredException.class)
     public ResponseEntity<ErrorResponse> handleRefreshTokenExpired(RefreshTokenExpiredException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", ex.getMessage(), request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", "Your session has expired. Please log in again.", request.getRequestURI()));
     }
 
     // Email Delivery Failure
@@ -253,24 +266,21 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 503,
                 "Service Unavailable",
-                ex.getMessage(),
+                "We couldn't send this email. Please try again later.",
                 request.getRequestURI()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationRest(ConstraintViolationException ex, HttpServletRequest request) {
-        String message = ex.getConstraintViolations().stream()
-            .map(ConstraintViolation::getMessage)
-            .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
-            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", message, request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", "Validation failed.", request.getRequestURI()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex, HttpServletRequest request) {
         ErrorResponse error = new ErrorResponse(
             OffsetDateTime.now(), 413, "Payload Too Large",
-            ex.getMessage(), request.getRequestURI()
+            "The uploaded file exceeds the maximum allowed size.", request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error);
     }
@@ -279,7 +289,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         ErrorResponse error = new ErrorResponse(
             OffsetDateTime.now(), 409, "Conflict",
-            ex.getMessage(), request.getRequestURI()
+            "The request could not be completed due to a conflict.", request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
@@ -291,7 +301,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 400,
                 "Invalid webhook signature",
-                ex.getMessage(),
+                "The webhook signature could not be verified.",
                 request.getRequestURI()
             ));
     }
@@ -303,7 +313,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 409,
                 "Insufficient stock",
-                ex.getMessage(),
+                "Insufficient stock for this item.",
                 request.getRequestURI()
             ));
     }
@@ -315,7 +325,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 401,
                 "Unauthorized",
-                ex.getMessage(),
+                "You are not allowed to perform this action",
                 request.getRequestURI()
             ));
     }
@@ -327,7 +337,7 @@ public class GlobalExceptionHandler {
                 OffsetDateTime.now(),
                 403,
                 "Forbidden",
-                ex.getMessage(),
+                "You do not have permission to perform this action.",
                 request.getRequestURI()
             ));
     }
@@ -339,7 +349,7 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 500,
                 "Internal Server Error",
-                ex.getMessage(),
+                "Something went wrong",
                 request.getRequestURI()
             ));
     }

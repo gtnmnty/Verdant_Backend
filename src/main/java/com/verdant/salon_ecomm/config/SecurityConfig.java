@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.config;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,7 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+    
     private final AuthenticationProvider authenticationProvider;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
@@ -33,11 +35,26 @@ public class SecurityConfig {
     private List<String> allowedOrigins;
 
     public SecurityConfig(
-            AuthenticationProvider authenticationProvider,
-            JwtAuthenticationFilter jwtAuthenticationFilter
+        AuthenticationProvider authenticationProvider,
+        JwtAuthenticationFilter jwtAuthenticationFilter
     ) {
         this.authenticationProvider = authenticationProvider;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
+
+    @PostConstruct
+    void validateCorsConfig() {
+        if (allowedOrigins == null || allowedOrigins.isEmpty()) {
+            throw new IllegalStateException(
+                "app.cors.allowed-origins must be set (FRONTEND_URL is missing or empty)."
+            );
+        }
+        if (allowedOrigins.contains("*")) {
+            throw new IllegalStateException(
+                "app.cors.allowed-origins cannot be '*' when allowCredentials(true) is set. " +
+                    "Provide explicit origin(s) via FRONTEND_URL."
+            );
+        }
     }
 
     @Bean
@@ -49,16 +66,16 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         System.out.println(">>> Allowed origins: " + allowedOrigins);
         http.csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authorizeHttpRequests(auth -> auth
-                    .requestMatchers(
-                        "/auth/**", "/test/public", "/error",
-                        "/graphql", "/graphiql/**", "/webhooks/stripe").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authenticationProvider(authenticationProvider)
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/auth/**", "/test/public", "/error",
+                    "/graphql", "/graphiql/**", "/webhooks/stripe").permitAll()
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authenticationProvider(authenticationProvider)
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -91,5 +108,4 @@ public class SecurityConfig {
         handler.setRoleHierarchy(roleHierarchy);
         return handler;
     }
-
 }

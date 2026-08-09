@@ -14,7 +14,6 @@ public class PasswordResetResolver {
     private final PasswordResetTokenService passwordResetTokenService;
 
     @MutationMapping
-    @PreAuthorize("isAuthenticated()")
     public boolean redeemPasswordReset(@Argument String token, @Argument String newPassword) {
         passwordResetTokenService.redeem(token, newPassword);
         return true;
