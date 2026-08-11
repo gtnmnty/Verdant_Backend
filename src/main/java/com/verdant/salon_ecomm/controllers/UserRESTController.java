@@ -9,9 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
-
-import java.util.UUID;
 
 @RequiredArgsConstructor
 @RequestMapping("v1/users")
@@ -39,6 +38,16 @@ public class UserRESTController {
         @Valid @RequestBody UpdateUserRequest request
     ){
         UserDto.Profile user = userService.updateUserProfile(principal.getId(), request);
+        return ResponseEntity.ok(user);
+    }
+
+    @PostMapping(value = "/avatar", consumes = "multipart/form-data")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UserDto.Profile> updateAvatar(
+        @AuthenticationPrincipal User principal,
+        @RequestParam("file") MultipartFile file
+    ){
+        UserDto.Profile user = userService.updateAvatar(principal.getId(), file);
         return ResponseEntity.ok(user);
     }
 

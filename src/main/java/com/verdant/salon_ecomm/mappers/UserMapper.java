@@ -33,6 +33,11 @@ public interface UserMapper {
     UserDto toDto(User user);
 
     // Entity → public profile
+    // BUG FIX: GraphQL/REST field is "shippingAddress" but the entity field is
+    // "address" — names don't match, so MapStruct's default matching silently
+    // left shippingAddress null on every profile response. Explicit mapping
+    // required, same class of bug as the phone/phoneNumber fix below.
+    @Mapping(target = "shippingAddress", source = "address")
     UserDto.Profile toProfile(User user);
 
     // Entity → minimal embed (e.g. inside OrderResponse)
@@ -51,9 +56,17 @@ public interface UserMapper {
     // dedicated updateUserPassword() flow, which verifies the old password first;
     // this mapping explicitly ignores it here so the intent is visible in code
     // rather than relying on an accidental name mismatch.
+    // BUG FIX: request had no address field at all before, so this was a
+    // no-op. Now maps shippingAddress -> address; MapStruct generates the
+    // nested AddressInput -> Address (embeddable) mapping automatically since
+    // both share the same property names (line1, line2, city, state, postal,
+    // country). Still respects the class-level IGNORE-nulls strategy, so a
+    // profile update that omits shippingAddress leaves the existing address
+    // untouched instead of wiping it.
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "phone", source = "phoneNumber")
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "address", source = "shippingAddress")
     void updateEntity(UpdateUserRequest request, @MappingTarget User user);
 
     // OffsetDateTime → Instant converter (used for createdAt / updatedAt in DTOs)

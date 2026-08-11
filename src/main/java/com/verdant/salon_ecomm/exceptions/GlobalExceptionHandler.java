@@ -14,6 +14,7 @@ import org.springframework.graphql.data.method.annotation.GraphQlExceptionHandle
 import org.springframework.graphql.execution.ErrorType;
 
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.OffsetDateTime;
@@ -249,14 +250,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidVerificationCodeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidVerificationCode(InvalidVerificationCodeException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", "Invalid verification code.", request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                400,
+                "Bad Request",
+                "Invalid verification code.",
+                request.getRequestURI()));
     }
 
     // RefreshToken Expired
     @ExceptionHandler(RefreshTokenExpiredException.class)
     public ResponseEntity<ErrorResponse> handleRefreshTokenExpired(RefreshTokenExpiredException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(new ErrorResponse(OffsetDateTime.now(), 401, "Unauthorized", "Your session has expired. Please log in again.", request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                401, "Unauthorized",
+                "Your session has expired. Please log in again.",
+                request.getRequestURI()));
     }
 
     // Email Delivery Failure
@@ -272,6 +280,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationRest(ConstraintViolationException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                400,
+                "Bad Request",
+                "Validation failed.",
+                request.getRequestURI()));
+    }
+
+    // @Valid @RequestBody failures (as opposed to @Validated method-param
+    // failures, which throw ConstraintViolationException above)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex, HttpServletRequest request) {
         return ResponseEntity.badRequest()
             .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", "Validation failed.", request.getRequestURI()));
     }

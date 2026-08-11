@@ -39,6 +39,12 @@ public class PendingCleanUpJob {
     @Column(name = "retry_count", nullable = false)
     private int retryCount = 0;
 
+    @Column(name = "claimed_by")
+    private String claimedBy;
+
+    @Column(name = "claim_expires_at")
+    private OffsetDateTime claimExpiresAt;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 

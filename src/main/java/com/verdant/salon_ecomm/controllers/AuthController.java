@@ -10,9 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.verdant.salon_ecomm.dtos.user.ForgotPasswordRequestDto;
 import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
 import com.verdant.salon_ecomm.dtos.user.ResendVerificationCodeDto;
+import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
 import com.verdant.salon_ecomm.dtos.user.UserDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
 import com.verdant.salon_ecomm.entities.User;
@@ -95,6 +97,22 @@ public class AuthController {
     public ResponseEntity<?> resendVerificationCode(@Valid @RequestBody ResendVerificationCodeDto request) {
         authenticationService.resendVerificationCode(request.getEmail());
         return ResponseEntity.ok("Verification code resent");
+    }
+
+    // "Forgot password" step 1 — request a reset code. Deliberately returns
+    // the same 200 response whether or not the email exists, so this can't be
+    // used to enumerate registered accounts.
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDto request) {
+        authenticationService.forgotPassword(request.getEmail());
+        return ResponseEntity.ok("If an account with that email exists, a reset code has been sent.");
+    }
+
+    // "Forgot password" step 2 — submit the code + new password together.
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordDto request) {
+        authenticationService.resetPassword(request);
+        return ResponseEntity.ok("Password has been reset successfully.");
     }
 
     @PostMapping("/logout")

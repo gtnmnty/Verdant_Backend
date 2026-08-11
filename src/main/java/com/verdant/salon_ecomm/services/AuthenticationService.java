@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
+import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
 import com.verdant.salon_ecomm.entities.RefreshToken;
 import com.verdant.salon_ecomm.entities.User;
@@ -11,6 +12,7 @@ import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.response.AuthResult;
 import jakarta.mail.MessagingException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,6 +25,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -33,19 +36,6 @@ public class AuthenticationService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
 
-    public AuthenticationService(
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            AuthenticationManager authenticationManager,
-            EmailService emailService, JwtService jwtService,
-            RefreshTokenService refreshTokenService) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
-        this.emailService = emailService;
-        this.jwtService = jwtService;
-        this.refreshTokenService = refreshTokenService;
-    }
 
     public User signUp(RegisterUserDto input) {
 
@@ -139,6 +129,53 @@ public class AuthenticationService {
             userRepository.save(user);
         } else {
             throw new ResourceNotFoundException("User not found");
+        }
+    }
+
+    // Step 1 of forgot-password: issue a short-lived numeric code and email
+    // it, mirroring the signup verification-code pattern. Deliberately does
+    // NOT throw when the email isn't found — returning the same response
+    // either way stops an attacker from using this endpoint to discover
+    // which emails have accounts.
+    public void forgotPassword(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setResetPasswordCode(generateVerificationCode());
+            user.setResetPasswordCodeExpiration(OffsetDateTime.now().plusMinutes(10));
+            userRepository.save(user);
+            sendPasswordResetEmail(user);
+        });
+    }
+
+    // Step 2 of forgot-password: verify the code and set the new password in
+    // one call. Unlike the admin-triggered link flow (PasswordResetTokenService),
+    // this is code-based so a customer can request AND redeem it themselves,
+    // with no admin in the loop.
+    public void resetPassword(ResetPasswordDto input) {
+        User user = userRepository.findByEmail(input.getEmail())
+            .orElseThrow(() -> new InvalidVerificationCodeException("Invalid or expired code."));
+
+        if (user.getResetPasswordCode() == null
+                || !Objects.equals(user.getResetPasswordCode(), input.getCode())) {
+            throw new InvalidVerificationCodeException("Invalid or expired code.");
+        }
+
+        if (user.getResetPasswordCodeExpiration() == null
+                || user.getResetPasswordCodeExpiration().isBefore(OffsetDateTime.now())) {
+            throw new VerificationCodeExpiredException("Code has expired. Please request a new one.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(input.getNewPassword()));
+        // Burn the code immediately so it can't be replayed.
+        user.setResetPasswordCode(null);
+        user.setResetPasswordCodeExpiration(null);
+        userRepository.save(user);
+    }
+
+    private void sendPasswordResetEmail(User user) {
+        try {
+            emailService.sendPasswordResetCodeEmail(user.getEmail(), user.getResetPasswordCode());
+        } catch (MessagingException e) {
+            throw new EmailDeliveryException("Failed to send password reset email to: " + user.getEmail(), e);
         }
     }
 

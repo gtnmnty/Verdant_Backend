@@ -21,13 +21,23 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    // Stable per-JVM identity used to claim cleanup jobs, so only this
+    // instance processes the batch it claimed. Doesn't need to survive
+    // restarts — an unfinished claim just expires and gets picked up by
+    // whichever instance runs the next scheduled pass.
+    private final String instanceId = UUID.randomUUID().toString();
+    private static final int CLEANUP_BATCH_SIZE = 50;
+    private static final long CLEANUP_LEASE_MINUTES = 5;
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
@@ -172,20 +182,21 @@ public class UserService {
         // with the user deletion — if this transaction commits, we're guaranteed
         // to eventually process (and retry) the external cleanup, even if the
         // app crashes right after this method returns.
-        if (avatarPublicId != null || stripeCustomerId != null) {
-            cleanUpJobRepository.save(PendingCleanUpJob.builder()
-                .userId(id)
-                .avatarPublicId(avatarPublicId)
-                .stripeCustomerId(stripeCustomerId)
-                .build());
-        }
-    }
+        cleanUpJobRepository.save(PendingCleanUpJob.builder()
+            .userId(id)
+            .avatarPublicId(avatarPublicId)
+            .stripeCustomerId(stripeCustomerId)
+            .build());
 
+    }
 
     @Scheduled(fixedDelay = 60_000)
     @Transactional
     public void processPendingCleanupJobs() {
-        for (PendingCleanUpJob job : cleanUpJobRepository.findByProcessedFalse()) {
+        OffsetDateTime leaseExpiry = OffsetDateTime.now().plusMinutes(CLEANUP_LEASE_MINUTES);
+        cleanUpJobRepository.claimBatch(instanceId, leaseExpiry, CLEANUP_BATCH_SIZE);
+
+        for (PendingCleanUpJob job : cleanUpJobRepository.findByClaimedByAndProcessedFalse(instanceId)) {
             try {
                 if (job.getAvatarPublicId() != null) {
                     cloudinaryService.delete(job.getAvatarPublicId());
@@ -205,8 +216,30 @@ public class UserService {
         }
     }
 
+    // Uploads the new avatar first, then swaps it in and deletes the old one
+    // only after the swap succeeds — avoids leaving the user with no avatar
+    // if the delete step were to fail, and avoids deleting the old image
+    // before we're sure the new one actually made it to Cloudinary.
+    @Transactional
+    public UserDto.Profile updateAvatar(UUID id, MultipartFile file) {
+        User user = findUserOrThrow(id);
 
-    // Callback or global
+        String previousPublicId = user.getAvatarPublicId();
+
+        CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
+
+        user.setAvatarUrl(uploaded.url());
+        user.setAvatarPublicId(uploaded.publicId());
+        User saved = userRepository.save(user);
+
+        if (previousPublicId != null && !previousPublicId.equals(uploaded.publicId())) {
+            cloudinaryService.delete(previousPublicId);
+        }
+
+        return userMapper.toProfile(saved);
+    }
+
+    // ----- Helpers -----------------------
     private User findUserOrThrow(UUID id) {
         return userRepository.findById(id)
             .orElseThrow(

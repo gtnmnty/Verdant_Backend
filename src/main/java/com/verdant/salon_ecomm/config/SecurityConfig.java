@@ -27,7 +27,7 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    
+
     private final AuthenticationProvider authenticationProvider;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
@@ -47,6 +47,17 @@ public class SecurityConfig {
         if (allowedOrigins == null || allowedOrigins.isEmpty()) {
             throw new IllegalStateException(
                 "app.cors.allowed-origins must be set (FRONTEND_URL is missing or empty)."
+            );
+        }
+
+        allowedOrigins = allowedOrigins.stream()
+            .map(String::trim)
+            .toList();
+
+        if (allowedOrigins.stream().anyMatch(String::isEmpty)) {
+            throw new IllegalStateException(
+                "app.cors.allowed-origins contains a blank entry. " +
+                    "Check FRONTEND_URL for stray commas or trailing whitespace."
             );
         }
         if (allowedOrigins.contains("*")) {

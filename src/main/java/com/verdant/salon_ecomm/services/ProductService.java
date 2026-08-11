@@ -98,7 +98,9 @@ public class ProductService {
             .map(Product::getId)
             .toList();
 
-        Map<UUID, List<MediaImage>> imagesByProduct = mediaImageRepository
+        Map<UUID, List<MediaImage>> imagesByProduct = productIds.isEmpty()
+            ? Map.of()
+            : mediaImageRepository
             .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.PRODUCT, productIds)
             .stream()
             .collect(Collectors.groupingBy(MediaImage::getEntityId));

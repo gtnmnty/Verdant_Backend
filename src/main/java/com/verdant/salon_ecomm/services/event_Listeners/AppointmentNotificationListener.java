@@ -18,6 +18,7 @@ import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
@@ -28,6 +29,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AppointmentNotificationListener {
@@ -267,17 +269,21 @@ public class AppointmentNotificationListener {
     ) {
         List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
         for (User staffMember : staff) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(),
-                type,
-                title,
-                message,
-                ReferenceType.APPOINTMENT,
-                referenceAppointmentId,
-                NotificationPriority.INFO,
-                actorId,
-                actorName
-            ));
+            try{
+                notificationService.create(new NotificationCreateDto(
+                    staffMember.getId(),
+                    type,
+                    title,
+                    message,
+                    ReferenceType.APPOINTMENT,
+                    referenceAppointmentId,
+                    NotificationPriority.INFO,
+                    actorId,
+                    actorName
+                ));
+            } catch (Exception e) {
+                log.error("Failed to notify staff member {}: {}", staffMember.getId(), e.getMessage(), e);
+            }
         }
     }
     

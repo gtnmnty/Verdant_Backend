@@ -34,6 +34,14 @@ public class EmailService {
         sendEmail(to, "Account Verification Code", htmlBody);
     }
 
+    public void sendPasswordResetCodeEmail(String to, String resetCode) throws MessagingException {
+        Context context = new Context();
+        context.setVariable("resetCode", resetCode);
+
+        String htmlBody = templateEngine.process("emails/password-reset", context);
+        sendEmail(to, "Your Password Reset Code", htmlBody);
+    }
+
     private void sendEmail(String to, String subject, String htmlBody) throws MessagingException {
         MimeMessage mimeMessage = emailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
