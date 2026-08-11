@@ -9,6 +9,7 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.EmailService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,13 +25,14 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+// Runs against an isolated Testcontainers Postgres instance, not the shared
+// Supabase database — see AbstractIntegrationTest.
 @AutoConfigureMockMvc
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class BackendSimulationTest {
 
     @Autowired
@@ -42,6 +44,9 @@ public class BackendSimulationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private EmailService emailService;
+
     // Use a nested class to override the EmailService to mock sending email
     @TestConfiguration
     static class TestConfig {
@@ -50,6 +55,7 @@ public class BackendSimulationTest {
         public EmailService emailService() throws Exception {
             EmailService mockService = mock(EmailService.class);
             doNothing().when(mockService).sendVerificationEmail(anyString(), anyString());
+            doNothing().when(mockService).sendPasswordResetCodeEmail(anyString(), anyString());
             return mockService;
         }
     }
@@ -148,6 +154,73 @@ public class BackendSimulationTest {
                 .andExpect(status().isOk());
 
         System.out.println("Logged out successfully.");
+
+        System.out.println("========== STEP 8: REQUESTING PASSWORD RESET ==========");
+        Map<String, String> forgotPasswordBody = Map.of("email", testEmail);
+        mockMvc.perform(post("/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(forgotPasswordBody)))
+                .andExpect(status().isOk());
+
+        System.out.println("========== STEP 9: RETRIEVING RESET CODE FROM MOCKED EMAIL ==========");
+        ArgumentCaptor<String> codeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendPasswordResetCodeEmail(eq(testEmail), codeCaptor.capture());
+        String resetCode = codeCaptor.getValue();
+        assertNotNull(resetCode, "Reset code should have been captured from email service");
+        System.out.println("Captured raw reset code from mocked email: " + resetCode);
+
+        System.out.println("========== STEP 10: RESETTING PASSWORD WITH CODE ==========");
+        String newPassword = "EvenMoreSecurePassword456!";
+        Map<String, String> resetPasswordBody = Map.of(
+                "email", testEmail,
+                "code", resetCode,
+                "newPassword", newPassword
+        );
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resetPasswordBody)))
+                .andExpect(status().isOk());
+
+        System.out.println("Password reset accepted.");
+
+        System.out.println("========== STEP 11: REUSING THE SAME RESET CODE SHOULD FAIL ==========");
+        Map<String, String> reuseResetPasswordBody = Map.of(
+                "email", testEmail,
+                "code", resetCode,
+                "newPassword", "AnotherPassword789!"
+        );
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(reuseResetPasswordBody)))
+                .andExpect(status().is4xxClientError());
+
+        System.out.println("Verified: reused reset code was rejected.");
+
+        System.out.println("========== STEP 12: LOGIN WITH OLD PASSWORD SHOULD FAIL ==========");
+        LogInUserDto loginWithOldPassword = new LogInUserDto();
+        loginWithOldPassword.setEmail(testEmail);
+        loginWithOldPassword.setPassword(testPassword);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginWithOldPassword)))
+                .andExpect(status().is4xxClientError());
+
+        System.out.println("Verified: old password no longer works.");
+
+        System.out.println("========== STEP 13: LOGIN WITH NEW PASSWORD SHOULD SUCCEED ==========");
+        LogInUserDto loginWithNewPassword = new LogInUserDto();
+        loginWithNewPassword.setEmail(testEmail);
+        loginWithNewPassword.setPassword(newPassword);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginWithNewPassword)))
+                .andExpect(status().isOk());
+
+        System.out.println("Verified: new password works.");
         System.out.println("========== ALL SIMULATION STEPS COMPLETED SUCCESSFULLY ==========");
     }
 }

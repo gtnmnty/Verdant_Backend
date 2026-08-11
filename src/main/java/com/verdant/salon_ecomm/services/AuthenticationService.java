@@ -18,6 +18,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
@@ -35,7 +36,6 @@ public class AuthenticationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
-
 
     public User signUp(RegisterUserDto input) {
 
@@ -59,7 +59,7 @@ public class AuthenticationService {
 
     public AuthResult authenticate(LogInUserDto input) throws InvalidCredentialsException {
         User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!user.isEnabled()) {
             throw new AccountNotVerifiedException("Account is not verified. Please check your email.");
@@ -139,10 +139,13 @@ public class AuthenticationService {
     // which emails have accounts.
     public void forgotPassword(String email) {
         userRepository.findByEmail(email).ifPresent(user -> {
-            user.setResetPasswordCode(generateVerificationCode());
+            String plainCode = generateVerificationCode();
+            // CHANGED: BCrypt via the existing passwordEncoder bean, same as
+            // real passwords — salted per-call, deliberately slow.
+            user.setResetPasswordCode(passwordEncoder.encode(plainCode));
             user.setResetPasswordCodeExpiration(OffsetDateTime.now().plusMinutes(10));
             userRepository.save(user);
-            sendPasswordResetEmail(user);
+            sendPasswordResetEmail(user, plainCode);
         });
     }
 
@@ -150,30 +153,34 @@ public class AuthenticationService {
     // one call. Unlike the admin-triggered link flow (PasswordResetTokenService),
     // this is code-based so a customer can request AND redeem it themselves,
     // with no admin in the loop.
+    @Transactional
     public void resetPassword(ResetPasswordDto input) {
-        User user = userRepository.findByEmail(input.getEmail())
+        User user = userRepository.findByEmailForUpdate(input.getEmail())
             .orElseThrow(() -> new InvalidVerificationCodeException("Invalid or expired code."));
+        // NOTE: same error/message on "email not found" as on "wrong code" —
+        // matches forgotPassword()'s no-account-enumeration behavior.
 
-        if (user.getResetPasswordCode() == null
-                || !Objects.equals(user.getResetPasswordCode(), input.getCode())) {
+        boolean codeValid = user.getResetPasswordCode() != null
+            && user.getResetPasswordCodeExpiration() != null
+            && user.getResetPasswordCodeExpiration().isAfter(OffsetDateTime.now())
+            && passwordEncoder.matches(input.getCode(), user.getResetPasswordCode());
+
+        if (!codeValid) {
             throw new InvalidVerificationCodeException("Invalid or expired code.");
         }
 
-        if (user.getResetPasswordCodeExpiration() == null
-                || user.getResetPasswordCodeExpiration().isBefore(OffsetDateTime.now())) {
-            throw new VerificationCodeExpiredException("Code has expired. Please request a new one.");
-        }
-
         user.setPasswordHash(passwordEncoder.encode(input.getNewPassword()));
-        // Burn the code immediately so it can't be replayed.
+        // Single-use: clear the code so it can't be redeemed twice.
         user.setResetPasswordCode(null);
         user.setResetPasswordCodeExpiration(null);
         userRepository.save(user);
+
+        refreshTokenService.deleteByUserId(user.getId());
     }
 
-    private void sendPasswordResetEmail(User user) {
+    private void sendPasswordResetEmail(User user, String plainCode) {
         try {
-            emailService.sendPasswordResetCodeEmail(user.getEmail(), user.getResetPasswordCode());
+            emailService.sendPasswordResetCodeEmail(user.getEmail(), plainCode);
         } catch (MessagingException e) {
             throw new EmailDeliveryException("Failed to send password reset email to: " + user.getEmail(), e);
         }

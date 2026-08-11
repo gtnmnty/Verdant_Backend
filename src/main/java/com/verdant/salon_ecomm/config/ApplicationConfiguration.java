@@ -29,7 +29,7 @@ public class ApplicationConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    } // random characters will save on DB
+    }
 
     @Bean
     AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {

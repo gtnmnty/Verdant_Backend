@@ -40,10 +40,12 @@ public interface CleanUpJobRepository extends JpaRepository<PendingCleanUpJob, U
     List<PendingCleanUpJob> findByClaimedByAndProcessedFalse(String claimedBy);
 
     @Modifying
-    @Query("UPDATE PendingCleanUpJob j SET j.processed = true, j.claimedBy = null, j.claimExpiresAt = null WHERE j.id = :id")
-    void markProcessed(@Param("id") UUID id);
+    @Query("UPDATE PendingCleanUpJob j SET j.processed = true, j.claimedBy = null, " +
+            "j.claimExpiresAt = null WHERE j.id = :id AND j.claimedBy = :claimedBy")
+    void markProcessed(@Param("id") UUID id, @Param("claimedBy") String claimedBy);
 
     @Modifying
-    @Query("UPDATE PendingCleanUpJob j SET j.retryCount = j.retryCount + 1, j.claimExpiresAt = null WHERE j.id = :id")
-    void incrementRetryCount(@Param("id") UUID id);
+    @Query("UPDATE PendingCleanUpJob j SET j.retryCount = j.retryCount + 1, " +
+            "j.claimedBy = null, j.claimExpiresAt = null WHERE j.id = :id")
+    void incrementRetryCount(@Param("id") UUID id, @Param("claimedBy") String claimedBy);
 }
