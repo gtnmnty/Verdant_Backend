@@ -21,6 +21,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -189,7 +190,6 @@ public class UserService {
 
     }
 
-
     @Scheduled(fixedDelay = 60_000)
     @Transactional
     public void processPendingCleanupJobs() {
@@ -216,8 +216,30 @@ public class UserService {
         }
     }
 
+    // Uploads the new avatar first, then swaps it in and deletes the old one
+    // only after the swap succeeds — avoids leaving the user with no avatar
+    // if the delete step were to fail, and avoids deleting the old image
+    // before we're sure the new one actually made it to Cloudinary.
+    @Transactional
+    public UserDto.Profile updateAvatar(UUID id, MultipartFile file) {
+        User user = findUserOrThrow(id);
 
-    // Callback or global
+        String previousPublicId = user.getAvatarPublicId();
+
+        CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
+
+        user.setAvatarUrl(uploaded.url());
+        user.setAvatarPublicId(uploaded.publicId());
+        User saved = userRepository.save(user);
+
+        if (previousPublicId != null && !previousPublicId.equals(uploaded.publicId())) {
+            cloudinaryService.delete(previousPublicId);
+        }
+
+        return userMapper.toProfile(saved);
+    }
+
+    // ----- Helpers -----------------------
     private User findUserOrThrow(UUID id) {
         return userRepository.findById(id)
             .orElseThrow(

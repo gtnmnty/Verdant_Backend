@@ -85,6 +85,12 @@ public class User implements UserDetails {
     @Column(name = "verificationCode_expiration")
     private OffsetDateTime verificationCodeExpiration;
 
+    @Column(name = "reset_password_code")
+    private String resetPasswordCode;
+
+    @Column(name = "reset_password_code_expiration")
+    private OffsetDateTime resetPasswordCodeExpiration;
+
     @Column
     private boolean enabled;
 

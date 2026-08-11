@@ -153,17 +153,21 @@ public class AccountNotificationListener {
     private void notifyStaffBulk(String title, String message, UUID referenceAccountId, UUID actorId, String actorName) {
         List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
         for (User staffMember : staff) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(),
-                NotificationType.BULK_ACTION_PERFORMED,
-                title,
-                message,
-                ReferenceType.USER,
-                referenceAccountId,
-                NotificationPriority.INFO,
-                actorId,
-                actorName
-            ));
+            try{
+                notificationService.create(new NotificationCreateDto(
+                    staffMember.getId(),
+                    NotificationType.BULK_ACTION_PERFORMED,
+                    title,
+                    message,
+                    ReferenceType.USER,
+                    referenceAccountId,
+                    NotificationPriority.INFO,
+                    actorId,
+                    actorName
+                ));
+            } catch (Exception e) {
+                System.err.println("Failed to notify staff member " + staffMember.getId() + ": " + e.getMessage());
+            }
         }
     }
 }

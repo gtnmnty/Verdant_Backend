@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.dtos.user;
 
+import com.verdant.salon_ecomm.entities.Address;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,6 +19,7 @@ public class UserDto {
         String fullName,
         String email,
         String phone,
+        Address shippingAddress,
         String role,
         boolean emailVerified,
         Instant createdAt,
