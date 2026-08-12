@@ -14,7 +14,8 @@ import com.verdant.salon_ecomm.mappers.UserMapper;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.*;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -23,7 +24,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.OffsetDateTime;
 import java.util.*;
 
 @Slf4j
@@ -49,6 +49,7 @@ public class UserService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final CleanUpJobRepository cleanUpJobRepository;
+    private final CleanUpJobTransactions cleanUpJobTransactions;
 
     private final CloudinaryService cloudinaryService;
     private final PaymentService paymentService;
@@ -95,11 +96,12 @@ public class UserService {
         String previousFullName = user.getFullName();
         String previousEmail = user.getEmail();
         String previousPhone = user.getPhone();
+        // ADDED: snapshot address fields before updateEntity() mutates the
+        // embedded Address in place — capturing the reference alone wouldn't
+        // work, since it's the same object before and after.
+        String previousAddressSignature = addressSignature(user.getAddress());
 
         userMapper.updateEntity(request, user);
-        // updateEntity() doesn't normalize case (it just copies request.getEmail()
-        // verbatim via the "email" -> "email" match) — normalize here so a
-        // mixed-case edit doesn't create a second-class duplicate of an existing email.
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail().trim().toLowerCase());
         }
@@ -115,6 +117,12 @@ public class UserService {
         }
         if (!Objects.equals(previousPhone, saved.getPhone())) {
             changes.add(new UserProfileUpdatedEvent.FieldChange("phone", previousPhone, saved.getPhone()));
+        }
+        // ADDED: address-only edits were previously invisible to the audit log.
+        // Values are intentionally omitted (null/null) — only the fact that the
+        // address changed is recorded, not the address itself.
+        if (!Objects.equals(previousAddressSignature, addressSignature(saved.getAddress()))) {
+            changes.add(new UserProfileUpdatedEvent.FieldChange("address", null, null));
         }
 
         if (!changes.isEmpty()) {
@@ -191,25 +199,28 @@ public class UserService {
     }
 
     @Scheduled(fixedDelay = 60_000)
-    @Transactional
     public void processPendingCleanupJobs() {
-        OffsetDateTime leaseExpiry = OffsetDateTime.now().plusMinutes(CLEANUP_LEASE_MINUTES);
-        cleanUpJobRepository.claimBatch(instanceId, leaseExpiry, CLEANUP_BATCH_SIZE);
+        // Unique per invocation (not the fixed per-JVM instanceId) so two overlapping
+        // runs of this method never share a claim token and can't collide on the same batch.
+        String claimToken = instanceId + ":" + UUID.randomUUID();
+        cleanUpJobTransactions.claimBatch(claimToken, CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE);
 
-        for (PendingCleanUpJob job : cleanUpJobRepository.findByClaimedByAndProcessedFalse(instanceId)) {
+        for (PendingCleanUpJob job : cleanUpJobRepository.findByClaimedByAndProcessedFalse(claimToken)) {
             try {
+                // External calls run outside any DB transaction — no point holding
+                // a DB connection/transaction open for the duration of an HTTP call.
                 if (job.getAvatarPublicId() != null) {
                     cloudinaryService.delete(job.getAvatarPublicId());
                 }
                 if (job.getStripeCustomerId() != null) {
                     paymentService.deleteStripeCustomer(job.getStripeCustomerId());
                 }
-                cleanUpJobRepository.markProcessed(job.getId());
+                cleanUpJobTransactions.markProcessed(job.getId(), claimToken);
 
                 userRepository.findById(job.getUserId())
                     .ifPresent(user -> eventPublisher.publishEvent(new UserDeletedEvent(user)));
             } catch (Exception e) {
-                cleanUpJobRepository.incrementRetryCount(job.getId());
+                cleanUpJobTransactions.incrementRetryCount(job.getId(), claimToken);
                 log.error("Cleanup job {} failed for user {} (retry {})",
                     job.getId(), job.getUserId(), job.getRetryCount() + 1, e);
             }
@@ -220,6 +231,9 @@ public class UserService {
     // only after the swap succeeds — avoids leaving the user with no avatar
     // if the delete step were to fail, and avoids deleting the old image
     // before we're sure the new one actually made it to Cloudinary.
+    // The old avatar is deleted only after the DB transaction actually commits —
+    // if the transaction rolls back, the old image is left alone, and we clean
+    // up the newly-uploaded (now-orphaned) image instead.
     @Transactional
     public UserDto.Profile updateAvatar(UUID id, MultipartFile file) {
         User user = findUserOrThrow(id);
@@ -232,9 +246,25 @@ public class UserService {
         user.setAvatarPublicId(uploaded.publicId());
         User saved = userRepository.save(user);
 
-        if (previousPublicId != null && !previousPublicId.equals(uploaded.publicId())) {
-            cloudinaryService.delete(previousPublicId);
-        }
+        boolean publicIdChanged = previousPublicId != null && !previousPublicId.equals(uploaded.publicId());
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    if (publicIdChanged) {
+                        cloudinaryService.delete(previousPublicId);
+                    }
+                }
+
+                @Override
+                public void afterCompletion(int status) {
+                    if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                        cloudinaryService.delete(uploaded.publicId());
+                    }
+                }
+            }
+        );
 
         return userMapper.toProfile(saved);
     }
@@ -245,5 +275,17 @@ public class UserService {
             .orElseThrow(
                 () -> new ResourceNotFoundException("User not found with id: " + id)
             );
+    }
+
+    private String addressSignature(com.verdant.salon_ecomm.entities.Address address) {
+        if (address == null) return null;
+        return String.join("|",
+            Objects.toString(address.getLine1(), ""),
+            Objects.toString(address.getLine2(), ""),
+            Objects.toString(address.getCity(), ""),
+            Objects.toString(address.getState(), ""),
+            Objects.toString(address.getPostal(), ""),
+            Objects.toString(address.getCountry(), "")
+        );
     }
 }

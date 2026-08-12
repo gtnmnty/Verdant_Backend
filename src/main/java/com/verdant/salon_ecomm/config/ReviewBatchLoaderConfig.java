@@ -21,7 +21,7 @@ public class ReviewBatchLoaderConfig {
     private final ProductRepository productRepository;
     private final SalonServiceRepository salonServiceRepository;
 
-    // BatchLoaderRegistry is an auto-configured Spring GraphQL bean. Registering
+    // BatchLoaderRegistry is an autoconfigured Spring GraphQL bean. Registering
     // here, in the constructor, means it's wired once at startup — the loader is
     // then looked up by name ("reviewTargetInfoLoader") in AdminReviewFieldResolver.
     public ReviewBatchLoaderConfig(BatchLoaderRegistry registry,

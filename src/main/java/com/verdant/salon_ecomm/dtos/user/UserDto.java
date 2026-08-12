@@ -20,6 +20,7 @@ public class UserDto {
         String email,
         String phone,
         Address shippingAddress,
+        String avatarUrl,
         String role,
         boolean emailVerified,
         Instant createdAt,

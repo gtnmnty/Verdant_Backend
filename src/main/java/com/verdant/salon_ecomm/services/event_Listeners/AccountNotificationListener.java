@@ -14,6 +14,7 @@ import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -21,6 +22,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AccountNotificationListener {
@@ -119,10 +121,6 @@ public class AccountNotificationListener {
         UUID actorId = event.actor() != null ? event.actor().getId() : null;
         String actorName = event.actor() != null ? event.actor().getFullName() : null;
 
-        // No referenceAccountId here: deleteAllInBatch() already hard-deleted
-        // these users before this AFTER_COMMIT listener runs, so any account id
-        // from this batch would be a dangling reference (FK violation, or a
-        // silent broken link if unconstrained).
         notifyStaffBulk("Bulk account deletion",
             event.accounts().size() + " accounts were deleted" + (actorName != null ? " by " + actorName : "") + ".",
             null, actorId, actorName);
@@ -136,24 +134,31 @@ public class AccountNotificationListener {
 
         List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
         for (User staffMember : staff) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(),
-                type,
-                title,
-                message,
-                ReferenceType.USER,
-                referenceAccountId,
-                NotificationPriority.INFO,
-                actorId,
-                actorName
-            ));
+            // ADDED: isolate failures per recipient, same as notifyStaffBulk —
+            // one bad notification shouldn't stop the rest of the staff from
+            // being notified.
+            try {
+                notificationService.create(new NotificationCreateDto(
+                    staffMember.getId(),
+                    type,
+                    title,
+                    message,
+                    ReferenceType.USER,
+                    referenceAccountId,
+                    NotificationPriority.INFO,
+                    actorId,
+                    actorName
+                ));
+            } catch (Exception e) {
+                log.error("Failed to notify staff member {}", staffMember.getId(), e);
+            }
         }
     }
 
     private void notifyStaffBulk(String title, String message, UUID referenceAccountId, UUID actorId, String actorName) {
         List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
         for (User staffMember : staff) {
-            try{
+            try {
                 notificationService.create(new NotificationCreateDto(
                     staffMember.getId(),
                     NotificationType.BULK_ACTION_PERFORMED,
@@ -166,7 +171,9 @@ public class AccountNotificationListener {
                     actorName
                 ));
             } catch (Exception e) {
-                System.err.println("Failed to notify staff member " + staffMember.getId() + ": " + e.getMessage());
+                // CHANGED: System.err.println → logger, and pass the
+                // throwable so the stack trace is actually captured.
+                log.error("Failed to notify staff member {}", staffMember.getId(), e);
             }
         }
     }
