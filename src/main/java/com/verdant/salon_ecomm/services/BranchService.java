@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.dtos.branch.AdminBranchPage;
 import com.verdant.salon_ecomm.dtos.branch.CreateBranchInput;
 import com.verdant.salon_ecomm.dtos.branch.UpdateBranchInput;
 import com.verdant.salon_ecomm.dtos.branch.events.BranchesBulkDeletedEvent;
+import com.verdant.salon_ecomm.dtos.branch.BranchDto;
 import com.verdant.salon_ecomm.entities.Branch;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
@@ -53,6 +54,15 @@ public class BranchService {
     // lose their branch — completed/canceled ones are historical and don't block.
     private static final List<AppointmentStatus> ACTIVE_APPOINTMENT_STATUSES =
         List.of(AppointmentStatus.PENDING, AppointmentStatus.UPCOMING);
+
+
+    public List<BranchDto> getBranches(){
+        return branchRepository
+            .findAll(BranchSpecification.filterBy(BranchStatus.OPEN, null))
+            .stream()
+            .map(branchMapper::toDto)
+            .toList();
+    }
 
     public AdminBranchPage getAdminBranches(
         BranchStatus status, String search,

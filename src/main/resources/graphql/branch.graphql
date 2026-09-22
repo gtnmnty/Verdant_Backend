@@ -91,6 +91,8 @@ input UpdateBranchInput {
 }
 
 extend type Query {
+    branches: [Branch!]!
+
     adminBranches(
         status: BranchStatus
         search: String

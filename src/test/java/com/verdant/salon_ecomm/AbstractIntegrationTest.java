@@ -14,6 +14,8 @@ import org.springframework.test.context.DynamicPropertySource;
 // tests never touch the shared Supabase database. @ServiceConnection wires the
 // datasource properties automatically, overriding whatever spring.datasource.*
 // values come from application-local.properties — no manual property juggling needed.
+
+//currently unused
 @Testcontainers
 @SpringBootTest
 public abstract class AbstractIntegrationTest {

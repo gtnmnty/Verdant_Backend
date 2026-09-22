@@ -22,6 +22,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
@@ -248,12 +249,12 @@ public class UserService {
 
         boolean publicIdChanged = previousPublicId != null && !previousPublicId.equals(uploaded.publicId());
 
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-            new org.springframework.transaction.support.TransactionSynchronization() {
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
                     if (publicIdChanged) {
-                        cloudinaryService.delete(previousPublicId);
+                        deletePreviousAvatarWithRetry(previousPublicId);
                     }
                 }
 
@@ -287,5 +288,29 @@ public class UserService {
             Objects.toString(address.getPostal(), ""),
             Objects.toString(address.getCountry(), "")
         );
+    }
+
+    private void deletePreviousAvatarWithRetry(String publicId) {
+        int maxAttempts = 3;
+        long delayMs = 1000;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                cloudinaryService.delete(publicId);
+                return;
+            } catch (Exception e) {
+                log.warn("Cloudinary delete failed for {} (attempt {}/{})", publicId, attempt, maxAttempts, e);
+                if (attempt == maxAttempts) {
+                    log.error("Giving up deleting previous avatar {} after {} attempts", publicId, maxAttempts, e);
+                    return;
+                }
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                delayMs *= 2;
+            }
+        }
     }
 }
