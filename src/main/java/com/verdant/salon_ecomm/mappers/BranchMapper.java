@@ -9,6 +9,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class BranchMapper {
 
+    public BranchDto toDto(Branch branch) {
+        if (branch == null) return null;
+        return new BranchDto(
+            branch.getId(),
+            branch.getName(),
+            toAddressDto(branch.getAddress()),
+            branch.getPhone(),
+            branch.getEmail(),
+            toOperatingHours(branch.getOperatingHours()),
+            branch.getGoogleMapsUrl(),
+            branch.getImageUrl(),
+            branch.getStatus()
+        );
+    }
+
     public AdminBranchDto toAdminDto(Branch branch) {
         if (branch == null) { return null; }
 

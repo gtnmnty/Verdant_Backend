@@ -30,7 +30,7 @@ public interface CleanUpJobRepository extends JpaRepository<PendingCleanUpJob, U
             FOR UPDATE SKIP LOCKED
         )
         """, nativeQuery = true)
-    int claimBatch(
+    void claimBatch(
         @Param("instanceId") String instanceId,
         @Param("expiresAt") OffsetDateTime expiresAt,
         @Param("batchSize") int batchSize
@@ -41,11 +41,12 @@ public interface CleanUpJobRepository extends JpaRepository<PendingCleanUpJob, U
 
     @Modifying
     @Query("UPDATE PendingCleanUpJob j SET j.processed = true, j.claimedBy = null, " +
-            "j.claimExpiresAt = null WHERE j.id = :id AND j.claimedBy = :claimedBy")
+        "j.claimExpiresAt = null WHERE j.id = :id AND j.claimedBy = :claimedBy")
     void markProcessed(@Param("id") UUID id, @Param("claimedBy") String claimedBy);
 
     @Modifying
     @Query("UPDATE PendingCleanUpJob j SET j.retryCount = j.retryCount + 1, " +
-            "j.claimedBy = null, j.claimExpiresAt = null WHERE j.id = :id")
+        "j.claimedBy = null, j.claimExpiresAt = null " +
+        "WHERE j.id = :id AND j.claimedBy = :claimedBy")
     void incrementRetryCount(@Param("id") UUID id, @Param("claimedBy") String claimedBy);
 }

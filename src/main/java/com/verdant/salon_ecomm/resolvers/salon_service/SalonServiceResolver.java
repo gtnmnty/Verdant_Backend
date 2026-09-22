@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.entities.SalonService;
 import com.verdant.salon_ecomm.entities.User;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.models.enums.ServiceSort;
 import com.verdant.salon_ecomm.services.SalonServicesService;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,19 @@ public class SalonServiceResolver {
             return dto.durationInMinutes();
         } else if (serviceObj instanceof SalonService entity) {
             return entity.getDurationMinutes();
+        }
+        throw new IllegalArgumentException(
+            "Unsupported SalonService object type: " +
+                (serviceObj != null ? serviceObj.getClass().getName() : "null")
+        );
+    }
+
+    @SchemaMapping(typeName = "SalonService", field = "catalog")
+    public ItemCatalog catalog(Object serviceObj) {
+        if (serviceObj instanceof SalonServiceDto dto) {
+            return dto.catalog();
+        } else if (serviceObj instanceof SalonService entity) {
+            return entity.getItemCatalog();
         }
         throw new IllegalArgumentException(
             "Unsupported SalonService object type: " +
