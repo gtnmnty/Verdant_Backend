@@ -5,7 +5,7 @@ import com.verdant.salon_ecomm.exceptions.InvalidCursorException;
 import com.verdant.salon_ecomm.mappers.NotificationMapper;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationSortField;
 import com.verdant.salon_ecomm.models.enums.notification.SortDirection;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.services.NotificationPublisher;
 import com.verdant.salon_ecomm.services.NotificationService;
 import lombok.RequiredArgsConstructor;

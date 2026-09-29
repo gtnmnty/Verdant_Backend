@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.dtos.order.admin;
 
 import com.verdant.salon_ecomm.dtos.order.OrderMilestoneDto;
-import com.verdant.salon_ecomm.entities.Address;
+import com.verdant.salon_ecomm.models.entities.Address;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 

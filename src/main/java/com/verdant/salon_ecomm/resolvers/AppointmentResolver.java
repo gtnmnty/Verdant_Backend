@@ -1,9 +1,9 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.appointment.*;
-import com.verdant.salon_ecomm.entities.Address;
-import com.verdant.salon_ecomm.entities.Appointment;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.Address;
+import com.verdant.salon_ecomm.models.entities.Appointment;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.appointments.*;

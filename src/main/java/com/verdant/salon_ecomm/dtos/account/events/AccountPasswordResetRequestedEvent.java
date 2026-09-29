@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.dtos.account.events;
 
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 
 import java.util.UUID;
 

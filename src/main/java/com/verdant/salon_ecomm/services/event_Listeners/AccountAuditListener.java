@@ -5,7 +5,7 @@ import com.verdant.salon_ecomm.dtos.account.events.AccountPasswordResetRequested
 import com.verdant.salon_ecomm.dtos.account.events.AccountUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.account.events.AccountsDeletedEvent;
 import com.verdant.salon_ecomm.dtos.account.events.AccountsSuspendedEvent;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;

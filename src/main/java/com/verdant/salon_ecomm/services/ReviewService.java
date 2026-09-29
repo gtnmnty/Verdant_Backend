@@ -2,9 +2,9 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.reviews.*;
 import com.verdant.salon_ecomm.dtos.reviews.events.ReviewSubmittedEvent;
-import com.verdant.salon_ecomm.entities.Product;
-import com.verdant.salon_ecomm.entities.Review;
-import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.Product;
+import com.verdant.salon_ecomm.models.entities.Review;
+import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.mappers.ReviewMapper;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.reviews.AdminReviewSort;

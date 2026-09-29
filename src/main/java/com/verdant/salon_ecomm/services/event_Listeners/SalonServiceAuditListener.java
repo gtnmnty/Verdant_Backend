@@ -5,7 +5,7 @@ import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
-import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;

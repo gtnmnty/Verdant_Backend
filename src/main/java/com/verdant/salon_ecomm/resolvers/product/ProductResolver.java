@@ -1,10 +1,8 @@
 package com.verdant.salon_ecomm.resolvers.product;
 
 import com.verdant.salon_ecomm.dtos.product.*;
-import com.verdant.salon_ecomm.dtos.service.SalonServiceDto;
-import com.verdant.salon_ecomm.entities.Product;
-import com.verdant.salon_ecomm.entities.SalonService;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.Product;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.CollectionSort;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;

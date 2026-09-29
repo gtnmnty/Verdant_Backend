@@ -6,7 +6,7 @@ import com.verdant.salon_ecomm.dtos.account.AccountPage;
 import com.verdant.salon_ecomm.dtos.account.CreateAccountInput;
 import com.verdant.salon_ecomm.dtos.account.AccountDto;
 import com.verdant.salon_ecomm.dtos.account.UpdateAccountInput;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.services.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;

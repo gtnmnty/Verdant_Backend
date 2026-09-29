@@ -1,10 +1,9 @@
 package com.verdant.salon_ecomm.mappers;
 
 import com.verdant.salon_ecomm.dtos.AddressInput;
-import com.verdant.salon_ecomm.entities.Address;
+import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.dtos.appointment.AdminAppointmentDto;
 import com.verdant.salon_ecomm.dtos.appointment.CreateAppointmentInput;
-import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentStatus;
 import org.springframework.stereotype.Component;
 

@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.specifications;
 
-import com.verdant.salon_ecomm.entities.Order;
+import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.orders.OrderClientFilter;
 import org.springframework.data.jpa.domain.Specification;

@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.resolvers.salon_service;
 
-import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.FavoriteRepository;
 import graphql.GraphQLContext;

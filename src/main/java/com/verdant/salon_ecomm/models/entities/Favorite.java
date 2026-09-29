@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.entities;
+package com.verdant.salon_ecomm.models.entities;
 
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;
@@ -13,8 +13,12 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "reviews")
-public class Review {
+@Table(name = "favorites",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uq_favorites_user_target",
+        columnNames = {"user_id", "target_type", "target_id"}
+    ))
+public class Favorite {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -30,12 +34,6 @@ public class Review {
     @Column(name = "target_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private ItemType targetType;
-
-    @Column(nullable = false)
-    private Short stars;
-
-    @Column(columnDefinition = "text")
-    private String text;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

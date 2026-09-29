@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.services.event_Listeners;
 
 import com.verdant.salon_ecomm.dtos.reviews.events.ReviewSubmittedEvent;
-import com.verdant.salon_ecomm.entities.Review;
+import com.verdant.salon_ecomm.models.entities.Review;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;

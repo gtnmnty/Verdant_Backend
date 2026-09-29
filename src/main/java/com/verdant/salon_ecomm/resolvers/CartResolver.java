@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.resolvers;
 
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.AddToCartInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.RemoveCartItemsInput;

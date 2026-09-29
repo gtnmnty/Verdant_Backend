@@ -1,8 +1,8 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.entities.CartItem;
-import com.verdant.salon_ecomm.entities.Product;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.CartItem;
+import com.verdant.salon_ecomm.models.entities.Product;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.exceptions.CartItemNotFoundException;
 import com.verdant.salon_ecomm.exceptions.InvalidQuantityException;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;

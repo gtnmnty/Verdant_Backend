@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.specifications;
 
-import com.verdant.salon_ecomm.entities.Review;
+import com.verdant.salon_ecomm.models.entities.Review;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.criteria.JoinType;
 import org.springframework.data.jpa.domain.Specification;

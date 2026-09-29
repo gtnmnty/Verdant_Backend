@@ -17,7 +17,7 @@ import com.verdant.salon_ecomm.dtos.user.ResendVerificationCodeDto;
 import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
 import com.verdant.salon_ecomm.dtos.user.UserDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.response.AuthResult;
 import com.verdant.salon_ecomm.services.AuthenticationService;
 import com.verdant.salon_ecomm.services.RefreshTokenService;

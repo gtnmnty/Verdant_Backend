@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.dtos.service;
 
-import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.SalonService;
 
 import java.util.List;
 

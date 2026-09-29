@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.entities.AuditLog;
+import com.verdant.salon_ecomm.models.entities.AuditLog;
 import com.verdant.salon_ecomm.dtos.audit.AuditLogDto;
 import org.springframework.stereotype.Component;
 

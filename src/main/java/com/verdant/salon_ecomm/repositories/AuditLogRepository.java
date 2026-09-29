@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.entities.AuditLog;
+import com.verdant.salon_ecomm.models.entities.AuditLog;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -1,6 +1,5 @@
-package com.verdant.salon_ecomm.entities;
+package com.verdant.salon_ecomm.models.entities;
 
-import com.verdant.salon_ecomm.StringListConverter;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import jakarta.persistence.*;

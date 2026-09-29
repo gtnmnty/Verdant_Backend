@@ -3,8 +3,8 @@ package com.verdant.salon_ecomm.mappers;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.dtos.notification.NotificationGroupDto;
 import com.verdant.salon_ecomm.dtos.notification.NotificationResponseDto;
-import com.verdant.salon_ecomm.entities.Notification;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.Notification;
+import com.verdant.salon_ecomm.models.entities.User;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;

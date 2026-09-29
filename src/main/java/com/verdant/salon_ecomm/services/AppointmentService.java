@@ -10,12 +10,12 @@ import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEve
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
-import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.exceptions.AppointmentConflictException;
 import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
+import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AppointmentSpec;
 import jakarta.persistence.EntityNotFoundException;

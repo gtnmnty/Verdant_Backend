@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.dtos.appointment;
 
-import com.verdant.salon_ecomm.entities.Appointment;
+import com.verdant.salon_ecomm.models.entities.Appointment;
 
 import java.util.List;
 

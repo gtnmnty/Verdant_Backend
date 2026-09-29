@@ -1,12 +1,11 @@
 package com.verdant.salon_ecomm.dtos.appointment;
 
-import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentServiceType;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentStatus;
+import com.verdant.salon_ecomm.models.entities.*;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.Map;
 import java.util.UUID;
 
 public record AdminAppointmentDto(
