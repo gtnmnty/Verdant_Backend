@@ -44,6 +44,10 @@ enum AuditActionType {
     ASSIGNED
     BULK_CANCELLED
     BULK_DELETED
+    GIFT_CARD
+    ISSUED
+    REDEEMED
+    EXPIRED
 }
 
 type AuditLogEntry {

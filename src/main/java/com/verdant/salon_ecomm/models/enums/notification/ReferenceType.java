@@ -11,5 +11,6 @@ public enum ReferenceType {
     REVIEW,
     PROMOTION,
     STYLIST,
-    MEDIA_IMAGE
+    MEDIA_IMAGE,
+    GIFT_CARD
 }

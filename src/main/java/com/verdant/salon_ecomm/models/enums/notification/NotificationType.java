@@ -85,6 +85,16 @@ public enum NotificationType {
     MEMBERSHIP_TIER_UPGRADED,
 
     // ── System / Audit ───────────────────────────
-    BULK_ACTION_PERFORMED
+    BULK_ACTION_PERFORMED,
+
+    // ── Gift Cards ─────────────────────────────
+    GIFT_CARD_PURCHASED,
+    GIFT_CARD_ISSUED,
+    GIFT_CARD_REDEEMED,
+    GIFT_CARD_APPLIED_TO_ORDER,
+    GIFT_CARD_EXPIRED,
+    GIFT_CARD_REFUND_ISSUED,
+    
+
 
 }
