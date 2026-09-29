@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.utils;
 
-import com.verdant.salon_ecomm.entities.Favorite;
+import com.verdant.salon_ecomm.models.entities.Favorite;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.FavoriteRepository;
 

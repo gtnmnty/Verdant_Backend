@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.entities.Favorite;
+import com.verdant.salon_ecomm.models.entities.Favorite;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

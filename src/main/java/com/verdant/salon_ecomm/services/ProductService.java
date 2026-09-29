@@ -2,9 +2,9 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
-import com.verdant.salon_ecomm.entities.MediaImage;
-import com.verdant.salon_ecomm.entities.Product;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.MediaImage;
+import com.verdant.salon_ecomm.models.entities.Product;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.ProductMapper;
 import com.verdant.salon_ecomm.models.enums.CollectionSort;

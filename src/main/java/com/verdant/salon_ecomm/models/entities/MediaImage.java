@@ -1,5 +1,4 @@
-package com.verdant.salon_ecomm.entities;
-
+package com.verdant.salon_ecomm.models.entities;
 
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import jakarta.persistence.*;

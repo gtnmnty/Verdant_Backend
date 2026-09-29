@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.resolvers;
 
-import com.verdant.salon_ecomm.entities.Product;
-import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.Product;
+import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.services.FavoriteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;

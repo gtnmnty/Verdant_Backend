@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.EmailService;
 import jakarta.servlet.http.Cookie;

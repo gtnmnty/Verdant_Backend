@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.entities.MediaImage;
+import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;

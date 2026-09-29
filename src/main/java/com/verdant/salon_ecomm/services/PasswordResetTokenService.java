@@ -1,8 +1,8 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
-import com.verdant.salon_ecomm.entities.PasswordResetToken;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.PasswordResetToken;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.PasswordResetTokenRepository;

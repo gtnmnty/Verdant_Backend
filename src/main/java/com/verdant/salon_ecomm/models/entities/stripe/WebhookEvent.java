@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.entities.stripe;
+package com.verdant.salon_ecomm.models.entities.stripe;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

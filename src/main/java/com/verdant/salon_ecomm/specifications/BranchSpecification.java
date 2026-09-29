@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.specifications;
 
-import com.verdant.salon_ecomm.entities.Branch;
+import com.verdant.salon_ecomm.models.entities.Branch;
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;

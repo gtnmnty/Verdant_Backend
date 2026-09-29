@@ -2,8 +2,8 @@ package com.verdant.salon_ecomm.mappers;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.product.AdminProductDto;
-import com.verdant.salon_ecomm.entities.MediaImage;
-import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.models.entities.MediaImage;
+import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import lombok.RequiredArgsConstructor;

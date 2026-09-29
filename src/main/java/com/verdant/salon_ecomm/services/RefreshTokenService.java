@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.entities.RefreshToken;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.RefreshToken;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.exceptions.RefreshTokenExpiredException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.repositories.RefreshTokenRepository;

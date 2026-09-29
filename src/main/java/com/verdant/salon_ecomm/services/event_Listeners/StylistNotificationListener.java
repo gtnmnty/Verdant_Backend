@@ -7,7 +7,7 @@ import com.verdant.salon_ecomm.dtos.stylists.events.StylistImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.stylists.events.StylistStatusChangedEvent;
 import com.verdant.salon_ecomm.dtos.stylists.events.StylistUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.stylists.events.StylistsBulkDeletedEvent;
-import com.verdant.salon_ecomm.entities.Stylist;
+import com.verdant.salon_ecomm.models.entities.Stylist;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;

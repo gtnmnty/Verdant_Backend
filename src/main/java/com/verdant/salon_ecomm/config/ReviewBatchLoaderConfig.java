@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.config;
 
-import com.verdant.salon_ecomm.entities.Product;
-import com.verdant.salon_ecomm.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.Product;
+import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentServiceType;
 import com.verdant.salon_ecomm.repositories.ProductRepository;

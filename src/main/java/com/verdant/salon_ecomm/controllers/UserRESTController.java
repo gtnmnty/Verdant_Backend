@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.controllers;
 
 import com.verdant.salon_ecomm.dtos.user.*;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

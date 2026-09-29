@@ -2,7 +2,7 @@ package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.services.PaymentService;
 import lombok.RequiredArgsConstructor;

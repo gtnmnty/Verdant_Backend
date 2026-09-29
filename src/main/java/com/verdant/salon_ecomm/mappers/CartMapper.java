@@ -1,11 +1,11 @@
 package com.verdant.salon_ecomm.mappers;
 
 import com.verdant.salon_ecomm.dtos.cart.ProductSummaryDto;
-import com.verdant.salon_ecomm.entities.CartItem;
+import com.verdant.salon_ecomm.models.entities.CartItem;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
 import com.verdant.salon_ecomm.dtos.cart.CartItemDto;
-import com.verdant.salon_ecomm.entities.Favorite;
-import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.models.entities.Favorite;
+import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.FavoriteRepository;
 import lombok.RequiredArgsConstructor;

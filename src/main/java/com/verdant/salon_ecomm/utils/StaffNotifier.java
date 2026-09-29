@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.utils;
 
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;

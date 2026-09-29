@@ -1,8 +1,11 @@
 package com.verdant.salon_ecomm.dtos.appointment;
 
-import com.verdant.salon_ecomm.entities.*;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentServiceType;
 import com.verdant.salon_ecomm.models.enums.appointments.AppointmentStatus;
+import com.verdant.salon_ecomm.models.entities.Branch;
+import com.verdant.salon_ecomm.models.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.Stylist;
+import com.verdant.salon_ecomm.models.entities.User;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;

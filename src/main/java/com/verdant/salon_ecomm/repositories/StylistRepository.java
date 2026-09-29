@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.entities.Stylist;
+import com.verdant.salon_ecomm.models.entities.Stylist;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

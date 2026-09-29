@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.entities.OrderItem;
+import com.verdant.salon_ecomm.models.entities.OrderItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

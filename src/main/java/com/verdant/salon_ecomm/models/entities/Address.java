@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.entities;
+package com.verdant.salon_ecomm.models.entities;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;

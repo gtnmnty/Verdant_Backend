@@ -2,7 +2,7 @@ package com.verdant.salon_ecomm.controllers;
 
 import com.verdant.salon_ecomm.dtos.user.UpdateUserRequest;
 import com.verdant.salon_ecomm.dtos.user.UserDto;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.services.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

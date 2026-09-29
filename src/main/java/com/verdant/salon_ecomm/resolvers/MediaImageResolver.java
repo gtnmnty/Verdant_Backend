@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.services.MediaImageService;
 import lombok.RequiredArgsConstructor;

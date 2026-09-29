@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.entities.Review;
+import com.verdant.salon_ecomm.models.entities.Review;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;

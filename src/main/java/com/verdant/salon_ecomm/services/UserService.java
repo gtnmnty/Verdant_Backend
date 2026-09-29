@@ -5,8 +5,9 @@ import com.verdant.salon_ecomm.dtos.user.events.UserDeletedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserProfileUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserRegisteredEvent;
-import com.verdant.salon_ecomm.entities.PendingCleanUpJob;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.PendingCleanUpJob;
+import com.verdant.salon_ecomm.models.entities.Address;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.exceptions.DuplicateEmailException;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
@@ -119,9 +120,7 @@ public class UserService {
         if (!Objects.equals(previousPhone, saved.getPhone())) {
             changes.add(new UserProfileUpdatedEvent.FieldChange("phone", previousPhone, saved.getPhone()));
         }
-        // ADDED: address-only edits were previously invisible to the audit log.
-        // Values are intentionally omitted (null/null) — only the fact that the
-        // address changed is recorded, not the address itself.
+
         if (!Objects.equals(previousAddressSignature, addressSignature(saved.getAddress()))) {
             changes.add(new UserProfileUpdatedEvent.FieldChange("address", null, null));
         }
@@ -278,7 +277,7 @@ public class UserService {
             );
     }
 
-    private String addressSignature(com.verdant.salon_ecomm.entities.Address address) {
+    private String addressSignature(Address address) {
         if (address == null) return null;
         return String.join("|",
             Objects.toString(address.getLine1(), ""),

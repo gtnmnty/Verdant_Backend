@@ -2,8 +2,8 @@ package com.verdant.salon_ecomm.resolvers.salon_service;
 
 import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
 import com.verdant.salon_ecomm.dtos.service.*;
-import com.verdant.salon_ecomm.entities.SalonService;
-import com.verdant.salon_ecomm.entities.User;
+import com.verdant.salon_ecomm.models.entities.SalonService;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.models.enums.ServiceSort;

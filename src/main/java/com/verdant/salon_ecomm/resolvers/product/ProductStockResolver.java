@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.resolvers.product;
 
-import com.verdant.salon_ecomm.entities.Product;
+import com.verdant.salon_ecomm.models.entities.Product;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.stereotype.Controller;

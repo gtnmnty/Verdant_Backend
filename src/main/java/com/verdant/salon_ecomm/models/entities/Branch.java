@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.entities;
+package com.verdant.salon_ecomm.models.entities;
 
 import com.verdant.salon_ecomm.models.enums.BranchStatus;
 import jakarta.persistence.*;
@@ -11,7 +11,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
-import java.util.Map;
 import java.util.UUID;
 
 @Setter

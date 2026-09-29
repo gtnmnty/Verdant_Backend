@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.specifications;
 
 import com.verdant.salon_ecomm.dtos.notification.NotificationQueryDto;
-import com.verdant.salon_ecomm.entities.Notification;
+import com.verdant.salon_ecomm.models.entities.Notification;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationReadFilter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;

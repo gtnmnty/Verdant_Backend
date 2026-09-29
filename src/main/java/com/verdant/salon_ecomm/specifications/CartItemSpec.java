@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.specifications;
 
-import com.verdant.salon_ecomm.entities.CartItem;
+import com.verdant.salon_ecomm.models.entities.CartItem;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import org.springframework.data.jpa.domain.Specification;
 

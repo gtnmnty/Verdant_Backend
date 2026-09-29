@@ -8,7 +8,7 @@ import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEve
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
-import com.verdant.salon_ecomm.entities.Appointment;
+import com.verdant.salon_ecomm.models.entities.Appointment;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
