@@ -11,5 +11,6 @@ public enum AuditEntityType {
     BRANCH,
     SALON_SERVICE,
     MEDIA_IMAGE,
-    FAVORITE
+    FAVORITE,
+    GIFT_CARD
 }

@@ -25,5 +25,9 @@ public enum AuditActionType {
     STATUS_CHANGED,
     ASSIGNED,
     BULK_CANCELLED,
-    BULK_DELETED
+    BULK_DELETED,
+    GIFT_CARD,
+    ISSUED,
+    REDEEMED,
+    EXPIRED,
 }

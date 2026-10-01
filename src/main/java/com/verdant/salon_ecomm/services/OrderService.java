@@ -1,7 +1,10 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
-import com.verdant.salon_ecomm.dtos.order.*;
+import com.verdant.salon_ecomm.dtos.gitftcards.GiftCardBalanceApplicationResult;
+import com.verdant.salon_ecomm.dtos.order.OrderDto;
+import com.verdant.salon_ecomm.dtos.order.OrderPage;
+import com.verdant.salon_ecomm.dtos.order.PlaceOrderInput;
 import com.verdant.salon_ecomm.dtos.order.admin.*;
 import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
@@ -10,12 +13,14 @@ import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
 import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
+import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
-import com.verdant.salon_ecomm.models.entities.*;
-import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.orders.*;
-import com.verdant.salon_ecomm.repositories.*;
+import com.verdant.salon_ecomm.repositories.OrderItemRepository;
+import com.verdant.salon_ecomm.repositories.OrderRepository;
+import com.verdant.salon_ecomm.repositories.ProductRepository;
+import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +52,7 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final MediaImageService mediaImageService;
     private final CartService cartService;
+    private final GiftCardService giftCardService;
     private final ApplicationEventPublisher eventPublisher;
 
     // ---------- Queries ----------
@@ -297,13 +303,24 @@ public class OrderService {
 
         Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal);
 
-        pendingItems.forEach(item -> item.setOrder(savedOrder));
+        Order finalSavedOrder = savedOrder;
+        pendingItems.forEach(item -> item.setOrder(finalSavedOrder));
         orderItemRepository.saveAll(pendingItems);
 
+        if (Boolean.TRUE.equals(input.useWalletBalance())) {
+            GiftCardBalanceApplicationResult result =
+                giftCardService.applyBalanceToOrder(userId, savedOrder.getTotal(), savedOrder);
+            if (result.totalApplied().signum() > 0) {
+                savedOrder.setWalletAmountApplied(result.totalApplied());
+                if (result.totalApplied().compareTo(savedOrder.getTotal()) >= 0) {
+                    savedOrder.setPaymentStatus(PaymentStatus.PAID); // fully covered, no Stripe needed
+                }
+                savedOrder = orderRepository.save(savedOrder);
+            }
+        }
+
         cartService.removeItems(userId, input.cartItemIds());
-
         eventPublisher.publishEvent(new OrderPlacedEvent(savedOrder, user));
-
         return savedOrder;
     }
 

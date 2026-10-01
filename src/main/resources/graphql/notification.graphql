@@ -68,6 +68,13 @@ enum NotificationType {
     MEMBERSHIP_TIER_UPGRADED
 
     BULK_ACTION_PERFORMED
+
+    GIFT_CARD_PURCHASED
+    GIFT_CARD_ISSUED
+    GIFT_CARD_REDEEMED
+    GIFT_CARD_APPLIED_TO_ORDER
+    GIFT_CARD_EXPIRED
+    GIFT_CARD_REFUND_ISSUED
 }
 
 enum ReferenceType {
@@ -82,6 +89,7 @@ enum ReferenceType {
     PROMOTION
     STYLIST
     MEDIA_IMAGE
+    GIFT_CARD
 }
 
 enum NotificationPriority {

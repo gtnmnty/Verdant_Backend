@@ -16,6 +16,14 @@ enum AuditEntityType {
     ORDER
     STYLIST
     ACCOUNT
+    PRODUCT
+    APPOINTMENT
+    REVIEW
+    BRANCH
+    SALON_SERVICE
+    MEDIA_IMAGE
+    FAVORITE
+    GIFT_CARD
 }
 
 enum AuditActionType {
@@ -44,6 +52,10 @@ enum AuditActionType {
     ASSIGNED
     BULK_CANCELLED
     BULK_DELETED
+    GIFT_CARD
+    ISSUED
+    REDEEMED
+    EXPIRED
 }
 
 type AuditLogEntry {

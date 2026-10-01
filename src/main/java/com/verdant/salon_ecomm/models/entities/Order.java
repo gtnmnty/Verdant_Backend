@@ -55,6 +55,9 @@ public class Order {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
 
+    @Column(name = "wallet_amount_applied", precision = 10, scale = 2)
+    private BigDecimal walletAmountApplied = BigDecimal.ZERO;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 

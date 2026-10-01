@@ -1,0 +1,69 @@
+enum GiftCardStatus {
+    ACTIVE
+    REDEEMED
+    EXPIRED
+    CANCELLED
+}
+
+enum GiftCardTransactionType {
+    PURCHASE
+    REDEMPTION
+    ORDER_PAYMENT
+    REFUND
+    ADMIN_ADJUSTMENT
+}
+
+type GiftCard {
+    id: ID!
+    code: String!
+    balance: Float!
+    initialAmount: Float!
+    status: GiftCardStatus!
+    paymentStatus: PaymentStatus!
+    recipientName: String
+    recipientEmail: String
+    note: String
+    expiresAt: DateTime
+    createdAt: DateTime!
+}
+
+type GiftCardTransaction {
+    id: ID!
+    type: GiftCardTransactionType!
+    amount: Float!
+    description: String!
+    orderId: ID
+    createdAt: DateTime!
+}
+
+type GiftCardPayment {
+    giftCard: GiftCard!
+    clientSecret: String!
+}
+
+input PurchaseGiftCardInput {
+    amount: Float!
+    recipientName: String
+    recipientEmail: String
+    note: String
+}
+
+input AdminIssueGiftCardInput {
+    amount: Float!
+    recipientName: String
+    recipientEmail: String
+    note: String
+    expiresAt: DateTime
+}
+
+extend type Query {
+    myGiftCards: [GiftCard!]!
+    myWalletBalance: Float!
+    myGiftCardTransactions: [GiftCardTransaction!]!
+}
+
+extend type Mutation {
+    purchaseGiftCard(input: PurchaseGiftCardInput!): GiftCardPayment!
+    redeemGiftCard(code: String!): GiftCard!
+    adminIssueGiftCard(input: AdminIssueGiftCardInput!): GiftCard!
+}
