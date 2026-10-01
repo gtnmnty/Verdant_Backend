@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.dtos.gitftcards;
+package com.verdant.salon_ecomm.dtos.gitftcards.events;
 
 import com.verdant.salon_ecomm.models.entities.GiftCardTransaction;
 import com.verdant.salon_ecomm.models.entities.Order;
