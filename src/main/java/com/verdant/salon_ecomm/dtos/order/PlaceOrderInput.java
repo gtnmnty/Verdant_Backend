@@ -8,5 +8,6 @@ import java.util.UUID;
 public record PlaceOrderInput(
     List<UUID> cartItemIds,
     AddressInput shippingAddress,
-    String paymentMethod
+    String paymentMethod,
+    Boolean useWalletBalance
 ) {}

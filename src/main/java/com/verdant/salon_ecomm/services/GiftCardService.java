@@ -1,34 +1,44 @@
 package com.verdant.salon_ecomm.services;
 
+import com.stripe.StripeClient;
+import com.stripe.exception.ApiConnectionException;
+import com.stripe.exception.ApiException;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
+import com.stripe.net.RequestOptions;
+import com.stripe.param.PaymentIntentCreateParams;
+import com.verdant.salon_ecomm.config.StripeConfig;
 import com.verdant.salon_ecomm.dtos.gitftcards.*;
 import com.verdant.salon_ecomm.dtos.gitftcards.events.*;
+import com.verdant.salon_ecomm.exceptions.PaymentException;
+import com.verdant.salon_ecomm.mappers.GiftCardMapper;
 import com.verdant.salon_ecomm.models.entities.GiftCard;
 import com.verdant.salon_ecomm.models.entities.GiftCardTransaction;
+import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.mappers.GiftCardMapper;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardStatus;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardTransactionType;
 import com.verdant.salon_ecomm.repositories.GiftCardRepository;
 import com.verdant.salon_ecomm.repositories.GiftCardTransactionRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
-import com.stripe.exception.StripeException;
-import com.stripe.model.PaymentIntent;
-import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class GiftCardService {
 
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
@@ -39,12 +49,19 @@ public class GiftCardService {
     private final UserRepository userRepository;
     private final GiftCardMapper giftCardMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final StripeClient stripeClient;
+    private final StripeConfig stripeConfig;
+    private final PaymentService paymentService;
+    @Lazy
+    private final GiftCardService giftCardService;
 
     // ── Purchase (real Stripe charge) ───────────────────────────
     @Transactional
     public GiftCardPaymentDto purchaseGiftCard(UUID purchaserId, PurchaseGiftCardInput input) {
         User purchaser = userRepository.findById(purchaserId)
             .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        String stripeCustomerId = paymentService.ensureStripeCustomer(purchaser);
 
         GiftCard giftCard = GiftCard.builder()
             .code(generateUniqueCode())
@@ -57,28 +74,23 @@ public class GiftCardService {
             .recipientEmail(input.recipientEmail())
             .note(input.note())
             .build();
+        giftCard = giftCardRepository.save(giftCard);
 
+        PaymentIntent intent;
         try {
-            PaymentIntent intent = PaymentIntent.create(
-                PaymentIntentCreateParams.builder()
-                    .setAmount(input.amount().movePointRight(2).longValueExact())
-                    .setCurrency("php")
-                    .putMetadata("type", "gift_card")
-                    .putMetadata("purchaserId", purchaserId.toString())
-                    .build()
-            );
-            giftCard.setStripePaymentIntentId(intent.getId());
-            giftCard = giftCardRepository.save(giftCard);
-
-            writeTransaction(giftCard, GiftCardTransactionType.PURCHASE, input.amount(),
-                "Purchased " + giftCard.getCode(), null);
-
-            eventPublisher.publishEvent(new GiftCardPurchasedEvent(giftCard, purchaser));
-
-            return new GiftCardPaymentDto(giftCardMapper.toDto(giftCard), intent.getClientSecret());
-        } catch (StripeException e) {
-            throw new IllegalStateException("Failed to create gift card payment intent", e);
+            intent = giftCardService.createGiftCardPaymentIntent(giftCard, stripeCustomerId);
+        } catch (StripeException ex) {
+            throw new PaymentException("Failed to create PaymentIntent for gift card " + giftCard.getId(), ex);
         }
+
+        giftCard.setStripePaymentIntentId(intent.getId());
+        giftCard = giftCardRepository.save(giftCard);
+
+        writeTransaction(giftCard, GiftCardTransactionType.PURCHASE, input.amount(),
+            "Purchased " + giftCard.getCode(), null);
+        eventPublisher.publishEvent(new GiftCardPurchasedEvent(giftCard, purchaser));
+
+        return new GiftCardPaymentDto(giftCardMapper.toDto(giftCard), intent.getClientSecret());
     }
 
     // Called from the Stripe webhook handler when a gift-card PaymentIntent succeeds.
@@ -171,6 +183,24 @@ public class GiftCardService {
             .toList();
     }
 
+    @Transactional
+    public void applyStripeEventToGiftCard(String paymentIntentId, String eventType) {
+        GiftCard giftCard = giftCardRepository.findByStripePaymentIntentId(paymentIntentId).orElse(null);
+        if (giftCard == null) {
+            log.warn("Received webhook for unknown PaymentIntent {}", paymentIntentId);
+            return;
+        }
+        if ("payment_intent.succeeded".equals(eventType)) {
+            if (giftCard.getPaymentStatus() == PaymentStatus.PAID) return; // already handled
+            giftCard.setPaymentStatus(PaymentStatus.PAID);
+            giftCardRepository.save(giftCard);
+            // delivery email to recipientEmail goes here, via EmailService
+        } else if ("payment_intent.payment_failed".equals(eventType)) {
+            giftCard.setPaymentStatus(PaymentStatus.FAILED);
+            giftCardRepository.save(giftCard);
+        }
+    }
+
     // ── Checkout drawdown — called from OrderService.placeOrder ───
 
     /**
@@ -179,8 +209,10 @@ public class GiftCardService {
      * Must run inside the same transaction as order creation.
      */
     @Transactional
-    public GiftCardBalanceApplicationResult applyBalanceToOrder(UUID userId, BigDecimal amountRequested,
-                                                                com.verdant.salon_ecomm.models.entities.Order order) {
+    public GiftCardBalanceApplicationResult applyBalanceToOrder(
+        UUID userId, BigDecimal amountRequested,
+        Order order
+    ) {
         List<GiftCard> cards = giftCardRepository.findSpendableCardsForUpdate(userId);
         BigDecimal remaining = amountRequested;
         BigDecimal totalApplied = BigDecimal.ZERO;
@@ -207,7 +239,7 @@ public class GiftCardService {
 
         if (totalApplied.signum() > 0) {
             eventPublisher.publishEvent(new GiftCardAppliedToOrderEvent(
-                order, cards.get(0).getOwner(),
+                order, cards.getFirst().getOwner(),
                 cards.stream().map(c -> (GiftCardTransaction) null).toList(), // replaced by real tx list below
                 totalApplied
             ));
@@ -240,10 +272,19 @@ public class GiftCardService {
             .recipientEmail(refundDeliveryEmail)
             .note("Refund for deleted account balance")
             .build();
-        replacement = giftCardRepository.save(replacement);
-        writeTransaction(replacement, GiftCardTransactionType.REFUND, total, "Account-deletion refund", null);
 
-        eventPublisher.publishEvent(new GiftCardForfeitedEvent(cards.get(0), departingUser, total, true, replacement));
+        replacement = giftCardRepository.save(replacement);
+        writeTransaction(
+            replacement,
+            GiftCardTransactionType.REFUND,
+            total,
+            "Account-deletion refund",
+            null
+        );
+
+        eventPublisher.publishEvent(new GiftCardForfeitedEvent(
+            cards.getFirst(), departingUser, total, true, replacement
+        ));
     }
 
     // ── Expiry sweep — call from your existing cleanup job ─────────
@@ -261,6 +302,36 @@ public class GiftCardService {
     }
 
     // ── Helpers ──────────────────────────────────────────────────
+
+    @Retryable(
+        retryFor = { ApiConnectionException.class, ApiException.class },
+        backoff = @org.springframework.retry.annotation.Backoff(delay = 500, multiplier = 2)
+    )
+    PaymentIntent createGiftCardPaymentIntent(GiftCard giftCard, String stripeCustomerId) throws StripeException {
+        String currency = stripeConfig.getCurrency();
+        int fractionDigits = Currency.getInstance(currency.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
+        long minorUnits = giftCard.getInitialAmount()
+            .movePointRight(fractionDigits)
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValueExact();
+
+        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+            .setAmount(minorUnits)
+            .setCurrency(currency)
+            .setCustomer(stripeCustomerId)
+            .putMetadata("type", "gift_card")
+            .putMetadata("gift_card_id", giftCard.getId().toString())
+            .setAutomaticPaymentMethods(
+                PaymentIntentCreateParams.AutomaticPaymentMethods.builder().setEnabled(true).build()
+            )
+            .build();
+
+        RequestOptions options = RequestOptions.builder()
+            .setIdempotencyKey("gift_card_" + giftCard.getId() + "_payment_intent")
+            .build();
+
+        return stripeClient.paymentIntents().create(params, options);
+    }
 
     private GiftCardTransaction writeTransaction(
         GiftCard card, GiftCardTransactionType type, BigDecimal amount,

@@ -16,6 +16,14 @@ enum AuditEntityType {
     ORDER
     STYLIST
     ACCOUNT
+    PRODUCT
+    APPOINTMENT
+    REVIEW
+    BRANCH
+    SALON_SERVICE
+    MEDIA_IMAGE
+    FAVORITE
+    GIFT_CARD
 }
 
 enum AuditActionType {

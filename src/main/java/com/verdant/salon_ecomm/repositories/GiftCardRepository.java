@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.models.entities.GiftCard;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -9,6 +10,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import static jakarta.persistence.LockModeType.PESSIMISTIC_WRITE;
 
 public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
 
@@ -19,21 +22,22 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
     List<GiftCard> findByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
 
     @Query("""
-        SELECT COALESCE(SUM(g.balance), 0) FROM GiftCard g
-        WHERE g.owner.id = :ownerId AND g.status = 'REDEEMED' AND g.balance > 0
-    """)
+            SELECT COALESCE(SUM(g.balance), 0) FROM GiftCard g
+            WHERE g.owner.id = :ownerId AND g.status = 'REDEEMED' AND g.balance > 0
+        """)
     BigDecimal getRedeemableBalance(@Param("ownerId") UUID ownerId);
 
+    @Lock(PESSIMISTIC_WRITE)
     @Query("""
-        SELECT g FROM GiftCard g
-        WHERE g.owner.id = :ownerId AND g.status = 'REDEEMED' AND g.balance > 0
-        ORDER BY g.expiresAt ASC NULLS LAST, g.createdAt ASC
-    """)
+            SELECT g FROM GiftCard g
+            WHERE g.owner.id = :ownerId AND g.status = 'REDEEMED' AND g.balance > 0
+            ORDER BY g.expiresAt ASC NULLS LAST, g.createdAt ASC
+        """)
     List<GiftCard> findSpendableCardsForUpdate(@Param("ownerId") UUID ownerId);
 
     @Query("""
-        SELECT g FROM GiftCard g
-        WHERE g.status = 'ACTIVE' AND g.expiresAt IS NOT NULL AND g.expiresAt < CURRENT_TIMESTAMP
-    """)
+            SELECT g FROM GiftCard g
+            WHERE g.status = 'ACTIVE' AND g.expiresAt IS NOT NULL AND g.expiresAt < CURRENT_TIMESTAMP
+        """)
     List<GiftCard> findExpiredActiveCards();
 }

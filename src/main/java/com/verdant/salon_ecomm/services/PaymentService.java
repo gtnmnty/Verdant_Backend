@@ -55,6 +55,7 @@ public class PaymentService {
     private final PaymentMapper paymentMapper;
     private final StripeConfig stripeConfig;
     private final StripeClient stripeClient;
+    private final GiftCardService giftCardService;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -68,6 +69,10 @@ public class PaymentService {
 
     public PaymentIntentDto createPaymentIntent(CreatePaymentInput input, UUID currentUserId, boolean isAdmin) {
         Order order = self.loadAndAuthorizeOrder(input.orderId(), currentUserId, isAdmin);
+
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new PaymentException("Order " + order.getId() + " is already fully paid — no payment intent needed");
+        }
 
         if (order.getStripePaymentIntentId() != null) {
             return paymentMapper.toDto(retrieveExistingIntent(order.getStripePaymentIntentId()));
@@ -136,12 +141,13 @@ public class PaymentService {
         }
 
         Order order = orderRepository.findByStripePaymentIntentId(paymentIntentId).orElse(null);
-        if (order == null) {
-            log.warn("Received webhook for unknown PaymentIntent {}", paymentIntentId);
+        if (order != null) {
+            applyStripeEvent(order, event.getType());
             return;
         }
 
-        applyStripeEvent(order, event.getType());
+        // Not an order payment — check if it's a gift card purchase instead.
+        giftCardService.applyStripeEventToGiftCard(paymentIntentId, event.getType());
     }
 
     // ---------- Private helpers ----------
@@ -287,9 +293,9 @@ public class PaymentService {
         backoff = @Backoff(delay = 500, multiplier = 2)
     )
     PaymentIntent createStripePaymentIntent(Order order, String stripeCustomerId) throws StripeException {
-        BigDecimal orderTotal = order.getTotal();
-        if (orderTotal == null || orderTotal.signum() <= 0) {
-            throw new PaymentException("Order " + order.getId() + " has no valid total to charge");
+        BigDecimal amountDue = order.getTotal().subtract(order.getWalletAmountApplied());
+        if (amountDue.signum() <= 0) {
+            throw new PaymentException("Order " + order.getId() + " has nothing left to charge");
         }
 
         String currency = stripeConfig.getCurrency();
@@ -298,7 +304,7 @@ public class PaymentService {
         // (JPY has 0 minor digits, KWD/BHD have 3).
         int fractionDigits = Currency.getInstance(currency.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
 
-        long minorUnits = orderTotal
+        long minorUnits = amountDue
             .movePointRight(fractionDigits)
             .setScale(0, RoundingMode.HALF_UP)
             .longValueExact();
