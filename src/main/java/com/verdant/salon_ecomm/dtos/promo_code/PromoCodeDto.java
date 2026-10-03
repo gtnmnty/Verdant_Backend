@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.dtos.promo_code;
 
-import com.verdant.salon_ecomm.models.enums.promo.PromoCodeStatus;
+import com.verdant.salon_ecomm.models.enums.PromoCodeStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;

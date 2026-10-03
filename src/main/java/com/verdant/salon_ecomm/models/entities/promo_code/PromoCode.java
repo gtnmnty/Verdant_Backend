@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.models.entities.promo_code;
 
 import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.models.enums.PromoCodeStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
