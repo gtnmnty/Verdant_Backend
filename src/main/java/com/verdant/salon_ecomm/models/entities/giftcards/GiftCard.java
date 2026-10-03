@@ -1,5 +1,6 @@
-package com.verdant.salon_ecomm.models.entities;
+package com.verdant.salon_ecomm.models.entities.giftcards;
 
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardStatus;
 import jakarta.persistence.*;

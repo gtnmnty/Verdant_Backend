@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.models.entities.GiftCard;
+import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardStatus;
 import org.springframework.data.domain.Pageable;

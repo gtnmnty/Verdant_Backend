@@ -4,7 +4,7 @@ import com.verdant.salon_ecomm.config.StripeConfig;
 import com.verdant.salon_ecomm.dtos.gitftcards.events.GiftCardForfeitedEvent;
 import com.verdant.salon_ecomm.dtos.gitftcards.events.GiftCardIssuedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.gitftcards.events.GiftCardPurchasedEvent;
-import com.verdant.salon_ecomm.models.entities.GiftCard;
+import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import com.verdant.salon_ecomm.services.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
