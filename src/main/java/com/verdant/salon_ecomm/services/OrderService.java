@@ -184,6 +184,17 @@ public class OrderService {
         if (input.orderStatus() != null) { order.setOrderStatus(input.orderStatus()); }
         if (input.paymentStatus() != null) { order.setPaymentStatus(input.paymentStatus()); }
 
+        // Cancelling an order or marking its payment failed/canceled must hand back any gift-card wallet
+        // money used on it (idempotent - safe if the Stripe webhook already did it).
+        boolean orderJustCancelled = input.orderStatus() == OrderStatus.CANCELLED
+            && previousOrderStatus != OrderStatus.CANCELLED;
+        boolean paymentJustVoided = input.paymentStatus() != null
+            && input.paymentStatus() != previousPaymentStatus
+            && (input.paymentStatus() == PaymentStatus.FAILED || input.paymentStatus() == PaymentStatus.CANCELLED);
+        if (orderJustCancelled || paymentJustVoided) {
+            giftCardService.restoreWalletForOrder(order);
+        }
+
         List<OrderItem> items;
         if (input.items() != null) {
             List<UUID> requestedProductIds = input.items().stream()
@@ -338,6 +349,10 @@ public class OrderService {
         if (!foundIds.equals(requestedIds)) {
             throw new ResourceNotFoundException("One or more orders were not found.");
         }
+
+        // Keep the gift-card ledger rows but unlink them, otherwise gift_card_transactions.order_id
+        // blocks delete with an FK violation for any order paid (even partly) from the wallet.
+        giftCardService.detachOrderReferences(foundIds);
 
         orders.forEach(order -> orderItemRepository
             .deleteAll(orderItemRepository.findByOrder_Id(order.getId())));

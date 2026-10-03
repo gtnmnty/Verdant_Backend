@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.services.event_Listeners;
+package com.verdant.salon_ecomm.services.event_Listeners.account;
 
 import com.verdant.salon_ecomm.dtos.account.events.AccountCreatedEvent;
 import com.verdant.salon_ecomm.dtos.account.events.AccountPasswordResetRequestedEvent;

@@ -30,6 +30,12 @@ public class GiftCardResolver {
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
+    public List<GiftCardDto> mySentGiftCards() {
+        return giftCardService.getMySentGiftCards(getCurrentUserId());
+    }
+
+    @QueryMapping
+    @PreAuthorize("isAuthenticated()")
     public BigDecimal myWalletBalance() {
         return giftCardService.getMyWalletBalance(getCurrentUserId());
     }

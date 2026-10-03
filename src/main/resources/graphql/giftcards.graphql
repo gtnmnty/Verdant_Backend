@@ -1,6 +1,7 @@
 enum GiftCardStatus {
     ACTIVE
     REDEEMED
+    DEPLETED
     EXPIRED
     CANCELLED
 }
@@ -11,6 +12,7 @@ enum GiftCardTransactionType {
     ORDER_PAYMENT
     REFUND
     ADMIN_ADJUSTMENT
+    EXPIRY
 }
 
 type GiftCard {
@@ -44,7 +46,7 @@ type GiftCardPayment {
 input PurchaseGiftCardInput {
     amount: Float!
     recipientName: String
-    recipientEmail: String
+    recipientEmail: String!
     note: String
 }
 
@@ -58,6 +60,7 @@ input AdminIssueGiftCardInput {
 
 extend type Query {
     myGiftCards: [GiftCard!]!
+    mySentGiftCards: [GiftCard!]!
     myWalletBalance: Float!
     myGiftCardTransactions: [GiftCardTransaction!]!
 }

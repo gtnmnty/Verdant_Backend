@@ -20,8 +20,8 @@ public class GiftCardAuditListener {
     public void onGiftCardPurchased(GiftCardPurchasedEvent event) {
         GiftCard card = event.giftCard();
         auditLogService.recordSelfService(
-            AuditEntityType.GIFT_CARD, card.getId(), AuditActionType.PAYMENT_INITIATED,
-            "Gift card " + card.getCode() + " purchase initiated",
+            AuditEntityType.GIFT_CARD, card.getId(), AuditActionType.PAYMENT_SUCCEEDED,
+            "Gift card " + card.maskedCode() + " purchase paid",
             "Purchased by " + event.purchaser().getFullName() + " for " + card.getInitialAmount()
         );
     }
@@ -31,8 +31,9 @@ public class GiftCardAuditListener {
         GiftCard card = event.giftCard();
         auditLogService.record(
             AuditEntityType.GIFT_CARD, card.getId(), AuditActionType.ISSUED,
-            "Gift card " + card.getCode() + " issued manually",
-            "Issued to " + card.getRecipientEmail() + " for " + card.getInitialAmount(),
+            "Gift card " + card.maskedCode() + " issued manually",
+            "Issued to " + (card.getRecipientEmail() != null ? card.getRecipientEmail() : "no recipient email")
+                + " for " + card.getInitialAmount(),
             event.actor()
         );
     }
@@ -42,7 +43,7 @@ public class GiftCardAuditListener {
         GiftCard card = event.giftCard();
         auditLogService.recordSelfService(
             AuditEntityType.GIFT_CARD, card.getId(), AuditActionType.REDEEMED,
-            "Gift card " + card.getCode() + " redeemed",
+            "Gift card " + card.maskedCode() + " redeemed",
             "Redeemed by " + event.redeemedBy().getFullName()
         );
     }
@@ -66,10 +67,10 @@ public class GiftCardAuditListener {
 
         if (event.owner() != null) {
             auditLogService.recordSelfService(AuditEntityType.GIFT_CARD, card.getId(), action,
-                "Gift card " + card.getCode() + " balance forfeited", detail);
+                "Gift card " + card.maskedCode() + " balance forfeited", detail);
         } else {
             auditLogService.record(AuditEntityType.GIFT_CARD, card.getId(), action,
-                "Gift card " + card.getCode() + " expired unredeemed", detail, null);
+                "Gift card " + card.maskedCode() + " expired unredeemed", detail, null);
         }
     }
 }

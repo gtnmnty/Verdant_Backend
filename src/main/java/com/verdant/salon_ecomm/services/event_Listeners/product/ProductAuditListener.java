@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.services.event_Listeners;
+package com.verdant.salon_ecomm.services.event_Listeners.product;
 
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.dtos.product.events.ProductCreatedEvent;

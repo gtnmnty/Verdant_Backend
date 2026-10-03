@@ -8,6 +8,8 @@ import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.verdant.salon_ecomm.config.StripeConfig;
+import com.verdant.salon_ecomm.dtos.gitftcards.events.GiftCardStripeWebhookEvent;
+import com.verdant.salon_ecomm.dtos.gitftcards.events.OrderPaymentVoidedEvent;
 import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
@@ -55,7 +57,6 @@ public class PaymentService {
     private final PaymentMapper paymentMapper;
     private final StripeConfig stripeConfig;
     private final StripeClient stripeClient;
-    private final GiftCardService giftCardService;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -146,8 +147,9 @@ public class PaymentService {
             return;
         }
 
-        // Not an order payment — check if it's a gift card purchase instead.
-        giftCardService.applyStripeEventToGiftCard(paymentIntentId, event.getType());
+        // Not an order payment - hand it to GiftCardService via an event (a direct call created a
+        // PaymentService <-> GiftCardService circular dependency). Unknown intents are ignored there.
+        eventPublisher.publishEvent(new GiftCardStripeWebhookEvent(paymentIntentId, event.getType()));
     }
 
     // ---------- Private helpers ----------
@@ -182,7 +184,7 @@ public class PaymentService {
         return order;
     }
 
-    protected String ensureStripeCustomer(User user) {
+    public String ensureStripeCustomer(User user) {
         if (user.getStripeCustomerId() != null) {
             return user.getStripeCustomerId();
         }
@@ -263,6 +265,11 @@ public class PaymentService {
         order.setPaymentStatus(next);
         orderRepository.save(order);
 
+        // The card payment is dead - hand back any gift-card wallet money that was applied to this order.
+        if (next == PaymentStatus.FAILED || next == PaymentStatus.CANCELLED) {
+            eventPublisher.publishEvent(new OrderPaymentVoidedEvent(order));
+        }
+
         eventPublisher.publishEvent(new PaymentStatusChangedEvent(
             order.getId(), order.getUser().getId(), current, next, eventType
         ));
@@ -293,7 +300,8 @@ public class PaymentService {
         backoff = @Backoff(delay = 500, multiplier = 2)
     )
     PaymentIntent createStripePaymentIntent(Order order, String stripeCustomerId) throws StripeException {
-        BigDecimal amountDue = order.getTotal().subtract(order.getWalletAmountApplied());
+        BigDecimal wallet = order.getWalletAmountApplied() != null ? order.getWalletAmountApplied() : BigDecimal.ZERO;
+        BigDecimal amountDue = order.getTotal().subtract(wallet);
         if (amountDue.signum() <= 0) {
             throw new PaymentException("Order " + order.getId() + " has nothing left to charge");
         }

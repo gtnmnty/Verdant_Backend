@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.services.event_Listeners;
+package com.verdant.salon_ecomm.services.event_Listeners.appointment;
 
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
 import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCancelledEvent;
