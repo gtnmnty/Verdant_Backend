@@ -55,6 +55,9 @@ public class Order {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
 
+    // @Builder.Default: the builder ignores plain field initializers, so this was null for every
+    // order built via OrderMapper and NPE'd in PaymentService.createStripePaymentIntent.
+    @Builder.Default
     @Column(name = "wallet_amount_applied", precision = 10, scale = 2)
     private BigDecimal walletAmountApplied = BigDecimal.ZERO;
 

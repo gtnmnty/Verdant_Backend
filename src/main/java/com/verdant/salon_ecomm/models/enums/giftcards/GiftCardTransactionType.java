@@ -5,5 +5,6 @@ public enum GiftCardTransactionType {
     REDEMPTION,
     ORDER_PAYMENT,
     REFUND,
-    ADMIN_ADJUSTMENT
+    ADMIN_ADJUSTMENT,
+    EXPIRY
 }

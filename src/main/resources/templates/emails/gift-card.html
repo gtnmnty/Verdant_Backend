@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif;">
+<div style="background-color: #f5f5f5; padding: 20px;">
+    <h2>You've received a gift card!</h2>
+    <p th:if="${recipientName}">Hi <span th:text="${recipientName}"></span>,</p>
+    <p th:if="${senderName}"><span th:text="${senderName}"></span> sent you a Verdant Salon gift card worth:</p>
+    <p th:unless="${senderName}">You've been sent a Verdant Salon gift card worth:</p>
+    <h2 th:text="${amountText}" style="color: #007bff;"></h2>
+    <p th:if="${note}" style="font-style: italic;" th:text="${note}"></p>
+    <p>Your gift card code:</p>
+    <h3 th:text="${code}" style="color: #007bff; letter-spacing: 2px;"></h3>
+    <p>To use it, sign in to your Verdant Salon account and redeem the code under Gift Cards.</p>
+    <p th:if="${expiresText}">This gift card expires on <span th:text="${expiresText}"></span>.</p>
+    <p style="color: #888; font-size: 12px;">Keep this code private - anyone who has it can redeem the card.</p>
+</div>
+</body>
+</html>

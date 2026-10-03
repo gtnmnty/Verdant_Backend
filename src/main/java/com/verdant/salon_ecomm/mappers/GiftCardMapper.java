@@ -10,19 +10,13 @@ import org.springframework.stereotype.Component;
 public class GiftCardMapper {
 
     public GiftCardDto toDto(GiftCard giftCard) {
-        return new GiftCardDto(
-            giftCard.getId(),
-            giftCard.getCode(),
-            giftCard.getBalance(),
-            giftCard.getInitialAmount(),
-            giftCard.getStatus(),
-            giftCard.getPaymentStatus(),
-            giftCard.getRecipientName(),
-            giftCard.getRecipientEmail(),
-            giftCard.getNote(),
-            giftCard.getExpiresAt(),
-            giftCard.getCreatedAt()
-        );
+        return build(giftCard, giftCard.getCode());
+    }
+
+    // For the purchaser's "sent" list -
+    // the code stays secret between the buyer's screen and the recipient.
+    public GiftCardDto toMaskedDto(GiftCard giftCard) {
+        return build(giftCard, giftCard.maskedCode());
     }
 
     public GiftCardTransactionDto toDto(GiftCardTransaction tx) {
@@ -33,6 +27,22 @@ public class GiftCardMapper {
             tx.getDescription(),
             tx.getOrder() != null ? tx.getOrder().getId() : null,
             tx.getCreatedAt()
+        );
+    }
+
+    private GiftCardDto build(GiftCard giftCard, String code) {
+        return new GiftCardDto(
+            giftCard.getId(),
+            code,
+            giftCard.getBalance(),
+            giftCard.getInitialAmount(),
+            giftCard.getStatus(),
+            giftCard.getPaymentStatus(),
+            giftCard.getRecipientName(),
+            giftCard.getRecipientEmail(),
+            giftCard.getNote(),
+            giftCard.getExpiresAt(),
+            giftCard.getCreatedAt()
         );
     }
 }

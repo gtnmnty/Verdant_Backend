@@ -33,19 +33,25 @@ public class GiftCard {
     @Column(nullable = false, unique = true, length = 30)
     private String code;
 
+    // @Builder.Default is required: without it Lombok's builder ignores the initializer
+    // and the field is null whenever the builder doesn't set it explicitly.
+    @Builder.Default
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal balance = BigDecimal.ZERO;
 
     @Column(name = "initial_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal initialAmount;
 
+    @Builder.Default
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private GiftCardStatus status = GiftCardStatus.ACTIVE;
 
+    // Safe default: a card is unpaid until something explicitly marks it PAID.
+    @Builder.Default
     @Column(name = "payment_status", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private PaymentStatus paymentStatus = PaymentStatus.PAID;
+    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
     @Column(name = "stripe_payment_intent_id")
     private String stripePaymentIntentId;
@@ -67,6 +73,13 @@ public class GiftCard {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
+    // The code is a bearer secret -
+    // use this anywhere that isn't the owner's own screen (audit, staff notifications, logs).
+    public String maskedCode() {
+        if (code == null || code.length() < 9) return "****";
+        return code.substring(0, 4) + "****" + code.substring(8); // VLX-****-AB12
+    }
 
     @PrePersist
     protected void onCreate() {

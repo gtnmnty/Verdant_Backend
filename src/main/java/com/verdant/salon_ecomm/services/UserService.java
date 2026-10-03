@@ -55,6 +55,7 @@ public class UserService {
 
     private final CloudinaryService cloudinaryService;
     private final PaymentService paymentService;
+    private final GiftCardService giftCardService;
 
     public UserDto.Profile getUserById(UUID id) {
         return userRepository.findById(id)
@@ -157,6 +158,10 @@ public class UserService {
     public void deleteUserById(UUID id) {
         var user = userRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
+
+        // Must run BEFORE the email is overwritten below: the refund gift card is delivered to it.
+        // Same transaction as the deletion, so the forfeit and the anonymisation commit (or fail) together.
+        giftCardService.forfeitAndRefundOnAccountDeletion(user, user.getEmail());
 
         String avatarPublicId = user.getAvatarPublicId();
         String stripeCustomerId = user.getStripeCustomerId();

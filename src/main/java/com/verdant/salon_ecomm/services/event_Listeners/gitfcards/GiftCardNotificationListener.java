@@ -37,14 +37,18 @@ public class GiftCardNotificationListener {
             event.purchaser().getId(),
             NotificationType.GIFT_CARD_PURCHASED,
             "Gift card purchased",
-            "Your gift card " + card.getCode() + " is being processed.",
+            "Payment received for your gift card " + card.maskedCode() + ".",
             ReferenceType.GIFT_CARD, card.getId(),
             NotificationPriority.INFO, null, null
         ));
 
         notifyStaff(card, NotificationType.GIFT_CARD_PURCHASED, "Gift card purchased",
-            card.getCode() + " purchased by " + event.purchaser().getFullName(),
+            card.maskedCode() + " purchased by " + event.purchaser().getFullName(),
             null, null);
+
+        // TODO(email): this event now fires only once payment is CONFIRMED - send the recipient email here
+        // (card.getRecipientEmail(), card.getCode(), card.getNote()) using the same EmailService template
+        // as the purchase confirmation.
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -53,7 +57,7 @@ public class GiftCardNotificationListener {
 
         // Recipient isn't necessarily a registered user yet (issued by email) —
         // only notify in-app if it resolves to an existing account.
-        userRepository.findByEmail(card.getRecipientEmail()).ifPresent(recipient ->
+        if (card.getRecipientEmail() != null) userRepository.findByEmail(card.getRecipientEmail()).ifPresent(recipient ->
             notificationService.create(new NotificationCreateDto(
                 recipient.getId(),
                 NotificationType.GIFT_CARD_ISSUED,
@@ -65,7 +69,8 @@ public class GiftCardNotificationListener {
         );
 
         notifyStaff(card, NotificationType.GIFT_CARD_ISSUED, "Gift card issued manually",
-            card.getCode() + " issued by " + event.actor().getFullName() + " to " + card.getRecipientEmail(),
+            card.maskedCode() + " issued by " + event.actor().getFullName()
+                + " to " + (card.getRecipientEmail() != null ? card.getRecipientEmail() : "no recipient email"),
             event.actor().getId(), event.actor().getFullName());
     }
 
@@ -77,13 +82,13 @@ public class GiftCardNotificationListener {
             event.redeemedBy().getId(),
             NotificationType.GIFT_CARD_REDEEMED,
             "Gift card redeemed",
-            card.getCode() + " (" + card.getBalance() + ") added to your balance.",
+            card.maskedCode() + " (" + card.getBalance() + ") added to your balance.",
             ReferenceType.GIFT_CARD, card.getId(),
             NotificationPriority.INFO, null, null
         ));
 
         notifyStaff(card, NotificationType.GIFT_CARD_REDEEMED, "Gift card redeemed",
-            card.getCode() + " redeemed by " + event.redeemedBy().getFullName(),
+            card.maskedCode() + " redeemed by " + event.redeemedBy().getFullName(),
             null, null);
     }
 
@@ -109,14 +114,17 @@ public class GiftCardNotificationListener {
             ? NotificationType.GIFT_CARD_REFUND_ISSUED : NotificationType.GIFT_CARD_EXPIRED;
         String message = event.refundIssued()
             ? event.forfeitedAmount() + " refunded as a new gift card after account deletion."
-            : event.giftCard().getCode() + " expired with " + event.forfeitedAmount() + " remaining.";
+            : event.giftCard().maskedCode() + " expired with " + event.forfeitedAmount() + " remaining.";
 
-        notificationService.create(new NotificationCreateDto(
-            event.owner().getId(), type, "Gift card balance forfeited", message,
-            ReferenceType.GIFT_CARD, event.giftCard().getId(),
-            event.refundIssued() ? NotificationPriority.INFO : NotificationPriority.WARNING,
-            null, null
-        ));
+        // On account deletion the user no longer exists - an in-app notification would point at a deleted
+        // row. They are told by the refund-code email instead (see TODO in forfeitAndRefundOnAccountDeletion).
+        if (!event.refundIssued()) {
+            notificationService.create(new NotificationCreateDto(
+                event.owner().getId(), type, "Gift card balance forfeited", message,
+                ReferenceType.GIFT_CARD, event.giftCard().getId(),
+                NotificationPriority.WARNING, null, null
+            ));
+        }
 
         notifyStaff(event.giftCard(), type, "Gift card balance forfeited",
             message + " (user: " + event.owner().getFullName() + ")", null, null);

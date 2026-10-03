@@ -1,4 +1,4 @@
-package com.verdant.salon_ecomm.services.event_Listeners;
+package com.verdant.salon_ecomm.services.event_Listeners.branch;
 
 import com.verdant.salon_ecomm.dtos.branch.events.BranchesBulkDeletedEvent;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
