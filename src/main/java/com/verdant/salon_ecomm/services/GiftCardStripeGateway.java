@@ -8,7 +8,7 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.verdant.salon_ecomm.config.StripeConfig;
-import com.verdant.salon_ecomm.models.entities.GiftCard;
+import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.retry.annotation.Backoff;

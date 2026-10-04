@@ -1,0 +1,44 @@
+enum PromoCodeStatus {
+    ACTIVE
+    INACTIVE
+    EXPIRED
+    CANCELLED
+}
+
+type PromoCode {
+    id: ID!
+    code: String!
+    discountPercent: Float!
+    minOrderAmount: Float
+    maxUsesPerUser: Int!
+    status: PromoCodeStatus!
+    startsAt: DateTime
+    endsAt: DateTime
+    description: String
+}
+
+type PromoCodeValidationResult {
+    discountAmount: Float!
+    promoCode: PromoCode!
+}
+
+input AdminUpsertPromoCodeInput {
+    id: ID
+    code: String!
+    discountPercent: Float!
+    minOrderAmount: Float
+    maxUsesPerUser: Int
+    startsAt: DateTime
+    endsAt: DateTime
+    description: String
+}
+
+extend type Query {
+    previewPromoCode(code: String!, subtotal: Float!): PromoCodeValidationResult!
+    adminPromoCodes: [PromoCode!]!
+}
+
+extend type Mutation {
+    adminUpsertPromoCode(input: AdminUpsertPromoCodeInput!): PromoCode!
+    adminSetPromoCodeStatus(id: ID!, status: PromoCodeStatus!): Boolean!
+}

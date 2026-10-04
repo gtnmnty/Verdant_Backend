@@ -12,5 +12,6 @@ public enum AuditEntityType {
     SALON_SERVICE,
     MEDIA_IMAGE,
     FAVORITE,
-    GIFT_CARD
+    GIFT_CARD,
+    PROMOTION
 }

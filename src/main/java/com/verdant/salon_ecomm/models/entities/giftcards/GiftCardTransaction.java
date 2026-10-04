@@ -1,5 +1,6 @@
-package com.verdant.salon_ecomm.models.entities;
+package com.verdant.salon_ecomm.models.entities.giftcards;
 
+import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardTransactionType;
 import jakarta.persistence.*;
 import lombok.*;

@@ -24,6 +24,7 @@ enum AuditEntityType {
     MEDIA_IMAGE
     FAVORITE
     GIFT_CARD
+    PROMOTION
 }
 
 enum AuditActionType {
