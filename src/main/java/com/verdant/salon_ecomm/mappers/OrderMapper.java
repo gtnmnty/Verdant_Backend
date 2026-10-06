@@ -41,7 +41,9 @@ public class OrderMapper {
             order.getTotal(),
             itemDtos,
             order.getCreatedAt(),
-            order.getUpdatedAt()
+            order.getUpdatedAt(),
+            order.getPromoDiscountAmount(),
+            order.getWalletAmountApplied()
         );
     }
 
@@ -65,7 +67,9 @@ public class OrderMapper {
             itemDtos,
             buildMilestones(order),
             order.getCreatedAt(),
-            order.getUpdatedAt()
+            order.getUpdatedAt(),
+            order.getPromoDiscountAmount(),
+            order.getWalletAmountApplied()
         );
     }
 

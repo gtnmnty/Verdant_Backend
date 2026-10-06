@@ -9,5 +9,6 @@ public record PlaceOrderInput(
     List<UUID> cartItemIds,
     AddressInput shippingAddress,
     String paymentMethod,
-    Boolean useWalletBalance
+    Boolean useWalletBalance,
+    String promoCode
 ) {}

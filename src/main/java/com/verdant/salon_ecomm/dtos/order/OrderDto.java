@@ -19,5 +19,7 @@ public record OrderDto(
     BigDecimal total,
     List<OrderItemDto> items,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    OffsetDateTime updatedAt,
+    BigDecimal promoDiscount,
+    BigDecimal walletAmountApplied
 ) {}
