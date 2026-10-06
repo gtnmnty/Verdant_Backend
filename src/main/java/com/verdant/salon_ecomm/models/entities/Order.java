@@ -61,6 +61,9 @@ public class Order {
     @Column(name = "wallet_amount_applied", precision = 10, scale = 2)
     private BigDecimal walletAmountApplied = BigDecimal.ZERO;
 
+    @Column(name = "promo_discount_amount", precision = 10, scale = 2)
+    private BigDecimal promoDiscountAmount = BigDecimal.ZERO;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 

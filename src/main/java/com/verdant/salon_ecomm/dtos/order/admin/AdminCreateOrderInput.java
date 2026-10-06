@@ -12,5 +12,6 @@ public record AdminCreateOrderInput(
     String email,
     AddressInput shippingAddress,
     String paymentMethod,
-    List<AdminOrderItemInput> items
+    List<AdminOrderItemInput> items,
+    String promoCode
 ) {}

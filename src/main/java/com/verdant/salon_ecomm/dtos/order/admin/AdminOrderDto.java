@@ -25,5 +25,7 @@ public record AdminOrderDto(
     List<AdminOrderItemDto> items,
     List<OrderMilestoneDto> activity,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    OffsetDateTime updatedAt,
+    BigDecimal promoDiscount,
+    BigDecimal walletAmountApplied
 ) {}

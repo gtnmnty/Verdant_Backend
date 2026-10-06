@@ -38,6 +38,7 @@ input PlaceOrderInput {
     cartItemIds: [ID!]!
     shippingAddress: AddressInput!
     paymentMethod: String!
+    promoCode: String
 }
 
 input AdminCreateOrderInput {
@@ -48,6 +49,7 @@ input AdminCreateOrderInput {
     shippingAddress: AddressInput!
     paymentMethod: String!
     items: [AdminOrderItemInput!]!
+    promoCode: String
 }
 
 input AdminUpdateOrderInput {
@@ -138,6 +140,8 @@ type Order {
     items: [OrderItem!]!
     createdAt: DateTime!
     updatedAt: DateTime!
+    walletAmountApplied: BigDecimal
+    promoDiscountAmount: BigDecimal
 }
 
 type OrderItem {
@@ -168,6 +172,8 @@ type AdminOrder {
     activity: [OrderActivity!]!
     createdAt: DateTime!
     updatedAt: DateTime!
+    walletAmountApplied: BigDecimal
+    promoDiscountAmount: BigDecimal
 }
 
 type AdminOrderItem {

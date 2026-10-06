@@ -53,6 +53,7 @@ public class OrderService {
     private final MediaImageService mediaImageService;
     private final CartService cartService;
     private final GiftCardService giftCardService;
+    private final PromoCodeService promoCodeService;
     private final ApplicationEventPublisher eventPublisher;
 
     // ---------- Queries ----------
@@ -159,10 +160,20 @@ public class OrderService {
         List<OrderItem> pendingItems = built.items();
         BigDecimal subtotal = built.subtotal();
 
-        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal);
+        BigDecimal promoDiscount = BigDecimal.ZERO;
+        if (input.promoCode() != null && !input.promoCode().isBlank()) {
+            promoDiscount = promoCodeService.validate(user.getId(), input.promoCode(), subtotal).discountAmount();
+        }
+
+        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal, promoDiscount);
 
         pendingItems.forEach(item -> item.setOrder(savedOrder));
         List<OrderItem> savedItems = orderItemRepository.saveAll(pendingItems);
+
+        if (promoDiscount.signum() > 0) {
+            assert input.promoCode() != null;
+            promoCodeService.recordRedemption(user.getId(), input.promoCode(), promoDiscount, savedOrder);
+        }
 
         eventPublisher.publishEvent(new OrderCreatedByAdminEvent(savedOrder, actor));
 
@@ -312,11 +323,21 @@ public class OrderService {
             pendingItems.add(item);
         }
 
-        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal);
+        BigDecimal promoDiscount = BigDecimal.ZERO;
+        if (input.promoCode() != null && !input.promoCode().isBlank()) {
+            promoDiscount = promoCodeService.validate(userId, input.promoCode(), subtotal).discountAmount();
+        }
+
+        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal, promoDiscount);
 
         Order finalSavedOrder = savedOrder;
         pendingItems.forEach(item -> item.setOrder(finalSavedOrder));
         orderItemRepository.saveAll(pendingItems);
+
+        if (promoDiscount.signum() > 0) {
+            assert input.promoCode() != null;
+            promoCodeService.recordRedemption(userId, input.promoCode(), promoDiscount, savedOrder);
+        }
 
         if (Boolean.TRUE.equals(input.useWalletBalance())) {
             GiftCardBalanceApplicationResult result =
@@ -324,7 +345,7 @@ public class OrderService {
             if (result.totalApplied().signum() > 0) {
                 savedOrder.setWalletAmountApplied(result.totalApplied());
                 if (result.totalApplied().compareTo(savedOrder.getTotal()) >= 0) {
-                    savedOrder.setPaymentStatus(PaymentStatus.PAID); // fully covered, no Stripe needed
+                    savedOrder.setPaymentStatus(PaymentStatus.PAID);
                 }
                 savedOrder = orderRepository.save(savedOrder);
             }
@@ -385,17 +406,19 @@ public class OrderService {
     }
 
     private Order buildAndSaveOrder(
-        User user, Address address, String paymentMethod, BigDecimal subtotal
+        User user, Address address, String paymentMethod,
+        BigDecimal subtotal, BigDecimal promoDiscount
     ) {
         // Shipping is currently free across the board (matches cart screen showing 0 per item) —
         // revisit if per-delivery-option shipping costs get introduced later.
         BigDecimal deliveryFee = BigDecimal.ZERO;
-        BigDecimal total = subtotal.add(deliveryFee);
+        BigDecimal total = subtotal.subtract(promoDiscount).add(deliveryFee);
 
         Order order = orderMapper.toEntity(
             user, address, paymentMethod,
             subtotal, deliveryFee, total
         );
+        order.setPromoDiscountAmount(promoDiscount);
         order.setOrderCode(generateOrderCode());
 
         return orderRepository.save(order);
