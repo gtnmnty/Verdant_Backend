@@ -14,6 +14,7 @@ import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.entities.*;
+import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.orders.*;
@@ -54,6 +55,7 @@ public class OrderService {
     private final CartService cartService;
     private final GiftCardService giftCardService;
     private final PromoCodeService promoCodeService;
+    private final ShippingService shippingService;
     private final ApplicationEventPublisher eventPublisher;
 
     // ---------- Queries ----------
@@ -165,7 +167,10 @@ public class OrderService {
             promoDiscount = promoCodeService.validate(user.getId(), input.promoCode(), subtotal).discountAmount();
         }
 
-        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal, promoDiscount);
+        List<DeliveryOption> deliveryOptions = pendingItems.stream().map(OrderItem::getDeliveryOption).toList();
+        Order savedOrder = buildAndSaveOrder(
+            user, address, input.paymentMethod(), subtotal, promoDiscount, deliveryOptions
+        );
 
         pendingItems.forEach(item -> item.setOrder(savedOrder));
         List<OrderItem> savedItems = orderItemRepository.saveAll(pendingItems);
@@ -284,8 +289,14 @@ public class OrderService {
                 orderItemRepository.flush();
             }
 
+            List<DeliveryOption> updatedDeliveryOptions = reconciledItems.stream()
+                .map(OrderItem::getDeliveryOption)
+                .toList();
+            BigDecimal updatedDeliveryFee = shippingService.calculateDeliveryFee(updatedDeliveryOptions);
+
             order.setSubtotal(subtotal);
-            order.setTotal(subtotal.add(order.getDeliveryFee()));
+            order.setDeliveryFee(updatedDeliveryFee);
+            order.setTotal(subtotal.subtract(order.getPromoDiscountAmount()).add(updatedDeliveryFee));
             items = orderItemRepository.saveAll(reconciledItems);
         }
         else { items = orderItemRepository.findByOrder_Id(id); }
@@ -328,7 +339,10 @@ public class OrderService {
             promoDiscount = promoCodeService.validate(userId, input.promoCode(), subtotal).discountAmount();
         }
 
-        Order savedOrder = buildAndSaveOrder(user, address, input.paymentMethod(), subtotal, promoDiscount);
+        List<DeliveryOption> deliveryOptions = pendingItems.stream().map(OrderItem::getDeliveryOption).toList();
+        Order savedOrder = buildAndSaveOrder(
+            user, address, input.paymentMethod(), subtotal, promoDiscount, deliveryOptions
+        );
 
         Order finalSavedOrder = savedOrder;
         pendingItems.forEach(item -> item.setOrder(finalSavedOrder));
@@ -407,11 +421,11 @@ public class OrderService {
 
     private Order buildAndSaveOrder(
         User user, Address address, String paymentMethod,
-        BigDecimal subtotal, BigDecimal promoDiscount
+        BigDecimal subtotal, BigDecimal promoDiscount, List<DeliveryOption> deliveryOptions
     ) {
         // Shipping is currently free across the board (matches cart screen showing 0 per item) —
         // revisit if per-delivery-option shipping costs get introduced later.
-        BigDecimal deliveryFee = BigDecimal.ZERO;
+        BigDecimal deliveryFee = shippingService.calculateDeliveryFee(deliveryOptions);
         BigDecimal total = subtotal.subtract(promoDiscount).add(deliveryFee);
 
         Order order = orderMapper.toEntity(
