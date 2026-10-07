@@ -19,6 +19,8 @@ extend type Query {
     ): AdminOrderPage!
 
     adminOrder(id: ID!): AdminOrder
+
+    calculateShippingFee(deliveryOptions: [DeliveryOption!]!): BigDecimal!
 }
 
 extend type Mutation {
