@@ -22,6 +22,7 @@ extend type Query {
 
     adminAppointment(id: ID!): AdminAppointmentDto
     appointmentStatusCounts: AppointmentStatusCounts!
+    appointmentRebookDetails(appointmentId: ID!): AppointmentRebookDetails!
 }
 
 extend type Mutation {
@@ -117,6 +118,17 @@ type Appointment {
     guests: Int!
     homeAddress: Address
     notes: String
+}
+
+type AppointmentRebookDetails {
+    serviceId: ID!
+    serviceName: String!
+    serviceType: AppointmentServiceType!
+    stylistId: ID
+    stylistName: String
+    branchId: ID
+    branchName: String
+    guests: Int!
 }
 
 type AdminAppointmentDto {
