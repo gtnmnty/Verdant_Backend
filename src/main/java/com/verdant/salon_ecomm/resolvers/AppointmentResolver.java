@@ -110,6 +110,12 @@ public class AppointmentResolver {
         return appointmentService.bookAppointment(input, principal.getId());
     }
 
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
+    @MutationMapping
+    public Appointment approveAppointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
+        return appointmentService.approveAppointment(id, principal.getId());
+    }
+
     @PreAuthorize("isAuthenticated()")
     @MutationMapping
     public Appointment rescheduleAppointment(
@@ -172,11 +178,6 @@ public class AppointmentResolver {
     }
 
     // ---------- Field resolvers ----------
-
-    @SchemaMapping(typeName = "Appointment", field = "branch")
-    public String branch(Appointment appointment) {
-        return appointment.getBranch() != null ? appointment.getBranch().getName() : null;
-    }
 
     @SchemaMapping(typeName = "Appointment", field = "homeAddress")
     public Address homeAddressMap(Appointment appointment) {

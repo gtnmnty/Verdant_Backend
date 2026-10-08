@@ -1,13 +1,6 @@
 package com.verdant.salon_ecomm.services.event_Listeners.appointment;
 
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCancelledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCompletedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentDeletedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.*;
 import com.verdant.salon_ecomm.models.entities.Appointment;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
@@ -33,6 +26,21 @@ public class AppointmentAuditListener {
             "Appointment " + appointment.getAppointmentCode() + " booked",
             appointment.getServiceName() + " booked by " + appointment.getUser().getFullName()
                 + " for " + appointment.getScheduledAt()
+        );
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentApproved(AppointmentApprovedEvent event) {
+        Appointment appointment = event.appointment();
+        auditLogService.record(
+            AuditEntityType.APPOINTMENT,
+            appointment.getId(),
+            AuditActionType.APPROVED,
+            "Appointment " + appointment.getAppointmentCode() + " approved",
+            appointment.getServiceName() + " for " +
+                appointment.getUser().getFullName() +
+                " moved from PENDING to UPCOMING",
+            event.actor()
         );
     }
 

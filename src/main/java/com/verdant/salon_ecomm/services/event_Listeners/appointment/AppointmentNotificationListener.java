@@ -1,13 +1,6 @@
 package com.verdant.salon_ecomm.services.event_Listeners.appointment;
 
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCancelledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCompletedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentDeletedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.*;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.models.entities.Appointment;
 import com.verdant.salon_ecomm.models.entities.User;
@@ -67,6 +60,23 @@ public class AppointmentNotificationListener {
             customer.getFullName() + " booked " + appointment.getServiceName()
                 + " for " + appointment.getScheduledAt() + ".",
             null, null);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentApproved(AppointmentApprovedEvent event) {
+        Appointment appointment = event.appointment();
+
+        notificationService.create(new NotificationCreateDto(
+            appointment.getUser().getId(),
+            NotificationType.APPOINTMENT_APPROVED,
+            "Appointment confirmed",
+            appointment.getServiceName() + " has been confirmed for " + appointment.getScheduledAt() + ".",
+            ReferenceType.APPOINTMENT,
+            appointment.getId(),
+            NotificationPriority.INFO,
+            event.actor() != null ? event.actor().getId() : null,
+            event.actor() != null ? event.actor().getFullName() : null
+        ));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
