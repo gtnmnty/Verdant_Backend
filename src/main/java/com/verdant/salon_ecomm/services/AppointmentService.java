@@ -2,20 +2,13 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.appointment.*;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentBookedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCancelledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentCompletedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentDeletedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentRescheduledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkCancelledEvent;
-import com.verdant.salon_ecomm.dtos.appointment.events.AppointmentsBulkDeletedEvent;
+import com.verdant.salon_ecomm.dtos.appointment.events.*;
 import com.verdant.salon_ecomm.exceptions.AppointmentConflictException;
 import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
-import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.models.entities.*;
+import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AppointmentSpec;
 import jakarta.persistence.EntityNotFoundException;
@@ -195,6 +188,24 @@ public class AppointmentService {
 
         Appointment saved = saveAppointmentSafely(appointment);
         eventPublisher.publishEvent(new AppointmentBookedEvent(saved));
+        return saved;
+    }
+
+    @Transactional
+    public Appointment approveAppointment(UUID id, UUID actorId) {
+        Appointment appointment = appointmentRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + id));
+
+        if (appointment.getStatus() != AppointmentStatus.PENDING) {
+            throw new InvalidAppointmentException(
+                "Only PENDING appointments can be approved (current status: " + appointment.getStatus() + ")"
+            );
+        }
+
+        appointment.setStatus(AppointmentStatus.UPCOMING);
+        Appointment saved = appointmentRepository.save(appointment);
+
+        eventPublisher.publishEvent(new AppointmentApprovedEvent(saved, resolveActor(actorId)));
         return saved;
     }
 

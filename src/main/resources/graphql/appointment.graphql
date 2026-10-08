@@ -34,6 +34,7 @@ extend type Mutation {
     cancelAppointments(ids: [ID!]!): [Appointment!]!
     deleteAppointment(id: ID!): Appointment!
     deleteAppointments(ids: [ID!]!): [Appointment!]!
+    approveAppointment(id: ID!): Appointment!
 }
 
 enum AppointmentServiceType {
@@ -111,7 +112,7 @@ type Appointment {
     serviceName: String!
     priceSnapshot: BigDecimal!
     stylist: Stylist
-    branch: String
+    branch: Branch
     scheduledAt: DateTime!
     durationMinutes: Int!
     status: AppointmentStatus!
@@ -140,7 +141,7 @@ type AdminAppointmentDto {
     serviceType: AppointmentServiceType!
     priceSnapshot: BigDecimal!
     stylist: Stylist
-    branch: String
+    branch: Branch
     scheduledAt: DateTime!
     durationMinutes: Int!
     status: AppointmentStatus!
