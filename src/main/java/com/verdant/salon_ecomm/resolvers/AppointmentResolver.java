@@ -55,6 +55,14 @@ public class AppointmentResolver {
         return appointmentService.getAppointmentById(id, principal.getId(), isAdmin);
     }
 
+    @QueryMapping
+    @PreAuthorize("isAuthenticated()")
+    public AppointmentRebookDto appointmentRebookDetails(
+        @Argument UUID appointmentId, @AuthenticationPrincipal User principal
+    ) {
+        return appointmentService.getRebookDetails(appointmentId, principal.getId());
+    }
+
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @QueryMapping
     public AdminAppointmentPage adminAppointments(

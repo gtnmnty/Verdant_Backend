@@ -140,6 +140,28 @@ public class AppointmentService {
         );
     }
 
+    // Gets the details from the existing appointment.
+    // Users will review the info and update if needed
+    public AppointmentRebookDto getRebookDetails(UUID appointmentId, UUID userId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + appointmentId));
+
+        if (!appointment.getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("You do not have access to this appointment");
+        }
+
+        return new AppointmentRebookDto(
+            appointment.getService().getId(),
+            appointment.getServiceName(),
+            appointment.getServiceType(),
+            appointment.getStylist() != null ? appointment.getStylist().getId() : null,
+            appointment.getStylist() != null ? appointment.getStylist().getName() : null,
+            appointment.getBranch() != null ? appointment.getBranch().getId() : null,
+            appointment.getBranch() != null ? appointment.getBranch().getName() : null,
+            appointment.getGuests()
+        );
+    }
+
     // ---------- Mutations ----------
 
     @Transactional

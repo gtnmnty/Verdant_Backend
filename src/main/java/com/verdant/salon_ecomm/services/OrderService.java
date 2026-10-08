@@ -421,7 +421,8 @@ public class OrderService {
 
     private Order buildAndSaveOrder(
         User user, Address address, String paymentMethod,
-        BigDecimal subtotal, BigDecimal promoDiscount, List<DeliveryOption> deliveryOptions
+        BigDecimal subtotal, BigDecimal promoDiscount,
+        List<DeliveryOption> deliveryOptions
     ) {
         // Shipping is currently free across the board (matches cart screen showing 0 per item) —
         // revisit if per-delivery-option shipping costs get introduced later.

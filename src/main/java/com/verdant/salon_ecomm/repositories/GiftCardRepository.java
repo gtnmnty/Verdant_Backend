@@ -11,10 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static jakarta.persistence.LockModeType.PESSIMISTIC_WRITE;
 
@@ -39,6 +36,12 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
     List<GiftCard> findByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
 
     List<GiftCard> findByPurchaserIdOrderByCreatedAtDesc(UUID purchaserId);
+
+    @Query("""
+            SELECT DISTINCT g.owner.id FROM GiftCard g
+            WHERE g.owner.id IN :userIds AND g.status = 'REDEEMED' AND g.balance > 0
+        """)
+    List<UUID> findDistinctOwnerIdsWithBalance(@Param("userIds") Set<UUID> userIds);
 
     // ── spendable = redeemed + has balance + not past expiry ─────
 

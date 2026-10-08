@@ -12,10 +12,7 @@ import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AccountMapper;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
-import com.verdant.salon_ecomm.repositories.AccountRepository;
-import com.verdant.salon_ecomm.repositories.AppointmentRepository;
-import com.verdant.salon_ecomm.repositories.OrderRepository;
-import com.verdant.salon_ecomm.repositories.ReviewRepository;
+import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AccountSpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -50,6 +47,7 @@ public class AccountService {
     private final AppointmentRepository appointmentRepository;
     private final ReviewRepository reviewRepository;
     private final PasswordResetTokenService passwordResetTokenService;
+    private final GiftCardRepository giftCardRepository;
 
     // Safety cap for bulk mutations — protects against an unbounded payload
     // locking rows / holding the transaction open too long.
@@ -262,12 +260,15 @@ public class AccountService {
         List<UUID> idsWithOrders = orderRepository.findDistinctUserIdsWithOrders(requestedIds);
         List<UUID> idsWithAppointments = appointmentRepository.findDistinctUserIdsWithAppointments(requestedIds);
         List<UUID> idsWithReviews = reviewRepository.findDistinctUserIdsWithReviews(requestedIds);
+        List<UUID> idsWithGiftCardBalance = giftCardRepository.findDistinctOwnerIdsWithBalance(requestedIds);
 
-        if (!idsWithOrders.isEmpty() || !idsWithAppointments.isEmpty() || !idsWithReviews.isEmpty()) {
+        if (!idsWithOrders.isEmpty() || !idsWithAppointments.isEmpty() || !idsWithReviews.isEmpty()
+            || !idsWithGiftCardBalance.isEmpty()) {
             Set<UUID> blockedIds = new LinkedHashSet<>();
             blockedIds.addAll(idsWithOrders);
             blockedIds.addAll(idsWithAppointments);
             blockedIds.addAll(idsWithReviews);
+            blockedIds.addAll(idsWithGiftCardBalance);
 
             List<String> blockedNames = accounts.stream()
                 .filter(a -> blockedIds.contains(a.getId()))
@@ -275,9 +276,9 @@ public class AccountService {
                 .toList();
 
             throw new ForbiddenException(
-                "Cannot delete the following accounts because they have order, appointment, "
-                    + "or review history: " + String.join(", ", blockedNames)
-                    + ". Suspend the account instead, or consider a soft-delete path."
+                "Cannot delete the following accounts because they have order, appointment, review, "
+                    + "or gift card balance history: " + String.join(", ", blockedNames)
+                    + ". Suspend the account instead, or use self-service deletion for gift card refund handling."
             );
         }
 
