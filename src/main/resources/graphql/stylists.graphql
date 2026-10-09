@@ -77,6 +77,20 @@ type AdminStylistsDto{
     branch: Branch
 }
 
+type AdminStylistsDto {
+    id: ID!
+    name: String!
+    email: String!
+    phone: String
+    status: StylistAccountStatus!
+    bio: String
+    avatarUrl: String
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    branch: Branch
+    services: [SalonService!]!
+}
+
 input CreateStylistInput {
     name: String!
     email: String
