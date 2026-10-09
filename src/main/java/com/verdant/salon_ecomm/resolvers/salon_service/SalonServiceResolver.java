@@ -114,4 +114,10 @@ public class SalonServiceResolver {
         return salonService.getAdminServiceDto(id);
     }
 
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public AdminServiceDto duplicateService(@Argument UUID id, @AuthenticationPrincipal User principal) {
+        return salonService.duplicateService(id, principal.getId());
+    }
+
 }
