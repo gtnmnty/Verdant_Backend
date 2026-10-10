@@ -1,22 +1,14 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.dtos.branch.OperatingHoursInput;
 import com.verdant.salon_ecomm.dtos.stylists.AdminStylistsDto;
 import com.verdant.salon_ecomm.dtos.stylists.AdminStylistsPage;
-import com.verdant.salon_ecomm.dtos.stylists.BranchDto;
 import com.verdant.salon_ecomm.dtos.stylists.CreateStylistInput;
 import com.verdant.salon_ecomm.dtos.stylists.UpdateStylistInput;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistAssignedToServicesEvent;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistCreatedEvent;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistDeletedEvent;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistImageUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistStatusChangedEvent;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.stylists.events.StylistsBulkDeletedEvent;
-import com.verdant.salon_ecomm.models.entities.Branch;
-import com.verdant.salon_ecomm.models.entities.SalonService;
-import com.verdant.salon_ecomm.models.entities.Stylist;
-import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.dtos.stylists.events.*;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.mappers.StylistMapper;
+import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;
 import com.verdant.salon_ecomm.models.enums.stylists.StylistSort;
 import com.verdant.salon_ecomm.repositories.BranchRepository;
@@ -25,6 +17,7 @@ import com.verdant.salon_ecomm.repositories.StylistRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.StylistsSpec;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,20 +26,23 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class StylistsService {
 
+    private final StylistMapper stylistMapper;
     private final StylistRepository stylistRepository;
     private final BranchRepository branchRepository;
     private final SalonServiceRepository salonServiceRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+
+    private static final Pattern HH_MM = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
 
     public AdminStylistsPage getStylists(
         StylistAccountStatus status, UUID branchId, String search,
@@ -64,7 +60,7 @@ public class StylistsService {
         );
 
         List<AdminStylistsDto> stylists = result.getContent()
-            .stream().map(this::toAdminDto).toList();
+            .stream().map(stylistMapper::toAdminDto).toList();
 
         return new AdminStylistsPage(
             stylists, normalizePage, normalizePageSize,
@@ -77,7 +73,7 @@ public class StylistsService {
         Stylist stylist = stylistRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist Not Found"));
 
-        return toAdminDto(stylist);
+        return stylistMapper.toAdminDto(stylist);
     }
 
     // ---------- Mutations ----------
@@ -101,6 +97,7 @@ public class StylistsService {
             .bio(input.bio())
             .branch(branch)
             .services(services)
+            .workingHours(Optional.ofNullable(toWorkingHours(input.workingHours())).orElseGet(ArrayList::new))
             .status(StylistAccountStatus.ACTIVE)
             .build();
 
@@ -123,6 +120,7 @@ public class StylistsService {
         String previousAvatarUrl = stylist.getAvatarUrl();
         String previousBio = stylist.getBio();
         Branch previousBranch = stylist.getBranch();
+        String previousHours = formatHours(stylist.getWorkingHours());
 
         if (input.name() != null) stylist.setName(input.name());
         if (input.email() != null) stylist.setEmail(input.email());
@@ -134,6 +132,9 @@ public class StylistsService {
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
             stylist.setBranch(branch);
         }
+
+        List<OperatingHours> newHours = toWorkingHours(input.workingHours());
+        if (newHours != null) stylist.setWorkingHours(newHours);
 
         Stylist saved = stylistRepository.save(stylist);
         User actor = resolveActor(actorId);
@@ -159,6 +160,11 @@ public class StylistsService {
                 previousBranch != null ? previousBranch.getName() : "none",
                 saved.getBranch() != null ? saved.getBranch().getName() : "none"
             ));
+        }
+
+        String currentHours = formatHours(saved.getWorkingHours());
+        if (!Objects.equals(previousHours, currentHours)) {
+            changes.add(new StylistUpdatedEvent.FieldChange("workingHours", previousHours, currentHours));
         }
 
         if (!changes.isEmpty()) {
@@ -213,12 +219,15 @@ public class StylistsService {
         Stylist stylist = stylistRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Stylist not found"));
 
+        // initialize the lazy collection before the row is deleted
+        Hibernate.initialize(stylist.getServices());
+
         stylistRepository.deleteById(id);
 
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new StylistDeletedEvent(stylist, actor));
 
-        return toAdminDto(stylist);
+        return stylistMapper.toAdminDto(stylist);
     }
 
     @Transactional
@@ -228,6 +237,8 @@ public class StylistsService {
         }
 
         List<Stylist> stylists = stylistRepository.findAllById(ids);
+        stylists.forEach(s -> Hibernate.initialize(s.getServices()));   // load BEFORE deleting
+
         stylistRepository.deleteAllByIdInBatch(ids);
 
         if (!stylists.isEmpty()) {
@@ -235,33 +246,13 @@ public class StylistsService {
             eventPublisher.publishEvent(new StylistsBulkDeletedEvent(stylists, actor));
         }
 
-        return stylists.stream().map(this::toAdminDto).toList();
+        return stylists.stream().map(stylistMapper::toAdminDto).toList();
     }
 
     // ---------- Helpers ----------
     
     private User resolveActor(UUID actorId) {
         return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
-    }
-
-    private AdminStylistsDto toAdminDto(Stylist stylist) {
-        Branch branch = stylist.getBranch();
-        BranchDto branchDto = branch == null ? null :
-            new BranchDto(branch.getId().toString(), branch.getName(), branch.getAddress().toString());
-
-        return new AdminStylistsDto(
-            stylist.getId().toString(),
-            stylist.getName(),
-            stylist.getEmail(),
-            stylist.getPhone(),
-            stylist.getAvatarUrl(),
-            stylist.getBio(),
-            branchDto,
-            stylist.getServices(),
-            stylist.getStatus(),
-            stylist.getCreatedAt(),
-            stylist.getUpdatedAt()
-        );
     }
 
     private Sort toSort(StylistSort sort) {
@@ -271,5 +262,35 @@ public class StylistsService {
             case A_TO_Z -> Sort.by(Sort.Direction.ASC, "name");
             case Z_TO_A -> Sort.by(Sort.Direction.DESC, "name");
         };
+    }
+
+    // null in = "not provided" (null out); empty list = "clear".
+    private List<OperatingHours> toWorkingHours(List<OperatingHoursInput> inputs) {
+        if (inputs == null) return null;
+        List<OperatingHours> result = new ArrayList<>();
+        for (OperatingHoursInput in : inputs) {
+            String days = in.getDays() == null ? "" : in.getDays().trim();
+            String open = in.getOpen() == null ? "" : in.getOpen().trim();
+            String close = in.getClose() == null ? "" : in.getClose().trim();
+
+            if (days.isEmpty()) {
+                throw new IllegalArgumentException("Working hours need a days value, e.g. \"Mon-Fri\"");
+            }
+            if (!HH_MM.matcher(open).matches() || !HH_MM.matcher(close).matches()) {
+                throw new IllegalArgumentException("Working hours must use 24-hour HH:mm format");
+            }
+            if (open.compareTo(close) >= 0) { // zero-padded HH:mm compares correctly as text
+                throw new IllegalArgumentException("Working hours: opening time must be before closing time");
+            }
+            result.add(new OperatingHours(days, open, close));
+        }
+        return result;
+    }
+
+    private String formatHours(List<OperatingHours> hours) {
+        if (hours == null || hours.isEmpty()) return "none";
+        return hours.stream()
+            .map(h -> h.getDays() + " " + h.getOpen() + "-" + h.getClose())
+            .collect(Collectors.joining("; "));
     }
 }

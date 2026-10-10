@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.dtos.stylists;
 
+import com.verdant.salon_ecomm.dtos.branch.OperatingHoursInput;
 import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;
 
 import java.util.List;
@@ -14,6 +15,7 @@ public record UpdateStylistInput(
     String avatarUrl,
     String branchId,
     List<String> serviceIds,
-    StylistAccountStatus status
+    StylistAccountStatus status,
+    List<OperatingHoursInput> workingHours
 ) {
 }
