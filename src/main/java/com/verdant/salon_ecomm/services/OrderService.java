@@ -34,6 +34,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -41,6 +42,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Validated
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class OrderService {
@@ -537,7 +539,8 @@ public class OrderService {
 
     private Sort toAdminSort(AdminOrderSort sort, OrderSortDirection direction) {
         AdminOrderSort effectiveSort = sort != null ? sort : AdminOrderSort.DATE;
-        Sort.Direction effectiveDirection = direction == OrderSortDirection.ASC ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Sort.Direction effectiveDirection =
+            direction == OrderSortDirection.ASC ? Sort.Direction.ASC : Sort.Direction.DESC;
 
         String field = switch (effectiveSort) {
             case DATE -> "createdAt";

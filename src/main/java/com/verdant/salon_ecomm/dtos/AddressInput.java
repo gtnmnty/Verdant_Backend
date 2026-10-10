@@ -16,6 +16,7 @@ public record AddressInput(
     @Size(max = 100)
     String city,
 
+    @NotBlank(message = "State / region is required")
     @Size(max = 100)
     String state,
 

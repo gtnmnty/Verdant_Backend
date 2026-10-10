@@ -1,0 +1,148 @@
+enum SupportTicketStatus {
+    OPEN
+    IN_REVIEW
+    RESOLVED
+}
+
+enum SupportTicketPriority {
+    LOW
+    NORMAL
+    HIGH
+    URGENT
+}
+
+enum SupportTicketCategory {
+    ORDER
+    APPOINTMENT
+    PAYMENT
+    GIFT_CARD
+    ACCOUNT
+    OTHER
+}
+
+enum AdminSupportTicketSort {
+    NEWEST
+    OLDEST
+    RECENTLY_UPDATED
+    PRIORITY_HIGH_TO_LOW
+}
+
+type SupportTicketUser {
+    id: ID!
+    fullName: String!
+}
+
+type SupportTicketMessage {
+    id: ID!
+    author: SupportTicketUser!
+    fromStaff: Boolean!
+    internal: Boolean!
+    body: String!
+    createdAt: DateTime!
+}
+
+# Customer list row (Ticket History table)
+type SupportTicketSummary {
+    id: ID!
+    ticketNumber: String!
+    subject: String!
+    category: SupportTicketCategory!
+    status: SupportTicketStatus!
+    priority: SupportTicketPriority!
+    messageCount: Int!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+# Staff list row
+type AdminSupportTicketSummary {
+    id: ID!
+    ticketNumber: String!
+    subject: String!
+    category: SupportTicketCategory!
+    status: SupportTicketStatus!
+    priority: SupportTicketPriority!
+    customer: SupportTicketUser!
+    assignedTo: SupportTicketUser
+    messageCount: Int!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+# Used by both customers and staff. For customers: no internal notes, assignedTo is always null.
+type SupportTicketDetail {
+    id: ID!
+    ticketNumber: String!
+    subject: String!
+    category: SupportTicketCategory!
+    status: SupportTicketStatus!
+    priority: SupportTicketPriority!
+    contactName: String!
+    contactEmail: String!
+    customer: SupportTicketUser!
+    assignedTo: SupportTicketUser
+    messages: [SupportTicketMessage!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    resolvedAt: DateTime
+}
+
+type AdminSupportTicketPage {
+    items: [AdminSupportTicketSummary!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+input CreateSupportTicketInput {
+    subject: String!
+    message: String!
+    category: SupportTicketCategory
+    contactName: String!
+    contactEmail: String!
+}
+
+input AddSupportTicketMessageInput {
+    ticketId: ID!
+    body: String!
+}
+
+input AdminAddSupportTicketMessageInput {
+    ticketId: ID!
+    body: String!
+    internal: Boolean = false
+}
+
+input AdminUpdateSupportTicketInput {
+    status: SupportTicketStatus
+    priority: SupportTicketPriority
+}
+
+extend type Query {
+    mySupportTickets(status: SupportTicketStatus): [SupportTicketSummary!]!
+    mySupportTicket(id: ID!): SupportTicketDetail
+
+    adminSupportTickets(
+        status: SupportTicketStatus
+        priority: SupportTicketPriority
+        category: SupportTicketCategory
+        assignedToId: ID
+        unassignedOnly: Boolean
+        search: String
+        sort: AdminSupportTicketSort = NEWEST
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminSupportTicketPage!
+
+    adminSupportTicket(id: ID!): SupportTicketDetail
+}
+
+extend type Mutation {
+    createSupportTicket(input: CreateSupportTicketInput!): SupportTicketDetail!
+    addSupportTicketMessage(input: AddSupportTicketMessageInput!): SupportTicketDetail!
+
+    adminAddSupportTicketMessage(input: AdminAddSupportTicketMessageInput!): SupportTicketDetail!
+    adminUpdateSupportTicket(id: ID!, input: AdminUpdateSupportTicketInput!): SupportTicketDetail!
+    adminAssignSupportTicket(id: ID!, assigneeId: ID): SupportTicketDetail!
+}

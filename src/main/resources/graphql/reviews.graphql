@@ -72,6 +72,7 @@ type AdminReviewDto {
     id: ID!
     user: ReviewUser!
     itemType: ItemType!
+    targetId: ID!
     itemName: String!
     serviceType: AppointmentServiceType
     serviceName: String

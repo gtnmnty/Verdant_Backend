@@ -8,14 +8,12 @@ import jakarta.validation.constraints.NotBlank;
 public record CreateBranchInput(
     @NotBlank(message = "Branch name is required")
     String name,
-    @Valid
-    BranchAddressInput address,
+    @Valid BranchAddressInput address,
     String phone,
     @Email(message = "Email must be valid")
     @NotBlank
     String email,
-    @Valid
-    OperatingHoursInput operatingHours,
+    @Valid OperatingHoursInput operatingHours,
     String googleMapsUrl,
     String imageUrl,
     BranchStatus status
