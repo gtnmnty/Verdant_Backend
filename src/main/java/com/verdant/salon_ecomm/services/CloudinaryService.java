@@ -29,6 +29,19 @@ public class CloudinaryService {
     }
 
     @SuppressWarnings("unchecked")
+    public CloudinaryUploadResult uploadFromUrl(String sourceUrl) {
+        try {
+            Map<String, Object> result = cloudinary.uploader().upload(sourceUrl, ObjectUtils.emptyMap());
+            return new CloudinaryUploadResult(
+                (String) result.get("secure_url"),
+                (String) result.get("public_id")
+            );
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to copy image in Cloudinary", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     public void delete(String publicId) {
         try {
             Map<String, Object> result = cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());

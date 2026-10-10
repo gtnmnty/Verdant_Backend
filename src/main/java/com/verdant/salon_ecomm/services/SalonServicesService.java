@@ -1,16 +1,19 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
+import com.verdant.salon_ecomm.dtos.PageInfo;
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceCreatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceDeletedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServicesBulkDeletedEvent;
-import com.verdant.salon_ecomm.dtos.PageInfo;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.SalonServiceMapper;
-import com.verdant.salon_ecomm.models.enums.*;
 import com.verdant.salon_ecomm.models.entities.*;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+import com.verdant.salon_ecomm.models.enums.ItemCatalog;
+import com.verdant.salon_ecomm.models.enums.ItemType;
+import com.verdant.salon_ecomm.models.enums.ServiceSort;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
 import com.verdant.salon_ecomm.utils.IsEmpty;
@@ -22,6 +25,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -199,6 +204,73 @@ public class SalonServicesService {
         eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
 
         return serviceMapper.toAdminDto(saved);
+    }
+
+    @Transactional
+    public AdminServiceDto duplicateService(UUID sourceId, UUID actorId) {
+        SalonService source = serviceRepository.findById(sourceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
+
+        SalonService copy = SalonService.builder()
+            .name(source.getName() + " (Copy)")
+            .subName(source.getSubName())
+            .itemCatalog(source.getItemCatalog())
+            .durationMinutes(source.getDurationMinutes())
+            .price(source.getPrice())
+            .description(source.getDescription())
+            .status(CollectionStatus.INACTIVE) // never go live until an admin reviews it
+            .info(source.getInfo() != null ? new ArrayList<>(source.getInfo()) : new ArrayList<>())
+            .tags(source.getTags() != null ? new ArrayList<>(source.getTags()) : null)
+            .badge(source.getBadge())
+            .isHomeService(source.getIsHomeService())
+            .isFeatured(false) // a featured original shouldn't silently produce a second featured item
+            .stylists(new ArrayList<>(source.getStylists()))
+            .reviewCount(0)
+            .averageRating(BigDecimal.ZERO)
+            .build();
+
+        SalonService saved = serviceRepository.save(copy);
+
+        // Give the copy its own Cloudinary assets so deleting one service never breaks the other.
+        List<MediaImage> sourceImages = mediaImageRepository
+            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.SALON_SERVICE, sourceId);
+        List<String> uploadedPublicIds = new ArrayList<>();
+        List<MediaImage> copiedImages = new ArrayList<>();
+
+        try {
+            for (MediaImage image : sourceImages) {
+                CloudinaryService.CloudinaryUploadResult uploaded =
+                    cloudinaryService.uploadFromUrl(image.getUrl());
+                uploadedPublicIds.add(uploaded.publicId());
+                copiedImages.add(MediaImage.builder()
+                    .entityType(ItemType.SALON_SERVICE)
+                    .entityId(saved.getId())
+                    .url(uploaded.url())
+                    .publicId(uploaded.publicId())
+                    .isPrimary(image.isPrimary())
+                    .sortOrder(image.getSortOrder())
+                    .build());
+            }
+        } catch (RuntimeException e) {
+            uploadedPublicIds.forEach(cloudinaryService::delete); // don't strand half-copied uploads
+            throw e;
+        }
+        mediaImageRepository.saveAll(copiedImages);
+
+        // If the DB transaction rolls back after uploading, remove the now-orphaned copies.
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    uploadedPublicIds.forEach(cloudinaryService::delete);
+                }
+            }
+        });
+
+        User actor = resolveActor(actorId);
+        eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
+
+        return serviceMapper.toAdminDto(saved, copiedImages);
     }
 
     @Transactional

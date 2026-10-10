@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.dtos.stylists;
 
+import com.verdant.salon_ecomm.models.entities.OperatingHours;
 import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;
 
@@ -15,6 +16,7 @@ public record AdminStylistsDto(
     String bio,
     BranchDto branch,
     List<SalonService> services,
+    List<OperatingHours> workingHours,
     StylistAccountStatus status,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt

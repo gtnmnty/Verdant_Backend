@@ -25,6 +25,7 @@ extend type Mutation {
     toggleFavoriteService(targetId: ID!): CatalogItem!
     deleteService(id: ID!): AdminServiceDto!
     deleteServices(ids: [ID!]!): [AdminServiceDto!]!
+    duplicateService(id: ID!): AdminServiceDto!
 }
 
 enum ServiceSort {

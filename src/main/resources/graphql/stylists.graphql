@@ -60,21 +60,9 @@ type Stylist {
     avatarUrl: String
     branch: Branch
     services: [SalonService!]!
+    workingHours: [OperatingHours!]!
     createdAt: DateTime!
     updatedAt: DateTime!
-}
-
-type AdminStylistsDto{
-    id: ID!
-    name: String!
-    email: String!
-    phone: String
-    status: StylistAccountStatus!
-    bio: String
-    avatarUrl: String
-    createdAt: DateTime!
-    updatedAt: DateTime!
-    branch: Branch
 }
 
 type AdminStylistsDto {
@@ -89,6 +77,7 @@ type AdminStylistsDto {
     updatedAt: DateTime!
     branch: Branch
     services: [SalonService!]!
+    workingHours: [OperatingHours!]!
 }
 
 input CreateStylistInput {
@@ -99,6 +88,7 @@ input CreateStylistInput {
     avatarUrl: String
     branchId: ID!
     serviceIds: [ID!]
+    workingHours: [OperatingHoursInput!]
 }
 
 input UpdateStylistInput {
@@ -108,4 +98,5 @@ input UpdateStylistInput {
     bio: String
     avatarUrl: String
     branchId: ID
+    workingHours: [OperatingHoursInput!]
 }

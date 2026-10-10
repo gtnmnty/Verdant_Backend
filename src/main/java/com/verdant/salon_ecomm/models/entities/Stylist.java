@@ -4,8 +4,11 @@ import com.verdant.salon_ecomm.models.enums.stylists.StylistAccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,6 +60,11 @@ public class Stylist {
     @BatchSize(size = 20)
     @ManyToMany(mappedBy = "stylists")
     private List<SalonService> services;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "working_hours", columnDefinition = "jsonb", nullable = false)
+    @Builder.Default
+    private List<OperatingHours> workingHours = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
