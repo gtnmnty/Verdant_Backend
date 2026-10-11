@@ -1,0 +1,143 @@
+# Frontend label mapping:
+#   COLOR "Color" | CUT_AND_STYLE "Cut & Style" | SPA_AND_SKIN "Spa & Skin" | BRIDAL "Bridal" | TEXTURE "Texture"
+enum JournalCategory {
+    COLOR
+    CUT_AND_STYLE
+    SPA_AND_SKIN
+    BRIDAL
+    TEXTURE
+}
+
+enum JournalStoryStatus {
+    DRAFT
+    PUBLISHED
+}
+
+enum JournalStorySort {
+    NEWEST
+    OLDEST
+}
+
+type JournalImage {
+    url: String!
+    width: Int!
+    height: Int!
+}
+
+# Slim view of a real catalog product (id works with addToCart and /collections/{id}).
+type JournalProduct {
+    id: ID!
+    name: String!
+    price: BigDecimal!
+    salePrice: BigDecimal
+    imageUrl: String
+    inStock: Boolean!
+}
+
+# Public: only PUBLISHED stories are ever returned.
+type JournalStory {
+    id: ID!
+    clientName: String!
+    quote: String!
+    category: JournalCategory!
+    service: String!
+    stylist: String!
+    resultImage: JournalImage!
+    productImage: JournalImage
+    products: [JournalProduct!]!
+    publishedAt: DateTime
+}
+
+type JournalStoryPage {
+    items: [JournalStory!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+type AdminJournalStory {
+    id: ID!
+    clientName: String!
+    quote: String!
+    category: JournalCategory!
+    service: String!
+    stylist: String!
+    status: JournalStoryStatus!
+    resultImage: JournalImage!
+    productImage: JournalImage
+    products: [JournalProduct!]!
+    publishedAt: DateTime
+    createdAt: DateTime
+    updatedAt: DateTime
+}
+
+type AdminJournalStoryPage {
+    items: [AdminJournalStory!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+input CreateJournalStoryInput {
+    clientName: String!
+    quote: String!
+    category: JournalCategory!
+    service: String!
+    stylist: String!
+    productIds: [ID!]
+    status: JournalStoryStatus = DRAFT
+}
+
+# All optional: null = unchanged. productIds replaces the whole list when provided.
+input UpdateJournalStoryInput {
+    clientName: String
+    quote: String
+    category: JournalCategory
+    service: String
+    stylist: String
+    productIds: [ID!]
+}
+
+extend type Query {
+    # Public (no login). Category + search filtering happens server-side; newest first.
+    journalStories(
+        category: JournalCategory
+        search: String
+        page: Int = 1
+        pageSize: Int = 12
+    ): JournalStoryPage!
+    journalStory(id: ID!): JournalStory
+
+    # Staff
+    adminJournalStories(
+        status: JournalStoryStatus
+        category: JournalCategory
+        search: String
+        sort: JournalStorySort = NEWEST
+        page: Int = 1
+        pageSize: Int = 10
+    ): AdminJournalStoryPage!
+    adminJournalStory(id: ID!): AdminJournalStory
+}
+
+extend type Mutation {
+    # Images are uploaded with the story (multipart), not through addImage.
+    createJournalStory(
+        input: CreateJournalStoryInput!
+        resultImage: Upload!
+        productImage: Upload
+    ): AdminJournalStory!
+
+    # Omit an image argument to keep the current one.
+    updateJournalStory(
+        id: ID!
+        input: UpdateJournalStoryInput!
+        resultImage: Upload
+        productImage: Upload
+    ): AdminJournalStory!
+
+    setJournalStoryStatus(id: ID!, status: JournalStoryStatus!): AdminJournalStory!
+    deleteJournalStory(id: ID!): Boolean!
+}

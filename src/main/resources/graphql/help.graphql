@@ -1,0 +1,102 @@
+# Frontend icon mapping:
+#   CALENDAR CalendarDays | PACKAGE Package | GIFT Gift | MAP_PIN MapPin | BADGE_CHECK BadgeCheck
+#   CREDIT_CARD CreditCard | TRUCK Truck | USER User | SPARKLES Sparkles | HELP_CIRCLE CircleHelp
+enum HelpTopicIcon {
+    CALENDAR
+    PACKAGE
+    GIFT
+    MAP_PIN
+    BADGE_CHECK
+    CREDIT_CARD
+    TRUCK
+    USER
+    SPARKLES
+    HELP_CIRCLE
+}
+
+enum HelpTopicLayout {
+    FEATURED
+    STANDARD
+    TILE_DARK
+    TILE_PLAIN
+    TILE_ACCENT
+}
+
+type HelpArticle {
+    id: ID!
+    title: String!
+    body: String!
+}
+
+# Public: only published topics, already ordered. The Help page loads them all once and filters
+# with its search box in the browser (the list is small), so there is no search argument.
+type HelpTopic {
+    id: ID!
+    slug: String!
+    title: String!
+    summary: String!
+    keywords: String!
+    icon: HelpTopicIcon!
+    layout: HelpTopicLayout!
+    articles: [HelpArticle!]!
+}
+
+type AdminHelpTopic {
+    id: ID!
+    slug: String!
+    title: String!
+    summary: String!
+    keywords: String!
+    icon: HelpTopicIcon!
+    layout: HelpTopicLayout!
+    published: Boolean!
+    sortOrder: Int!
+    articles: [HelpArticle!]!
+    createdAt: DateTime
+    updatedAt: DateTime
+}
+
+input HelpArticleInput {
+    title: String!
+    body: String!
+}
+
+input CreateHelpTopicInput {
+    title: String!
+    summary: String!
+    keywords: String = ""
+    icon: HelpTopicIcon = HELP_CIRCLE
+    layout: HelpTopicLayout = STANDARD
+    published: Boolean = false
+    articles: [HelpArticleInput!]
+}
+
+# All optional: null = unchanged. articles replaces ALL of the topic's articles when provided.
+input UpdateHelpTopicInput {
+    title: String
+    summary: String
+    keywords: String
+    icon: HelpTopicIcon
+    layout: HelpTopicLayout
+    published: Boolean
+    articles: [HelpArticleInput!]
+}
+
+extend type Query {
+    # Public (no login)
+    helpTopics: [HelpTopic!]!
+    helpTopic(slug: String!): HelpTopic
+
+    # Staff
+    adminHelpTopics: [AdminHelpTopic!]!
+    adminHelpTopic(id: ID!): AdminHelpTopic
+}
+
+extend type Mutation {
+    createHelpTopic(input: CreateHelpTopicInput!): AdminHelpTopic!
+    updateHelpTopic(id: ID!, input: UpdateHelpTopicInput!): AdminHelpTopic!
+    setHelpTopicPublished(id: ID!, published: Boolean!): AdminHelpTopic!
+    # Full ordered list of topic ids; the position in the list becomes the display order.
+    reorderHelpTopics(ids: [ID!]!): [AdminHelpTopic!]!
+    deleteHelpTopic(id: ID!): Boolean!
+}
