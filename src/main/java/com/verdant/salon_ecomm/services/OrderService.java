@@ -23,6 +23,7 @@ import com.verdant.salon_ecomm.repositories.OrderRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
+import jakarta.validation.Valid;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -140,7 +141,7 @@ public class OrderService {
     // ---------- Mutations ----------
 
     @Transactional
-    public AdminOrderDto createAdminOrder(AdminCreateOrderInput input, User actor) {
+    public AdminOrderDto createAdminOrder(@Valid AdminCreateOrderInput input, User actor) {
         User user = resolveCustomer(input.userId(), input.email());
 
         if (input.fullName() == null || input.fullName().isBlank()) {
@@ -188,7 +189,7 @@ public class OrderService {
     }
 
     @Transactional
-    public AdminOrderDto updateAdminOrder(UUID id, AdminUpdateOrderInput input, User actor) {
+    public AdminOrderDto updateAdminOrder(UUID id, @Valid AdminUpdateOrderInput input, User actor) {
         Order order = orderRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
 
@@ -315,7 +316,7 @@ public class OrderService {
     }
 
     @Transactional
-    public Order placeOrder(UUID userId, PlaceOrderInput input) {
+    public Order placeOrder(UUID userId, @Valid PlaceOrderInput input) {
         List<CartItem> cartItems = cartService.getOwnedItems(userId, input.cartItemIds());
 
         User user = userRepository.findById(userId)
