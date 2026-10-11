@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.repositories;
 import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -40,6 +41,7 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
     @Query("""
             SELECT DISTINCT g.owner.id FROM GiftCard g
             WHERE g.owner.id IN :userIds AND g.status = 'REDEEMED' AND g.balance > 0
+                AND (g.expiresAt IS NULL OR g.expiresAt > CURRENT_TIMESTAMP)
         """)
     List<UUID> findDistinctOwnerIdsWithBalance(@Param("userIds") Set<UUID> userIds);
 
@@ -50,28 +52,26 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
             WHERE g.owner.id = :ownerId AND g.status = :status AND g.balance > 0
               AND (g.expiresAt IS NULL OR g.expiresAt > :now)
         """)
-    BigDecimal sumSpendableBalance(
-        @Param("ownerId") UUID ownerId,
-        @Param("status") GiftCardStatus status,
-        @Param("now") OffsetDateTime now
-    );
+    BigDecimal sumSpendableBalance(@Param("ownerId") UUID ownerId,
+                                   @Param("status") GiftCardStatus status,
+                                   @Param("now") OffsetDateTime now);
 
-    @Lock(PESSIMISTIC_WRITE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT g FROM GiftCard g
             WHERE g.owner.id = :ownerId AND g.status = :status AND g.balance > 0
               AND (g.expiresAt IS NULL OR g.expiresAt > :now)
             ORDER BY g.expiresAt ASC NULLS LAST, g.createdAt ASC
         """)
-    List<GiftCard> lockSpendableCards(
-        @Param("ownerId") UUID ownerId,
-        @Param("status") GiftCardStatus status,
-        @Param("now") OffsetDateTime now
-    );
+    List<GiftCard> lockSpendableCards(@Param("ownerId") UUID ownerId,
+                                      @Param("status") GiftCardStatus status,
+                                      @Param("now") OffsetDateTime now);
+
 
     default BigDecimal getRedeemableBalance(UUID ownerId) {
         return sumSpendableBalance(ownerId, GiftCardStatus.REDEEMED, OffsetDateTime.now());
     }
+
 
     default List<GiftCard> findSpendableCardsForUpdate(UUID ownerId) {
         return lockSpendableCards(ownerId, GiftCardStatus.REDEEMED, OffsetDateTime.now());

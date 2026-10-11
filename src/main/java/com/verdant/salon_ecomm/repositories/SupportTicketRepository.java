@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.repositories;
 
 import com.verdant.salon_ecomm.models.entities.SupportTicket;
+import com.verdant.salon_ecomm.models.enums.support.SupportTicketStatus;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,9 @@ public interface SupportTicketRepository
 
     @EntityGraph(attributePaths = {"user", "assignedTo"})
     Optional<SupportTicket> findDetailedById(UUID id);
+
+    // Used to cap how many unresolved tickets one customer can have open at once.
+    long countByUserIdAndStatusNot(UUID userId, SupportTicketStatus status);
 
     // Ownership check built into the query: a customer can never load someone else's ticket.
     @EntityGraph(attributePaths = {"user", "assignedTo"})
