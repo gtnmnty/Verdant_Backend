@@ -1,0 +1,119 @@
+enum NewsletterStatus {
+    SUBSCRIBED
+    UNSUBSCRIBED
+}
+
+enum NewsletterSource {
+    HELP_PAGE
+    FOOTER
+    CHECKOUT
+    ACCOUNT
+}
+
+# Always the same answer for a new, existing or previously unsubscribed address (no list enumeration).
+type NewsletterSubscribeResult {
+    success: Boolean!
+    message: String!
+}
+
+type AdminNewsletterSubscriber {
+    id: ID!
+    email: String!
+    status: NewsletterStatus!
+    source: NewsletterSource
+    subscribedAt: DateTime
+    unsubscribedAt: DateTime
+    createdAt: DateTime
+}
+
+enum NewsletterCampaignStatus {
+    DRAFT
+    SENDING
+    SENT
+}
+
+# One newsletter. body is plain text: blank lines separate paragraphs, HTML is not supported.
+type AdminNewsletterCampaign {
+    id: ID!
+    subject: String!
+    body: String!
+    ctaLabel: String
+    ctaUrl: String
+    status: NewsletterCampaignStatus!
+    recipientCount: Int
+    sentCount: Int!
+    failedCount: Int!
+    createdByName: String
+    startedAt: DateTime
+    completedAt: DateTime
+    createdAt: DateTime
+    updatedAt: DateTime
+}
+
+type AdminNewsletterCampaignPage {
+    items: [AdminNewsletterCampaign!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+# ctaLabel + ctaUrl are an optional button; give both or neither. ctaUrl must be https://
+input CreateNewsletterCampaignInput {
+    subject: String!
+    body: String!
+    ctaLabel: String
+    ctaUrl: String
+}
+
+# null = unchanged. To remove the button send "" for BOTH ctaLabel and ctaUrl. Drafts only.
+input UpdateNewsletterCampaignInput {
+    subject: String
+    body: String
+    ctaLabel: String
+    ctaUrl: String
+}
+
+type AdminNewsletterSubscriberPage {
+    items: [AdminNewsletterSubscriber!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
+extend type Query {
+    adminNewsletterSubscribers(
+        status: NewsletterStatus
+        source: NewsletterSource
+        search: String
+        page: Int = 1
+        pageSize: Int = 20
+    ): AdminNewsletterSubscriberPage!
+
+    adminNewsletterCampaigns(page: Int = 1, pageSize: Int = 10): AdminNewsletterCampaignPage!
+    adminNewsletterCampaign(id: ID!): AdminNewsletterCampaign
+}
+
+extend type Mutation {
+    # Public (no login). Used by the "Stay Inspired" form.
+    subscribeToNewsletter(email: String!, source: NewsletterSource = HELP_PAGE): NewsletterSubscribeResult!
+
+    # Public. The token comes from the unsubscribe link in every newsletter email.
+    unsubscribeFromNewsletter(token: String!): Boolean!
+
+    # Staff: permanently erases the address (data-deletion requests).
+    adminRemoveNewsletterSubscriber(id: ID!): Boolean!
+
+    createNewsletterCampaign(input: CreateNewsletterCampaignInput!): AdminNewsletterCampaign!
+    updateNewsletterCampaign(id: ID!, input: UpdateNewsletterCampaignInput!): AdminNewsletterCampaign!
+    deleteNewsletterCampaign(id: ID!): Boolean!
+
+    # Starts delivery in the background and returns right away with status SENDING. Poll the campaign
+    # (adminNewsletterCampaign) for sentCount/failedCount. Calling it again resumes an interrupted send and
+    # retries failed recipients; nobody who already received it gets it twice.
+    sendNewsletterCampaign(id: ID!): AdminNewsletterCampaign!
+
+    # Sends one proofing copy to a single address. Records nothing.
+    sendNewsletterTest(id: ID!, email: String!): Boolean!
+}
