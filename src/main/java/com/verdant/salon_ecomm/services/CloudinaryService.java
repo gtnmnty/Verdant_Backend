@@ -41,6 +41,24 @@ public class CloudinaryService {
         }
     }
 
+
+    // Same upload as upload(), but also returns the pixel size Cloudinary reports (used by the Journal's
+    // masonry grid). Existing upload() is untouched so avatar/product code keeps working.
+    @SuppressWarnings("unchecked")
+    public CloudinaryImageResult uploadWithDimensions(MultipartFile file) {
+        try {
+            Map<String, Object> result = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+            return new CloudinaryImageResult(
+                (String) result.get("secure_url"),
+                (String) result.get("public_id"),
+                result.get("width") instanceof Number w ? w.intValue() : 0,
+                result.get("height") instanceof Number h ? h.intValue() : 0
+            );
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to upload image to Cloudinary", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public void delete(String publicId) {
         try {
@@ -56,5 +74,8 @@ public class CloudinaryService {
     }
 
     public record CloudinaryUploadResult(String url, String publicId) {
+    }
+
+    public record CloudinaryImageResult(String url, String publicId, int width, int height) {
     }
 }
