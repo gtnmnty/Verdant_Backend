@@ -1,15 +1,14 @@
 package com.verdant.salon_ecomm.services.newsletter;
 
-import com.verdant.salon_ecomm.dtos.newsletter.AdminNewsletterSubscriberDto;
-import com.verdant.salon_ecomm.dtos.newsletter.AdminNewsletterSubscriberPage;
 import com.verdant.salon_ecomm.dtos.newsletter.NewsletterSubscribeResultDto;
 import com.verdant.salon_ecomm.dtos.newsletter.NewsletterSubscribedEvent;
+import com.verdant.salon_ecomm.dtos.newsletter.admin.AdminNewsletterSubscriberPage;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.NewsletterMapper;
-import com.verdant.salon_ecomm.models.entities.NewsletterSubscriber;
+import com.verdant.salon_ecomm.models.entities.newsletter.NewsletterSubscriber;
 import com.verdant.salon_ecomm.models.enums.newsletter.NewsletterSource;
 import com.verdant.salon_ecomm.models.enums.newsletter.NewsletterStatus;
-import com.verdant.salon_ecomm.repositories.NewsletterSubscriberRepository;
+import com.verdant.salon_ecomm.repositories.newsletter.NewsletterSubscriberRepository;
 import com.verdant.salon_ecomm.services.PublicFormRateLimiter;
 import com.verdant.salon_ecomm.specifications.NewsletterSubscriberSpec;
 import lombok.RequiredArgsConstructor;
@@ -137,7 +136,7 @@ public class NewsletterService {
         );
         Pageable pageable = PageRequest.of(
             Math.max(page, 1) - 1,
-            Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE),
+            Math.clamp(pageSize, 1, MAX_PAGE_SIZE),
             Sort.by(Sort.Order.desc("createdAt"))
         );
 
