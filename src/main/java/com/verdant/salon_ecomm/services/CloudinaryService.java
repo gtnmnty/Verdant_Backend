@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -14,6 +15,12 @@ import java.util.Map;
 public class CloudinaryService {
 
     private final Cloudinary cloudinary;
+
+    private static final List<String> ALLOWED_URL_HOSTS = List.of(
+        "res.cloudinary.com",
+        "lh3.googleusercontent.com"   // Google OAuth profile pictures
+    );
+
 
     @SuppressWarnings("unchecked")
     public CloudinaryUploadResult upload(MultipartFile file) {
@@ -30,6 +37,20 @@ public class CloudinaryService {
 
     @SuppressWarnings("unchecked")
     public CloudinaryUploadResult uploadFromUrl(String sourceUrl) {
+        // Validate the URL host before passing to Cloudinary
+        try {
+            java.net.URI uri = java.net.URI.create(sourceUrl);
+            String host = uri.getHost();
+            if (host == null) {
+                throw new IllegalArgumentException("URL has no host: " + sourceUrl);
+            }
+            boolean allowed = ALLOWED_URL_HOSTS.stream().anyMatch(host::endsWith);
+            if (!allowed) {
+                throw new IllegalArgumentException("URL host not in allow-list: " + host);
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid or disallowed source URL: " + sourceUrl, e);
+        }
         try {
             Map<String, Object> result = cloudinary.uploader().upload(sourceUrl, ObjectUtils.emptyMap());
             return new CloudinaryUploadResult(
@@ -40,7 +61,6 @@ public class CloudinaryService {
             throw new RuntimeException("Failed to copy image in Cloudinary", e);
         }
     }
-
 
     // Same upload as upload(), but also returns the pixel size Cloudinary reports (used by the Journal's
     // masonry grid). Existing upload() is untouched so avatar/product code keeps working.

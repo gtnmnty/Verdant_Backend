@@ -3,9 +3,9 @@ package com.verdant.salon_ecomm.services;
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.product.events.ProductImageUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.service.events.SalonServiceImageUpdatedEvent;
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,6 +34,8 @@ public class MediaImageService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+
+    private static final Tika TIKA = new Tika();
 
     private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -196,17 +199,21 @@ public class MediaImageService {
 
         for (MultipartFile file : files) {
             if (file.isEmpty()) {
-                throw new IllegalArgumentException("Uploaded file '" + file.getOriginalFilename() + "' is empty.");
+                throw new IllegalArgumentException("Uploaded file is empty.");
             }
             if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-                throw new IllegalArgumentException(
-                    "File '" + file.getOriginalFilename() + "' exceeds max size of " + (MAX_FILE_SIZE_BYTES / 1024 / 1024) + "MB."
-                );
+                throw new IllegalArgumentException("File exceeds max size.");
             }
-            String contentType = file.getContentType();
-            if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+            // Detect type from actual file bytes, not the HTTP header
+            String detectedType;
+            try {
+                detectedType = TIKA.detect(file.getInputStream());
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Could not read file content.");
+            }
+            if (!ALLOWED_CONTENT_TYPES.contains(detectedType.toLowerCase())) {
                 throw new IllegalArgumentException(
-                    "File '" + file.getOriginalFilename() + "' has unsupported type: " + contentType
+                    "File '" + file.getOriginalFilename() + "' is not a valid image type. Detected: " + detectedType
                 );
             }
         }
