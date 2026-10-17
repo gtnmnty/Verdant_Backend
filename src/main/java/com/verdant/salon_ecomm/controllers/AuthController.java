@@ -1,29 +1,21 @@
 package com.verdant.salon_ecomm.controllers;
 
+import com.verdant.salon_ecomm.dtos.user.*;
+import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.response.AuthResult;
+import com.verdant.salon_ecomm.services.AuthenticationService;
+import com.verdant.salon_ecomm.services.PublicFormRateLimiter;
+import com.verdant.salon_ecomm.services.RefreshTokenService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CookieValue;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import com.verdant.salon_ecomm.dtos.user.ForgotPasswordRequestDto;
-import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
-import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
-import com.verdant.salon_ecomm.dtos.user.ResendVerificationCodeDto;
-import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
-import com.verdant.salon_ecomm.dtos.user.UserDto;
-import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
-import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.response.AuthResult;
-import com.verdant.salon_ecomm.services.AuthenticationService;
-import com.verdant.salon_ecomm.services.RefreshTokenService;
-
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+import java.time.Duration;
 
 @RestController
 @RequiredArgsConstructor
@@ -38,7 +30,8 @@ public class AuthController {
 
     @Value("${app.production}")
     private boolean isProduction;
-    
+
+    private final PublicFormRateLimiter rateLimiter;
 
     @PostMapping("/signup")
     public ResponseEntity<UserDto.Summary> signUp(@Valid @RequestBody RegisterUserDto registerUser) {
@@ -52,7 +45,18 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResult> logIn(@Valid @RequestBody LogInUserDto logInUser) {
+    public ResponseEntity<AuthResult> logIn(
+        @Valid @RequestBody LogInUserDto logInUser,
+        HttpServletRequest request
+    ) {
+        String ip = request.getRemoteAddr();
+        rateLimiter.check("login:ip:" + ip, 10, Duration.ofMinutes(15));
+        rateLimiter.check(
+            "login:email:" + logInUser.getEmail().toLowerCase(),
+            3,
+            Duration.ofMinutes(15)
+        );
+
         AuthResult authResult = authenticationService.authenticate(logInUser);
         String refreshToken = authResult.getRefreshToken();
 
@@ -88,7 +92,18 @@ public class AuthController {
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyUser(@Valid @RequestBody VerifyUserDto verifyUser) {
+    public ResponseEntity<?> verifyUser(
+        @Valid @RequestBody VerifyUserDto verifyUser,
+        HttpServletRequest request
+    ) {
+        String ip = request.getRemoteAddr();
+        rateLimiter.check("login:ip:" + ip, 10, Duration.ofMinutes(15));
+        rateLimiter.check(
+            "login:email:" + verifyUser.getEmail().toLowerCase(),
+            3,
+            Duration.ofMinutes(15)
+        );
+
         authenticationService.verifyUser(verifyUser);
         return ResponseEntity.ok("Account verified");
     }
@@ -100,7 +115,7 @@ public class AuthController {
     }
 
     // "Forgot password" step 1 — request a reset code. Deliberately returns
-    // the same 200 response whether or not the email exists, so this can't be
+    // the same 200 response whether the email exists, so this can't be
     // used to enumerate registered accounts.
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDto request) {
@@ -110,7 +125,18 @@ public class AuthController {
 
     // "Forgot password" step 2 — submit the code + new password together.
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordDto request) {
+    public ResponseEntity<?> resetPassword(
+        @Valid @RequestBody ResetPasswordDto request,
+        HttpServletRequest requests
+    ) {
+        String ip = requests.getRemoteAddr();
+        rateLimiter.check("login:ip:" + ip, 3, Duration.ofMinutes(15));
+        rateLimiter.check(
+            "login:email:" + request.getEmail().toLowerCase(),
+            3,
+            Duration.ofMinutes(15)
+        );
+
         authenticationService.resetPassword(request);
         return ResponseEntity.ok("Password has been reset successfully.");
     }

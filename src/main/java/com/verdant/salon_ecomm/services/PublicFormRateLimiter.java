@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 public class PublicFormRateLimiter {
 
-    private static final int SWEEP_EVERY = 500; // calls between clean-ups of idle keys
+    private static final int SWEEP_EVERY = 500; // calls between cleanups of idle keys
 
     private final ConcurrentHashMap<String, Deque<Instant>> hits = new ConcurrentHashMap<>();
     private final AtomicInteger calls = new AtomicInteger();
