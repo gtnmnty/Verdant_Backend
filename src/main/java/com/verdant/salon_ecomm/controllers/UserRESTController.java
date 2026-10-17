@@ -20,6 +20,7 @@ public class UserRESTController {
     private final UserService userService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','OWNER')")
     public ResponseEntity<UserDto.Summary> createUser(
         @Valid @RequestBody RegisterUserDto request,
         UriComponentsBuilder uriBuilder

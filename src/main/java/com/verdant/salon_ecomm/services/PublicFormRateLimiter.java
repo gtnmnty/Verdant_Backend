@@ -1,51 +1,57 @@
 package com.verdant.salon_ecomm.services;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
+import java.util.UUID;
 
-/**
- * Sliding-window limiter for public (no-login) forms. Counts EVERY call, successful or not, so the
- * answer never depends on whether an email exists.
- * In-memory => per backend instance. With several instances behind a load balancer, move this to Redis.
- */
+@Slf4j
 @Component
 public class PublicFormRateLimiter {
 
-    private static final int SWEEP_EVERY = 500; // calls between cleanups of idle keys
+    private static final String PREFIX = "rl:";
 
-    private final ConcurrentHashMap<String, Deque<Instant>> hits = new ConcurrentHashMap<>();
-    private final AtomicInteger calls = new AtomicInteger();
+    // Atomic sliding window: purge old hits, reject if full, otherwise record this hit.
+    private static final String LUA = """
+        local key, now, window, max = KEYS[1], tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3])
+        redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+        if redis.call('ZCARD', key) >= max then return 0 end
+        redis.call('ZADD', key, now, ARGV[4])
+        redis.call('PEXPIRE', key, window)
+        return 1
+        """;
 
-    public void check(String key, int maxAttempts, Duration window) {
-        Instant now = Instant.now();
-        Instant cutoff = now.minus(window);
+    private static final DefaultRedisScript<Long> SCRIPT = new DefaultRedisScript<>(LUA, Long.class);
 
-        Deque<Instant> deque = hits.computeIfAbsent(key, k -> new ArrayDeque<>());
-        synchronized (deque) {
-            while (!deque.isEmpty() && deque.peekFirst().isBefore(cutoff)) deque.removeFirst();
-            if (deque.size() >= maxAttempts) {
-                throw new IllegalStateException("Too many requests. Please try again later.");
-            }
-            deque.addLast(now);
-        }
+    private final StringRedisTemplate redis;
 
-        if (calls.incrementAndGet() % SWEEP_EVERY == 0) sweep();
+    public PublicFormRateLimiter(StringRedisTemplate redis) {
+        this.redis = redis;
     }
 
-    /** Drops keys with no recent hits so the map can't grow forever. 1h covers the longest window used. */
-    private void sweep() {
-        Instant idleBefore = Instant.now().minus(Duration.ofHours(1));
-        hits.entrySet().removeIf(e -> {
-            Deque<Instant> d = e.getValue();
-            synchronized (d) {
-                return d.isEmpty() || d.peekLast().isBefore(idleBefore);
-            }
-        });
+    public void check(String key, int maxAttempts, Duration window) {
+        long now = System.currentTimeMillis();
+        long allowed;
+        try {
+            allowed = redis.execute(
+                SCRIPT,
+                List.of(PREFIX + key),
+                String.valueOf(now),
+                String.valueOf(window.toMillis()),
+                String.valueOf(maxAttempts),
+                now + "-" + UUID.randomUUID()   // unique member so same-millisecond hits aren't merged
+            );
+        } catch (DataAccessException e) {
+            log.error("Rate limiter unavailable, failing open", e);
+            return; // see note below
+        }
+        if (allowed == 0L) {
+            throw new IllegalStateException("Too many requests. Please try again later.");
+        }
     }
 }
