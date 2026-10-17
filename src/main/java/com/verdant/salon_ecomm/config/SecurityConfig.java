@@ -81,7 +81,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/auth/**", "/test/public", "/error",
-                    "/graphql", "/graphiql/**", "/webhooks/stripe").permitAll()
+                    "/graphql", "/webhooks/stripe").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

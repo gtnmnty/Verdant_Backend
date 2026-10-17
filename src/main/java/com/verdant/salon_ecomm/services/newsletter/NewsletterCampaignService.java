@@ -1,15 +1,19 @@
 package com.verdant.salon_ecomm.services.newsletter;
 
-import com.verdant.salon_ecomm.dtos.newsletter.*;
+import com.verdant.salon_ecomm.dtos.newsletter.CampaignDeliveryCount;
+import com.verdant.salon_ecomm.dtos.newsletter.CreateNewsletterCampaignInput;
+import com.verdant.salon_ecomm.dtos.newsletter.UpdateNewsletterCampaignInput;
+import com.verdant.salon_ecomm.dtos.newsletter.admin.AdminNewsletterCampaignDto;
+import com.verdant.salon_ecomm.dtos.newsletter.admin.AdminNewsletterCampaignPage;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.NewsletterMapper;
-import com.verdant.salon_ecomm.models.entities.NewsletterCampaign;
+import com.verdant.salon_ecomm.models.entities.newsletter.NewsletterCampaign;
 import com.verdant.salon_ecomm.models.enums.newsletter.NewsletterCampaignStatus;
 import com.verdant.salon_ecomm.models.enums.newsletter.NewsletterDeliveryStatus;
 import com.verdant.salon_ecomm.models.enums.newsletter.NewsletterStatus;
-import com.verdant.salon_ecomm.repositories.NewsletterCampaignRepository;
-import com.verdant.salon_ecomm.repositories.NewsletterDeliveryRepository;
-import com.verdant.salon_ecomm.repositories.NewsletterSubscriberRepository;
+import com.verdant.salon_ecomm.repositories.newsletter.NewsletterCampaignRepository;
+import com.verdant.salon_ecomm.repositories.newsletter.NewsletterDeliveryRepository;
+import com.verdant.salon_ecomm.repositories.newsletter.NewsletterSubscriberRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.EmailService;
 import jakarta.mail.MessagingException;
@@ -62,7 +66,7 @@ public class NewsletterCampaignService {
     public AdminNewsletterCampaignPage getCampaigns(int page, int pageSize) {
         Pageable pageable = PageRequest.of(
             Math.max(page, 1) - 1,
-            Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE),
+            Math.clamp(pageSize, 1, MAX_PAGE_SIZE),
             Sort.by(Sort.Order.desc("createdAt"))
         );
         Page<NewsletterCampaign> result = campaignRepository.findAll(pageable);
