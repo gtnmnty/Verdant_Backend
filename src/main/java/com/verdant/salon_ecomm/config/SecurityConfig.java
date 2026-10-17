@@ -68,7 +68,7 @@ public class SecurityConfig {
             );
         }
     }
-    
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         log.info("CORS allowed origins: {}", allowedOrigins);
@@ -76,8 +76,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    "/auth/**", "/test/public", "/error",
-                    "/graphql", "/webhooks/stripe").permitAll()
+                    "/auth/**", "/error", "/graphql", "/webhooks/stripe").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(s ->

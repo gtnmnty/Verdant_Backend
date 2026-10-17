@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
+import java.util.Locale;
 
 @RestController
 @RequiredArgsConstructor
@@ -52,7 +53,7 @@ public class AuthController {
         String ip = request.getRemoteAddr();
         rateLimiter.check("login:ip:" + ip, 10, Duration.ofMinutes(15));
         rateLimiter.check(
-            "login:email:" + logInUser.getEmail().toLowerCase(),
+            "login:email:" + logInUser.getEmail().toLowerCase(Locale.ROOT).trim(),
             3,
             Duration.ofMinutes(15)
         );
@@ -97,9 +98,9 @@ public class AuthController {
         HttpServletRequest request
     ) {
         String ip = request.getRemoteAddr();
-        rateLimiter.check("login:ip:" + ip, 10, Duration.ofMinutes(15));
+        rateLimiter.check("verify:ip:" + ip, 10, Duration.ofMinutes(15));
         rateLimiter.check(
-            "login:email:" + verifyUser.getEmail().toLowerCase(),
+            "verify:email:" + verifyUser.getEmail().toLowerCase(Locale.ROOT).trim(),
             3,
             Duration.ofMinutes(15)
         );
@@ -130,9 +131,9 @@ public class AuthController {
         HttpServletRequest requests
     ) {
         String ip = requests.getRemoteAddr();
-        rateLimiter.check("login:ip:" + ip, 3, Duration.ofMinutes(15));
+        rateLimiter.check("reset:ip:" + ip, 3, Duration.ofMinutes(15));
         rateLimiter.check(
-            "login:email:" + request.getEmail().toLowerCase(),
+            "reset:email:" + request.getEmail().toLowerCase(Locale.ROOT).trim(),
             3,
             Duration.ofMinutes(15)
         );
