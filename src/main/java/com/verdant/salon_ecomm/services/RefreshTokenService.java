@@ -38,7 +38,7 @@ public class RefreshTokenService {
         User user = userRepository.findByEmail(email)
                         .orElseThrow(() -> new ResourceNotFoundException("Account not found."));
 
-        refreshTokenRepository.deleteAllByUserId(user.getId());
+        refreshTokenRepository.deleteByUserId(user.getId());
 
         RefreshToken newrefreshToken = new RefreshToken();
         newrefreshToken.setUser(user);
@@ -76,6 +76,9 @@ public class RefreshTokenService {
         }
 
         User user = oldRefreshToken.getUser();
+        if (!user.isEnabled() || !user.isAccountNonLocked()) {
+            throw new RefreshTokenExpiredException("Please sign in again.");
+        }
 
         refreshTokenRepository.delete(oldRefreshToken);
 
@@ -92,7 +95,7 @@ public class RefreshTokenService {
 
     @Transactional
     public void deleteByUserId(UUID userId) {
-        refreshTokenRepository.deleteAllByUserId(userId);
+        refreshTokenRepository.deleteByUserId(userId);
     }
 
     public long getRefreshTokenDurationSeconds() {

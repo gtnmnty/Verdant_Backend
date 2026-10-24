@@ -97,4 +97,8 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
         @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
         @Param("cutoff") OffsetDateTime cutoff, Pageable pageable
     );
+
+    @Query("SELECT DISTINCT g.owner.id FROM GiftCard g WHERE g.owner.id IN :ids")
+    List<UUID> findDistinctOwnerIdsWithCards(@Param("ids") Collection<UUID> ids);
+
 }

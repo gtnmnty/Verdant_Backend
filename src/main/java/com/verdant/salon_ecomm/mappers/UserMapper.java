@@ -42,6 +42,8 @@ public interface UserMapper {
     @Mapping(target = "phone", source = "phoneNumber")
     @Mapping(target = "passwordHash", ignore = true)
     @Mapping(target = "address", source = "shippingAddress")
+    // Email goes through UserService's verified pending-change flow, never a straight copy.
+    @Mapping(target = "email", ignore = true)
     void updateEntity(UpdateUserRequest request, @MappingTarget User user);
 
     // OffsetDateTime → Instant converter (used for createdAt / updatedAt in DTOs)

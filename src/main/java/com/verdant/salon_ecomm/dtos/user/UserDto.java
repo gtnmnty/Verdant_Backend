@@ -18,6 +18,8 @@ public class UserDto {
         UUID id,
         String fullName,
         String email,
+        // Address awaiting code confirmation, null when no change is in progress.
+        String pendingEmail,
         String phone,
         Address shippingAddress,
         String avatarUrl,

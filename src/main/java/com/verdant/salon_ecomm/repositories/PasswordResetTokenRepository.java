@@ -32,6 +32,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
         + "WHERE t.tokenHash = :tokenHash AND t.usedAt IS NULL AND t.expiresAt > :now")
     int markUsedIfActive(@Param("tokenHash") String tokenHash, @Param("now") OffsetDateTime now);
 
+    // Used by self-deletion. Bulk admin deletes rely on the V2 ON DELETE CASCADE instead.
     @Modifying
     void deleteByUserId(UUID userId);
 }
