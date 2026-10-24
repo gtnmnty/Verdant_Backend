@@ -22,9 +22,9 @@ public class CleanUpJobTransactions {
     private final CleanUpJobRepository cleanUpJobRepository;
 
     @Transactional
-    public void claimBatch(String claimToken, long leaseMinutes, int batchSize) {
+    public void claimBatch(String claimToken, long leaseMinutes, int batchSize, int maxRetries) {
         OffsetDateTime leaseExpiry = OffsetDateTime.now().plusMinutes(leaseMinutes);
-        cleanUpJobRepository.claimBatch(claimToken, leaseExpiry, batchSize);
+        cleanUpJobRepository.claimBatch(claimToken, leaseExpiry, batchSize, maxRetries);
     }
 
     @Transactional

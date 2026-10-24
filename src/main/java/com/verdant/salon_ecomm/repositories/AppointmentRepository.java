@@ -12,7 +12,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -24,9 +23,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     @Query(value = "SELECT nextval('appointment_code_seq')", nativeQuery = true)
     Long getNextAppointmentCodeSequenceValue();
-
-    @Query("SELECT a FROM Appointment a WHERE a.stylist.id = :stylistId AND CAST(a.scheduledAt AS date) = :date")
-    List<Appointment> findByStylistIdAndDate(@Param("stylistId") UUID stylistId, @Param("date") LocalDate date);
 
     @Query(value = """
         SELECT COUNT(*) > 0 FROM appointments a

@@ -8,8 +8,8 @@ import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.verdant.salon_ecomm.config.StripeConfig;
-import com.verdant.salon_ecomm.dtos.gitftcards.events.GiftCardStripeWebhookEvent;
-import com.verdant.salon_ecomm.dtos.gitftcards.events.OrderPaymentVoidedEvent;
+import com.verdant.salon_ecomm.dtos.giftcards.events.GiftCardStripeWebhookEvent;
+import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
 import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
@@ -92,7 +92,7 @@ public class PaymentService {
         try {
             intent = self.createStripePaymentIntent(order, stripeCustomerId);
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to create PaymentIntent for order " + order.getId());
+            throw new PaymentException("Failed to create PaymentIntent for order " + order.getId(), ex);
         }
 
         Order updated = self.persistPaymentIntentId(order.getId(), order.getUser().getId(), intent.getId());
@@ -111,6 +111,10 @@ public class PaymentService {
         try {
             stripeClient.customers().delete(stripeCustomerId);
         } catch (StripeException ex) {
+            // Already gone (deleted earlier, or by a previous attempt that failed after the call): nothing left to do.
+            if ("resource_missing".equals(ex.getCode())) {
+                return;
+            }
             throw new PaymentException("Failed to delete Stripe customer " + stripeCustomerId, ex);
         }
     }
@@ -270,8 +274,10 @@ public class PaymentService {
             eventPublisher.publishEvent(new OrderPaymentVoidedEvent(order));
         }
 
+        // Order.user is nullable. A 500 here would make Stripe retry the webhook forever.
+        UUID ownerId = order.getUser() != null ? order.getUser().getId() : null;
         eventPublisher.publishEvent(new PaymentStatusChangedEvent(
-            order.getId(), order.getUser().getId(), current, next, eventType
+            order.getId(), ownerId, current, next, eventType
         ));
     }
 

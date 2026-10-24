@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.models.entities.promo_code.PromoCode;
+import com.verdant.salon_ecomm.models.entities.promocode.PromoCode;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 import java.util.UUID;

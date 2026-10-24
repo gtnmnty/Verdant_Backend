@@ -6,7 +6,6 @@ import com.verdant.salon_ecomm.dtos.user.events.UserEmailChangeRequestedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserEmailChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserProfileUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.user.events.UserRegisteredEvent;
 import com.verdant.salon_ecomm.models.entities.PendingCleanUpJob;
 import com.verdant.salon_ecomm.models.entities.Address;
 import com.verdant.salon_ecomm.models.entities.User;
@@ -16,7 +15,6 @@ import com.verdant.salon_ecomm.exceptions.InvalidCredentialsException;
 import com.verdant.salon_ecomm.exceptions.InvalidVerificationCodeException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.UserMapper;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.*;
 import jakarta.validation.Validator;
@@ -48,6 +46,9 @@ public class UserService {
     private final String instanceId = UUID.randomUUID().toString();
     private static final int CLEANUP_BATCH_SIZE = 50;
     private static final long CLEANUP_LEASE_MINUTES = 5;
+    // A job that keeps failing (e.g. bad credentials, a permanently broken asset) stops being
+    // claimed after this many attempts instead of being retried every minute forever.
+    private static final int CLEANUP_MAX_RETRIES = 10;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
@@ -72,27 +73,6 @@ public class UserService {
         return userRepository.findById(id)
             .map(userMapper::toProfile)
             .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-    }
-
-    @Transactional
-    public UserDto.Summary registerUser(RegisterUserDto request) {
-        String normalizedEmail = request.getEmail().trim().toLowerCase();
-
-        if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new DuplicateEmailException("Email already in use");
-        }
-
-        var newUser = userMapper.toEntity(request);
-        newUser.setEmail(normalizedEmail);
-        newUser.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        newUser.setRole(AccountRole.CUSTOMER);
-        newUser.setStatus(AccountStatus.ACTIVE);
-
-        var savedUser = userRepository.save(newUser);
-
-        eventPublisher.publishEvent(new UserRegisteredEvent(savedUser));
-
-        return userMapper.toSummary(savedUser);
     }
 
     @Transactional
@@ -130,9 +110,8 @@ public class UserService {
 
         String previousFullName = user.getFullName();
         String previousPhone = user.getPhone();
-        // ADDED: snapshot address fields before updateEntity() mutates the
-        // embedded Address in place — capturing the reference alone wouldn't
-        // work, since it's the same object before and after.
+        // Snapshot the address as a string before updateEntity() replaces it,
+        // so the change check compares values rather than object references.
         String previousAddressSignature = addressSignature(user.getAddress());
 
         userMapper.updateEntity(request, user);
@@ -240,9 +219,7 @@ public class UserService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-        // User is a managed JPA entity within @Transactional Annotation
-        // Changes are flushed automatically.
-        // Saving explicitly is fine and makes intent clearer.
+        // No save() needed: user is managed in this transaction, so the change is flushed on commit.
 
         eventPublisher.publishEvent(new UserPasswordChangedEvent(user));
     }
@@ -305,7 +282,7 @@ public class UserService {
         // Unique per invocation (not the fixed per-JVM instanceId) so two overlapping
         // runs of this method never share a claim token and can't collide on the same batch.
         String claimToken = instanceId + ":" + UUID.randomUUID();
-        cleanUpJobTransactions.claimBatch(claimToken, CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE);
+        cleanUpJobTransactions.claimBatch(claimToken, CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE, CLEANUP_MAX_RETRIES);
 
         for (PendingCleanUpJob job : cleanUpJobRepository.findByClaimedByAndProcessedFalse(claimToken)) {
             try {
@@ -323,8 +300,13 @@ public class UserService {
                     .ifPresent(user -> eventPublisher.publishEvent(new UserDeletedEvent(user)));
             } catch (Exception e) {
                 cleanUpJobTransactions.incrementRetryCount(job.getId(), claimToken);
-                log.error("Cleanup job {} failed for user {} (retry {})",
-                    job.getId(), job.getUserId(), job.getRetryCount() + 1, e);
+                int attempts = job.getRetryCount() + 1;
+                log.error("Cleanup job {} failed for user {} (attempt {} of {})",
+                    job.getId(), job.getUserId(), attempts, CLEANUP_MAX_RETRIES, e);
+                if (attempts >= CLEANUP_MAX_RETRIES) {
+                    log.error("Cleanup job {} for user {} reached the retry limit and will not run again; "
+                        + "clean up manually", job.getId(), job.getUserId());
+                }
             }
         }
     }

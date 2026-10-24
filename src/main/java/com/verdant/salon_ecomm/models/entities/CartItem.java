@@ -31,6 +31,7 @@ public class CartItem {
     private Product product;
 
     @Column(nullable = false)
+    @Builder.Default
     private Integer quantity = 1;
 
     @Column(name = "delivery_option", nullable = false, length = 50)

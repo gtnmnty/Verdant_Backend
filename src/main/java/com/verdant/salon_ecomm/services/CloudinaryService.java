@@ -40,11 +40,17 @@ public class CloudinaryService {
         // Validate the URL host before passing to Cloudinary
         try {
             java.net.URI uri = java.net.URI.create(sourceUrl);
+            if (!"https".equalsIgnoreCase(uri.getScheme())) {
+                throw new IllegalArgumentException("URL must use https: " + sourceUrl);
+            }
             String host = uri.getHost();
             if (host == null) {
                 throw new IllegalArgumentException("URL has no host: " + sourceUrl);
             }
-            boolean allowed = ALLOWED_URL_HOSTS.stream().anyMatch(host::endsWith);
+            String normalizedHost = host.toLowerCase(java.util.Locale.ROOT);
+            // Exact host or a real subdomain: "evilres.cloudinary.com" must not pass for "res.cloudinary.com".
+            boolean allowed = ALLOWED_URL_HOSTS.stream()
+                .anyMatch(h -> normalizedHost.equals(h) || normalizedHost.endsWith("." + h));
             if (!allowed) {
                 throw new IllegalArgumentException("URL host not in allow-list: " + host);
             }

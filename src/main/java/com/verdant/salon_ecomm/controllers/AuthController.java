@@ -26,7 +26,6 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
 
     private static final String COOKIE_NAME_REFRESH_TOKEN = "refreshToken";
-    //private static final String SAME_SITE_STRICT = "Strict";
     private static final String SAME_SITE_LAX = "Lax";
 
     @Value("${app.production}")

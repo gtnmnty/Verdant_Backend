@@ -10,7 +10,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @RequiredArgsConstructor
 @RequestMapping("v1/users")
@@ -18,19 +17,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class UserRESTController {
 
     private final UserService userService;
-
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','OWNER')")
-    public ResponseEntity<UserDto.Summary> createUser(
-        @Valid @RequestBody RegisterUserDto request,
-        UriComponentsBuilder uriBuilder
-    ) {
-        UserDto.Summary newUser = userService.registerUser(request);
-
-        var uri = uriBuilder.path("/api/v1/users/{id}").buildAndExpand(newUser.id()).toUri();
-
-        return ResponseEntity.created(uri).body(newUser);
-    }
 
     @PutMapping("/update-profile")
     @PreAuthorize("isAuthenticated()")
@@ -64,7 +50,7 @@ public class UserRESTController {
 
     @DeleteMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<UserDto> deleteAccount(@AuthenticationPrincipal User principal){
+    public ResponseEntity<Void> deleteAccount(@AuthenticationPrincipal User principal){
         userService.deleteUserById(principal.getId());
         return ResponseEntity.noContent().build();
     }

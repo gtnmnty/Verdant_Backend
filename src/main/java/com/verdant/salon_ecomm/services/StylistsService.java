@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -49,8 +50,8 @@ public class StylistsService {
         List<UUID> services, StylistSort sort,
         int page, int pageSize
     ) {
-        int normalizePage = Math.max(page - 1, 0) + 1;
-        int normalizePageSize = Math.max(pageSize, 1);
+        int normalizePage = PageRequests.page(page);
+        int normalizePageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 

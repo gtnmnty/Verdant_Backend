@@ -16,7 +16,7 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ProductSpec;
 import com.verdant.salon_ecomm.utils.EnumUtils;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
-import com.verdant.salon_ecomm.utils.IsEmpty;
+import com.verdant.salon_ecomm.utils.CloudinaryCleanup;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -49,8 +50,8 @@ public class ProductService {
         String category, String search,
         CollectionSort sort, int page, int pageSize
     ) {
-        int normalizePage = Math.max(page - 1, 0) + 1;
-        int normalizePageSize = Math.max(pageSize, 1);
+        int normalizePage = PageRequests.page(page);
+        int normalizePageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
@@ -84,8 +85,8 @@ public class ProductService {
         CollectionSort sort,
         CollectionStatus status, int page, int pageSize
     ) {
-        int normalizePage = Math.max(page - 1, 0) + 1;
-        int normalizePageSize = Math.max(pageSize, 1);
+        int normalizePage = PageRequests.page(page);
+        int normalizePageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
@@ -138,7 +139,8 @@ public class ProductService {
             .averageRating(BigDecimal.ZERO)
             .build();
 
-        return productMapper.toAdminDTO(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        return productMapper.toAdminDTO(saved, imagesOf(saved));
     }
 
     @Transactional
@@ -161,7 +163,8 @@ public class ProductService {
         if (input.isFeatured() != null) product.setFeatured(input.isFeatured());
         if (input.status() != null) product.setStatus(input.status());
 
-        return productMapper.toAdminDTO(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        return productMapper.toAdminDTO(saved, imagesOf(saved));
     }
 
     @Transactional
@@ -201,7 +204,7 @@ public class ProductService {
             eventPublisher.publishEvent(new ProductsBulkDeletedEvent(products, actor));
         }
 
-        IsEmpty.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
+        CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
 
         return products;
     }
@@ -210,7 +213,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        return productMapper.toAdminDTO(product);
+        return productMapper.toAdminDTO(product, imagesOf(product));
     }
 
     private Sort toSort(CollectionSort sort) {
@@ -224,4 +227,8 @@ public class ProductService {
         };
     }
 
+    // Image lookup for single-product responses; list endpoints batch-load images instead.
+    private List<MediaImage> imagesOf(Product product) {
+        return mediaImageRepository.findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.PRODUCT, product.getId());
+    }
 }

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.ToString;
 
 @AllArgsConstructor
 @Data
@@ -18,10 +19,12 @@ public class UpdateUserRequest {
     @Size(max = 255)
     private String email;
 
+    @ToString.Exclude
     private String password;
     private String phoneNumber;
 
     // Required only when the email is being changed, so a stolen access token alone can't move the account.
+    @ToString.Exclude
     private String currentPassword;
 
     @Valid

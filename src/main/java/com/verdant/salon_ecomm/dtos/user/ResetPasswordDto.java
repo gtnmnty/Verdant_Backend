@@ -1,10 +1,10 @@
 package com.verdant.salon_ecomm.dtos.user;
 
+import com.verdant.salon_ecomm.validation.ValidPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.ToString;
 
 @Data
 public class ResetPasswordDto {
@@ -14,13 +14,10 @@ public class ResetPasswordDto {
     private String email;
 
     @NotBlank(message = "Reset code is required")
+    @ToString.Exclude
     private String code;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least {min} characters long")
-    @Pattern(
-        regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}$",
-        message = "Password must contain at least one uppercase letter, one lowercase letter, and one number"
-    )
+    @ValidPassword
+    @ToString.Exclude
     private String newPassword;
 }

@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -59,8 +60,8 @@ public class AccountService {
     // ---------- Queries ----------
 
     public AccountPage getAccounts(AccountFilterInput filter, int page, int pageSize) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, Sort.by("fullName").ascending());
 
@@ -169,6 +170,7 @@ public class AccountService {
 
         // Staff changed someone else's email (C-1). Treat the new address as unproven:
         // the account can't sign in or use forgot-password until the new mailbox enters the code.
+        String newEmailCode = null;
         if (emailChanging) {
             user.setEmailVerified(false);
             user.setEmailVerifiedAt(null);
@@ -176,7 +178,7 @@ public class AccountService {
             user.setResetPasswordCode(null);
             user.setResetPasswordCodeExpiration(null);
             // Fresh verification code + expiry; the listener mails it to the new address after commit.
-            authenticationService.prepareVerification(user);
+            newEmailCode = authenticationService.prepareVerification(user);
             // Sign out every session. Existing access JWTs also die, because their subject is the old email.
             refreshTokenService.deleteByUserId(user.getId());
             // Burn any staff-issued reset links still outstanding.
@@ -192,7 +194,7 @@ public class AccountService {
         // Notifies the OLD address (so the real owner can spot a hijack) and sends the code to the new one.
         if (emailChanging) {
             eventPublisher.publishEvent(new AccountEmailChangedEvent(
-                saved.getId(), previousEmail, saved.getEmail(), saved.getVerificationCode(), actor));
+                saved.getId(), previousEmail, saved.getEmail(), newEmailCode, actor));
         }
 
         List<AccountUpdatedEvent.FieldChange> changes = new ArrayList<>();

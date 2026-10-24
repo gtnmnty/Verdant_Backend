@@ -23,7 +23,6 @@ import com.verdant.salon_ecomm.specifications.JournalStorySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -35,6 +34,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import static com.verdant.salon_ecomm.utils.InputValidators.requireText;
+import static com.verdant.salon_ecomm.utils.InputValidators.optionalText;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -340,29 +342,13 @@ public class JournalService {
     }
 
     private Pageable pageable(int page, int pageSize, Sort sort) {
-        int safePage = Math.max(page, 1);
-        int safeSize = Math.clamp(pageSize, 1, MAX_PAGE_SIZE);
-        return PageRequest.of(safePage - 1, safeSize, sort);
+        return PageRequests.of(page, pageSize, MAX_PAGE_SIZE, sort);
     }
 
     private String cleanSearch(String search) {
         if (search == null || search.isBlank()) return null;
         String trimmed = search.trim();
         return trimmed.length() > MAX_SEARCH ? trimmed.substring(0, MAX_SEARCH) : trimmed;
-    }
-
-    private String requireText(String value, int max, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required");
-        String trimmed = value.trim();
-        if (trimmed.length() > max) {
-            throw new IllegalArgumentException(label + " must be at most " + max + " characters");
-        }
-        return trimmed;
-    }
-
-    // For updates: null means "unchanged", but a value that IS provided can't be blank.
-    private String optionalText(String value, int max, String label) {
-        return value == null ? null : requireText(value, max, label);
     }
 
     private boolean hasFile(MultipartFile file) {

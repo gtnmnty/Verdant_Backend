@@ -30,4 +30,6 @@ public enum AuditActionType {
     ISSUED,
     REDEEMED,
     EXPIRED,
+    GIFT_CARD_APPLIED,
+    PROMO_CODE_APPLIED,
 }

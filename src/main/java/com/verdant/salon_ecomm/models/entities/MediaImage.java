@@ -34,9 +34,11 @@ public class MediaImage {
     private String publicId;
 
     @Column(name = "is_primary")
+    @Builder.Default
     private boolean isPrimary = false;
 
     @Column(name = "sort_order")
+    @Builder.Default
     private int sortOrder = 0;
 
     @Column(name = "created_at")

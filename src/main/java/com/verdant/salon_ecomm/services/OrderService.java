@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
-import com.verdant.salon_ecomm.dtos.gitftcards.GiftCardBalanceApplicationResult;
+import com.verdant.salon_ecomm.dtos.giftcards.GiftCardBalanceApplicationResult;
 import com.verdant.salon_ecomm.dtos.order.OrderDto;
 import com.verdant.salon_ecomm.dtos.order.OrderPage;
 import com.verdant.salon_ecomm.dtos.order.PlaceOrderInput;
@@ -41,6 +41,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @Validated
@@ -67,8 +68,8 @@ public class OrderService {
         UUID userId, OrderClientFilter status, OrderTimeframe timeframe,
         String search, OrderClientSort sort, int page, int pageSize
     ) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime windowStart = now.minusDays(30);
@@ -99,7 +100,8 @@ public class OrderService {
 
     public Order getOrderById(UUID id, UUID currentUserId, boolean isAdmin) {
         Order order = findOrderOrThrow(id);
-        if (!isAdmin && !order.getUser().getId().equals(currentUserId)) {
+        // Order.user is nullable; an order with no owner is visible to staff only.
+        if (!isAdmin && (order.getUser() == null || !order.getUser().getId().equals(currentUserId))) {
             throw new AccessDeniedException("Not your order");
         }
         return order;
@@ -109,8 +111,8 @@ public class OrderService {
         OrderStatus status, String search,
         AdminOrderSort sort, OrderSortDirection direction, int page, int pageSize
     ) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, toAdminSort(sort, direction));
 
@@ -142,22 +144,24 @@ public class OrderService {
 
     @Transactional
     public AdminOrderDto createAdminOrder(@Valid AdminCreateOrderInput input, User actor) {
-        User user = resolveCustomer(input.userId(), input.email());
-
         if (input.fullName() == null || input.fullName().isBlank()) {
             throw new IllegalArgumentException("Customer full name is required for admin order creation");
         }
-
-        user.setFullName(input.fullName());
-        user.setPhone(input.phone());
-        userRepository.save(user);
-
         if (input.phone() == null || input.phone().isBlank()) {
             throw new IllegalArgumentException("Customer phone number is required for admin order creation");
+        }
+        if (input.fullName().trim().length() > 100) {
+            throw new IllegalArgumentException("Customer full name must be at most 100 characters");
+        }
+        if (input.phone().trim().length() > 20) {
+            throw new IllegalArgumentException("Customer phone number must be at most 20 characters");
         }
         if (input.items() == null || input.items().isEmpty()) {
             throw new IllegalArgumentException("At least one item is required");
         }
+
+        // The name/phone typed here belong to this order only; the customer's saved profile is left alone.
+        User user = resolveCustomer(input.userId(), input.email());
 
         Address address = orderMapper.fromAddressInput(input.shippingAddress());
 
@@ -174,12 +178,16 @@ public class OrderService {
         Order savedOrder = buildAndSaveOrder(
             user, address, input.paymentMethod(), subtotal, promoDiscount, deliveryOptions
         );
+        savedOrder.setContactName(input.fullName().trim());
+        savedOrder.setContactPhone(input.phone().trim());
 
         pendingItems.forEach(item -> item.setOrder(savedOrder));
         List<OrderItem> savedItems = orderItemRepository.saveAll(pendingItems);
 
         if (promoDiscount.signum() > 0) {
-            assert input.promoCode() != null;
+            if (input.promoCode() == null) {
+                throw new IllegalStateException("Promo discount applied without a promo code");
+            }
             promoCodeService.recordRedemption(user.getId(), input.promoCode(), promoDiscount, savedOrder);
         }
 
@@ -198,6 +206,18 @@ public class OrderService {
 
         if (input.shippingAddress() != null) {
             order.setShippingAddress(orderMapper.fromAddressInput(input.shippingAddress()));
+        }
+        if (input.fullName() != null && !input.fullName().isBlank()) {
+            if (input.fullName().trim().length() > 100) {
+                throw new IllegalArgumentException("Customer full name must be at most 100 characters");
+            }
+            order.setContactName(input.fullName().trim());
+        }
+        if (input.phone() != null && !input.phone().isBlank()) {
+            if (input.phone().trim().length() > 20) {
+                throw new IllegalArgumentException("Customer phone number must be at most 20 characters");
+            }
+            order.setContactPhone(input.phone().trim());
         }
         if (input.paymentMethod() != null) { order.setPaymentMethod(input.paymentMethod()); }
         if (input.orderStatus() != null) { order.setOrderStatus(input.orderStatus()); }
@@ -352,7 +372,9 @@ public class OrderService {
         orderItemRepository.saveAll(pendingItems);
 
         if (promoDiscount.signum() > 0) {
-            assert input.promoCode() != null;
+            if (input.promoCode() == null) {
+                throw new IllegalStateException("Promo discount applied without a promo code");
+            }
             promoCodeService.recordRedemption(userId, input.promoCode(), promoDiscount, savedOrder);
         }
 
@@ -387,6 +409,12 @@ public class OrderService {
         if (!foundIds.equals(requestedIds)) {
             throw new ResourceNotFoundException("One or more orders were not found.");
         }
+
+        // Must run before detachOrderReferences: the wallet refund rows it writes point at the order
+        // and need unlinking too.
+        orders.stream()
+            .filter(this::holdsUnpaidReservations)
+            .forEach(this::releaseUnpaidReservations);
 
         // Keep the gift-card ledger rows but unlink them, otherwise gift_card_transactions.order_id
         // blocks delete with an FK violation for any order paid (even partly) from the wallet.
@@ -427,8 +455,7 @@ public class OrderService {
         BigDecimal subtotal, BigDecimal promoDiscount,
         List<DeliveryOption> deliveryOptions
     ) {
-        // Shipping is currently free across the board (matches cart screen showing 0 per item) —
-        // revisit if per-delivery-option shipping costs get introduced later.
+        // One fee per order, set by the most expensive delivery option among the items (see ShippingService).
         BigDecimal deliveryFee = shippingService.calculateDeliveryFee(deliveryOptions);
         BigDecimal total = subtotal.subtract(promoDiscount).add(deliveryFee);
 
@@ -502,6 +529,34 @@ public class OrderService {
     private void restoreStock(UUID productId, int quantity) {
         if (quantity > 0) {
             productRepository.incrementStock(productId, quantity);
+        }
+    }
+
+    // An order that was never paid and never left the shop still holds the stock reserved at checkout
+    // and any wallet money drawn for it. PROCESSED is excluded because that payment may still succeed.
+    // Nothing else returns stock for cancelled or failed orders yet; if that changes, this must skip
+    // orders whose stock was already released.
+    private boolean holdsUnpaidReservations(Order order) {
+        PaymentStatus payment = order.getPaymentStatus();
+        boolean unpaid = payment == null
+            || payment == PaymentStatus.PENDING
+            || payment == PaymentStatus.REQUIRES_ACTION
+            || payment == PaymentStatus.FAILED
+            || payment == PaymentStatus.CANCELLED;
+        OrderStatus status = order.getOrderStatus();
+        boolean notShipped = status == null
+            || status == OrderStatus.PLACED
+            || status == OrderStatus.PROCESSING
+            || status == OrderStatus.CANCELLED;
+        return unpaid && notShipped;
+    }
+
+    private void releaseUnpaidReservations(Order order) {
+        giftCardService.restoreWalletForOrder(order); // idempotent
+        for (OrderItem item : orderItemRepository.findByOrder_Id(order.getId())) {
+            if (item.getProduct() != null && item.getQuantity() != null) {
+                restoreStock(item.getProduct().getId(), item.getQuantity());
+            }
         }
     }
 

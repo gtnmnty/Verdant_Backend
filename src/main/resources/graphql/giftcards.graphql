@@ -18,8 +18,8 @@ enum GiftCardTransactionType {
 type GiftCard {
     id: ID!
     code: String!
-    balance: Float!
-    initialAmount: Float!
+    balance: BigDecimal!
+    initialAmount: BigDecimal!
     status: GiftCardStatus!
     paymentStatus: PaymentStatus!
     recipientName: String
@@ -32,7 +32,7 @@ type GiftCard {
 type GiftCardTransaction {
     id: ID!
     type: GiftCardTransactionType!
-    amount: Float!
+    amount: BigDecimal!
     description: String!
     orderId: ID
     createdAt: DateTime!
@@ -44,14 +44,14 @@ type GiftCardPayment {
 }
 
 input PurchaseGiftCardInput {
-    amount: Float!
+    amount: BigDecimal!
     recipientName: String
     recipientEmail: String!
     note: String
 }
 
 input AdminIssueGiftCardInput {
-    amount: Float!
+    amount: BigDecimal!
     recipientName: String
     recipientEmail: String
     note: String
@@ -61,7 +61,7 @@ input AdminIssueGiftCardInput {
 extend type Query {
     myGiftCards: [GiftCard!]!
     mySentGiftCards: [GiftCard!]!
-    myWalletBalance: Float!
+    myWalletBalance: BigDecimal!
     myGiftCardTransactions: [GiftCardTransaction!]!
 }
 

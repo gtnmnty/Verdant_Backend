@@ -25,11 +25,11 @@ public class ProductSpec {
 
     private static Specification<Product> hasSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) ->
             cb.or(
-                cb.like(cb.lower(root.get("name")), pattern),
-                cb.like(cb.lower(root.get("description")), pattern)
+                cb.like(cb.lower(root.get("name")), pattern, LikePatterns.ESCAPE),
+                cb.like(cb.lower(root.get("description")), pattern, LikePatterns.ESCAPE)
             );
     }
 }

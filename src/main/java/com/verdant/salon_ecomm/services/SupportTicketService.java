@@ -21,7 +21,6 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.SupportTicketSpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,7 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.regex.Pattern;
+import static com.verdant.salon_ecomm.utils.InputValidators.requireText;
+import com.verdant.salon_ecomm.utils.InputValidators;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -43,7 +44,6 @@ public class SupportTicketService {
     private static final int MAX_PAGE_SIZE = 50;
     private static final int MAX_OPEN_TICKETS_PER_USER = 10;   // stops one account flooding the support desk
     private static final int MAX_MESSAGES_PER_TICKET = 200;    // stops one thread growing without limit
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     // Same support-desk roles the resolver allows.
     private static final Set<AccountRole> STAFF_ROLES =
@@ -154,11 +154,7 @@ public class SupportTicketService {
             case PRIORITY_HIGH_TO_LOW -> Sort.unsorted();
             case NEWEST -> Sort.by(Sort.Order.desc("createdAt"));
         };
-        Pageable pageable = PageRequest.of(
-            Math.max(page, 1) - 1,
-            Math.clamp(pageSize, 1, MAX_PAGE_SIZE),
-            order
-        );
+        Pageable pageable = PageRequests.of(page, pageSize, MAX_PAGE_SIZE, order);
 
         Page<SupportTicket> result = ticketRepository.findAll(spec, pageable);
         Map<UUID, Integer> counts = messageCounts(result.getContent(), true);
@@ -273,18 +269,9 @@ public class SupportTicketService {
         return counts;
     }
 
-    private String requireText(String value, int max, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required");
-        String trimmed = value.trim();
-        if (trimmed.length() > max) {
-            throw new IllegalArgumentException(label + " must be at most " + max + " characters");
-        }
-        return trimmed;
-    }
-
     private String requireEmail(String value) {
         String email = requireText(value, MAX_EMAIL, "Email").toLowerCase(Locale.ROOT);
-        if (!EMAIL.matcher(email).matches()) throw new IllegalArgumentException("Please enter a valid email address.");
+        if (!InputValidators.isEmail(email)) throw new IllegalArgumentException("Please enter a valid email address.");
         return email;
     }
 

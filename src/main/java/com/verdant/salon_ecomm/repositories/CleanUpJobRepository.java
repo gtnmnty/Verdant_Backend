@@ -16,7 +16,8 @@ public interface CleanUpJobRepository extends JpaRepository<PendingCleanUpJob, U
     // unclaimed or whose lease has expired, stamping them with this
     // scheduler instance's id and a new expiry. FOR UPDATE SKIP LOCKED lets
     // concurrent instances run this same query without blocking on or
-    // double-claiming rows another instance already grabbed.
+    // double-claiming rows another instance already grabbed. Jobs that have
+    // failed maxRetries times are left alone so they stop being retried forever.
     @Modifying
     @Query(value = """
         UPDATE pending_cleanup_jobs
@@ -24,6 +25,7 @@ public interface CleanUpJobRepository extends JpaRepository<PendingCleanUpJob, U
         WHERE id IN (
             SELECT id FROM pending_cleanup_jobs
             WHERE processed = false
+              AND retry_count < :maxRetries
               AND (claimed_by IS NULL OR claim_expires_at < now())
             ORDER BY created_at
             LIMIT :batchSize
@@ -33,7 +35,8 @@ public interface CleanUpJobRepository extends JpaRepository<PendingCleanUpJob, U
     void claimBatch(
         @Param("instanceId") String instanceId,
         @Param("expiresAt") OffsetDateTime expiresAt,
-        @Param("batchSize") int batchSize
+        @Param("batchSize") int batchSize,
+        @Param("maxRetries") int maxRetries
     );
 
     // Fetch the jobs this instance just claimed, to actually process.

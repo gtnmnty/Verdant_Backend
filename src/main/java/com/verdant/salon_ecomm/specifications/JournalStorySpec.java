@@ -8,6 +8,8 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.Objects;
+
 //Every method returns null when its filter is absent, so they compose with Specification.allOf(...).
 public class JournalStorySpec {
 
@@ -26,23 +28,23 @@ public class JournalStorySpec {
     // Same fields the page searched client-side: client name, service, stylist, and product names.
     public static Specification<JournalStory> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.trim().toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
 
         return (root, query, cb) -> {
             // EXISTS subquery for product names: no join on the main query,
             // so no duplicate rows and paging stays correct.
-            assert query != null;
+            Objects.requireNonNull(query, "JournalStorySpec.matchesSearch needs a CriteriaQuery for its subquery");
             Subquery<Integer> productMatch = query.subquery(Integer.class);
             Root<JournalStoryProduct> link = productMatch.from(JournalStoryProduct.class);
             productMatch.select(cb.literal(1)).where(
                 cb.equal(link.get("story"), root),
-                cb.like(cb.lower(link.get("product").get("name")), pattern)
+                cb.like(cb.lower(link.get("product").get("name")), pattern, LikePatterns.ESCAPE)
             );
 
             return cb.or(
-                cb.like(cb.lower(root.get("clientName")), pattern),
-                cb.like(cb.lower(root.get("service")), pattern),
-                cb.like(cb.lower(root.get("stylist")), pattern),
+                cb.like(cb.lower(root.get("clientName")), pattern, LikePatterns.ESCAPE),
+                cb.like(cb.lower(root.get("service")), pattern, LikePatterns.ESCAPE),
+                cb.like(cb.lower(root.get("stylist")), pattern, LikePatterns.ESCAPE),
                 cb.exists(productMatch)
             );
         };

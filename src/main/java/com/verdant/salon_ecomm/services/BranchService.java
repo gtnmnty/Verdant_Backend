@@ -16,7 +16,7 @@ import com.verdant.salon_ecomm.repositories.AppointmentRepository;
 import com.verdant.salon_ecomm.repositories.BranchRepository;
 import com.verdant.salon_ecomm.repositories.StylistRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
-import com.verdant.salon_ecomm.specifications.BranchSpecification;
+import com.verdant.salon_ecomm.specifications.BranchSpec;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -58,7 +59,7 @@ public class BranchService {
 
     public List<BranchDto> getBranches(){
         return branchRepository
-            .findAll(BranchSpecification.filterBy(BranchStatus.OPEN, null))
+            .findAll(BranchSpec.filterBy(BranchStatus.OPEN, null))
             .stream()
             .map(branchMapper::toDto)
             .toList();
@@ -68,8 +69,8 @@ public class BranchService {
         BranchStatus status, String search,
         int page, int pageSize
     ) {
-        int normalizePage = Math.max(page - 1, 0) + 1;
-        int normalizePageSize = Math.max(pageSize, 1);
+        int normalizePage = PageRequests.page(page);
+        int normalizePageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(
             normalizePage - 1, normalizePageSize,
@@ -77,7 +78,7 @@ public class BranchService {
         );
 
         Page<Branch> result = branchRepository.findAll(
-            BranchSpecification.filterBy(status, search),
+            BranchSpec.filterBy(status, search),
             pageable
         );
 

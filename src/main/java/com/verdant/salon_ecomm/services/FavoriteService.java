@@ -13,19 +13,19 @@ import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
+import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Service
 @RequiredArgsConstructor
 public class FavoriteService {
 
     private final FavoriteRepository favoriteRepository;
+    private final SecurityHelper securityHelper;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final SalonServiceRepository salonServiceRepository;
@@ -33,7 +33,7 @@ public class FavoriteService {
 
     @Transactional
     public Product toggleProduct(UUID productId) {
-        UUID userId = getCurrentUserId();
+        UUID userId = securityHelper.currentUserId();
 
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
@@ -66,7 +66,7 @@ public class FavoriteService {
 
     @Transactional
     public SalonService toggleSalon(UUID serviceId) {
-        UUID userId = getCurrentUserId();
+        UUID userId = securityHelper.currentUserId();
 
         SalonService service = salonServiceRepository.findById(serviceId)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
@@ -97,13 +97,5 @@ public class FavoriteService {
         );
 
         return service;
-    }
-
-    private UUID getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User user) {
-            return user.getId();
-        }
-        throw new IllegalStateException("No authenticated user found");
     }
 }

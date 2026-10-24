@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.repositories;
 
-import com.verdant.salon_ecomm.models.entities.promo_code.PromoCodeRedemption;
+import com.verdant.salon_ecomm.models.entities.promocode.PromoCodeRedemption;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

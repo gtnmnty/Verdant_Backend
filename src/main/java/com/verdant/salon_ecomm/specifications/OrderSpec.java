@@ -40,8 +40,8 @@ public final class OrderSpec {
 
     public static Specification<Order> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.toLowerCase() + "%";
-        return (root, query, cb) -> cb.like(cb.lower(root.get("orderCode")), pattern);
+        String pattern = LikePatterns.contains(search);
+        return (root, query, cb) -> cb.like(cb.lower(root.get("orderCode")), pattern, LikePatterns.ESCAPE);
     }
 
     public static Specification<Order> belongsToUser(UUID userId) {

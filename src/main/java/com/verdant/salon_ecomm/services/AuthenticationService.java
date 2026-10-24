@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
-import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -48,15 +47,14 @@ public class AuthenticationService {
         user.setPhone(input.getPhoneNumber());
         user.setPasswordHash(passwordEncoder.encode(input.getPassword()));
         user.setRole(AccountRole.CUSTOMER);
-        user.setVerificationCode(generateVerificationCode());
-        user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(5));
+        String plainCode = issueVerificationCode(user, 5);
         user.setEnabled(false);
 
         if(userRepository.existsByEmail(input.getEmail())) {
             throw new DuplicateEmailException("Account with this email already exists!");
         }
 
-        sendVerificationEmail(user);
+        sendVerificationEmail(user, plainCode);
         return userRepository.save(user);
     }
 
@@ -86,9 +84,9 @@ public class AuthenticationService {
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(input.getEmail());
         String refreshTokenString = refreshToken.getToken();
 
-        long expiresAt = jwtService.getExpirationTime();
+        long expiresInMs = jwtService.getExpirationTime();
 
-        return new AuthResult(accessToken, refreshTokenString, expiresAt);
+        return new AuthResult(accessToken, refreshTokenString, expiresInMs);
     }
 
     public void verifyUser(VerifyUserDto input) {
@@ -103,11 +101,14 @@ public class AuthenticationService {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 
-        if (!Objects.equals(input.getVerificationCode(), user.getVerificationCode())) {
+        // Stored as a BCrypt hash, like the forgot-password code.
+        if (input.getVerificationCode() == null
+            || !passwordEncoder.matches(input.getVerificationCode(), user.getVerificationCode())) {
             throw new InvalidVerificationCodeException("Invalid verification code.");
         }
 
-        if (user.getVerificationCodeExpiration().isBefore(OffsetDateTime.now())) {
+        if (user.getVerificationCodeExpiration() == null
+            || user.getVerificationCodeExpiration().isBefore(OffsetDateTime.now())) {
             throw new VerificationCodeExpiredException("Verification code has expired.");
         }
 
@@ -128,9 +129,8 @@ public class AuthenticationService {
                 throw new AccountAlreadyVerifiedException("Already verified");
             }
 
-            user.setVerificationCode(generateVerificationCode());
-            user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(5));
-            sendVerificationEmail(user);
+            String plainCode = issueVerificationCode(user, 5);
+            sendVerificationEmail(user, plainCode);
             userRepository.save(user);
         } else {
             throw new ResourceNotFoundException("User not found");
@@ -148,7 +148,7 @@ public class AuthenticationService {
             .filter(User::isAccountNonLocked)
             .ifPresent(user -> {
             String plainCode = generateVerificationCode();
-            // CHANGED: BCrypt via the existing passwordEncoder bean, same as
+            // BCrypt via the existing passwordEncoder bean, same as
             // real passwords — salted per-call, deliberately slow.
             user.setResetPasswordCode(passwordEncoder.encode(plainCode));
             user.setResetPasswordCodeExpiration(OffsetDateTime.now().plusMinutes(10));
@@ -195,10 +195,10 @@ public class AuthenticationService {
         }
     }
 
-    public void sendVerificationEmail(User user) {
+    private void sendVerificationEmail(User user, String plainCode) {
 
         try {
-            emailService.sendVerificationEmail(user.getEmail(), user.getVerificationCode());
+            emailService.sendVerificationEmail(user.getEmail(), plainCode);
         } catch (MessagingException e) {
             throw new EmailDeliveryException("Failed to send verification email to: " + user.getEmail(), e);
         }
@@ -207,6 +207,14 @@ public class AuthenticationService {
     private String generateVerificationCode() {
         int code = SECURE_RANDOM.nextInt(900000) + 100000;
         return String.valueOf(code);
+    }
+
+    // Stores only the BCrypt hash on the user and returns the plain code for the email.
+    private String issueVerificationCode(User user, int ttlMinutes) {
+        String plainCode = generateVerificationCode();
+        user.setVerificationCode(passwordEncoder.encode(plainCode));
+        user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(ttlMinutes));
+        return plainCode;
     }
 
     public AuthResult refresh(String refreshToken) {
@@ -222,8 +230,8 @@ public class AuthenticationService {
     // Shared so the email text and the real expiry can't drift apart.
     public static final int EMAIL_CHANGE_CODE_TTL_MINUTES = 15;
 
-    public void prepareVerification(User user) {
-        user.setVerificationCode(generateVerificationCode());
-        user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(EMAIL_CHANGE_CODE_TTL_MINUTES));
+    // Returns the plain code so the caller can mail it; the user only keeps the hash.
+    public String prepareVerification(User user) {
+        return issueVerificationCode(user, EMAIL_CHANGE_CODE_TTL_MINUTES);
     }
 }

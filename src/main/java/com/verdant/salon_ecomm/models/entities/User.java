@@ -40,10 +40,12 @@ public class User implements UserDetails {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private AccountRole role = AccountRole.CUSTOMER;
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private AccountStatus status = AccountStatus.UNVERIFIED;
 
     @Column(name = "stripe_customer_id")
@@ -68,6 +70,7 @@ public class User implements UserDetails {
     private OffsetDateTime updatedAt;
 
     @Column(name = "email_verified", nullable = false)
+    @Builder.Default
     private boolean emailVerified = false;
 
     @Column(name = "email_verified_at")
@@ -117,13 +120,6 @@ public class User implements UserDetails {
         updatedAt = OffsetDateTime.now();
     }
 
-    public User(String passwordHash, String phone, String email, String fullName) {
-        this.passwordHash = passwordHash;
-        this.phone = phone;
-        this.email = email;
-        this.fullName = fullName;
-    }
-
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
@@ -134,7 +130,7 @@ public class User implements UserDetails {
         return true;
     }
 
-    // Allow-list, so it fails closed: a null status (User.builder() skips the field defaults)
+    // Allow-list, so it fails closed: a null status (e.g. a builder call that sets status(null))
     // or a status added to the enum later counts as locked until it is listed here.
     // UNVERIFIED stays unlocked because isEnabled() already blocks it until the email is confirmed.
     @Override

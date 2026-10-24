@@ -18,43 +18,43 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 
 import java.util.List;
 import java.util.UUID;
+import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
 @RequiredArgsConstructor
 public class SupportTicketResolver {
 
     private final SupportTicketService supportTicketService;
+    private final SecurityHelper securityHelper;
 
     // ── Customer ─────────────────────────────────────────────────
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
     public List<SupportTicketSummaryDto> mySupportTickets(@Argument SupportTicketStatus status) {
-        return supportTicketService.getMyTickets(getCurrentUserId(), status);
+        return supportTicketService.getMyTickets(securityHelper.currentUserId(), status);
     }
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
     public SupportTicketDetailDto mySupportTicket(@Argument UUID id) {
-        return supportTicketService.getMyTicket(getCurrentUserId(), id);
+        return supportTicketService.getMyTicket(securityHelper.currentUserId(), id);
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
     public SupportTicketDetailDto createSupportTicket(@Argument CreateSupportTicketInput input) {
-        return supportTicketService.createTicket(getCurrentUserId(), input);
+        return supportTicketService.createTicket(securityHelper.currentUserId(), input);
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
     public SupportTicketDetailDto addSupportTicketMessage(@Argument AddSupportTicketMessageInput input) {
-        return supportTicketService.addCustomerMessage(getCurrentUserId(), input);
+        return supportTicketService.addCustomerMessage(securityHelper.currentUserId(), input);
     }
 
     // ── Staff (support desk) ─────────────────────────────────────
@@ -85,7 +85,7 @@ public class SupportTicketResolver {
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER', 'RECEPTIONIST')")
     public SupportTicketDetailDto adminAddSupportTicketMessage(@Argument AdminAddSupportTicketMessageInput input) {
-        return supportTicketService.adminAddMessage(getCurrentUserId(), input);
+        return supportTicketService.adminAddMessage(securityHelper.currentUserId(), input);
     }
 
     @MutationMapping
@@ -93,21 +93,13 @@ public class SupportTicketResolver {
     public SupportTicketDetailDto adminUpdateSupportTicket(
         @Argument UUID id, @Argument AdminUpdateSupportTicketInput input
     ) {
-        return supportTicketService.adminUpdateTicket(getCurrentUserId(), id, input);
+        return supportTicketService.adminUpdateTicket(securityHelper.currentUserId(), id, input);
     }
 
     // assigneeId = null unassigns the ticket.
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER', 'RECEPTIONIST')")
     public SupportTicketDetailDto adminAssignSupportTicket(@Argument UUID id, @Argument UUID assigneeId) {
-        return supportTicketService.adminAssignTicket(getCurrentUserId(), id, assigneeId);
-    }
-
-    private UUID getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User user) {
-            return user.getId();
-        }
-        throw new IllegalStateException("No authenticated user found");
+        return supportTicketService.adminAssignTicket(securityHelper.currentUserId(), id, assigneeId);
     }
 }

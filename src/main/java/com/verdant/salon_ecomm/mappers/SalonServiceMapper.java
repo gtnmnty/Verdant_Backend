@@ -7,18 +7,12 @@ import com.verdant.salon_ecomm.dtos.stylists.StylistSummaryDto;
 import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.entities.SalonService;
 import com.verdant.salon_ecomm.models.entities.Stylist;
-import com.verdant.salon_ecomm.models.enums.ItemType;
-import com.verdant.salon_ecomm.repositories.MediaImageRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
-@RequiredArgsConstructor
 public class SalonServiceMapper {
-
-    private final MediaImageRepository mediaImageRepository;
 
     public SalonServiceDto toDto(SalonService service, MediaImage primaryImage) {
         return new SalonServiceDto(
@@ -32,15 +26,6 @@ public class SalonServiceMapper {
             service.getBadge(),
             primaryImage != null ? toImageDto(primaryImage) : null
         );
-    }
-
-    public AdminServiceDto toAdminDto(SalonService service) {
-        List<MediaImage> images = mediaImageRepository
-            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(
-                ItemType.SALON_SERVICE, service.getId()
-            );
-
-        return toAdminDto(service, images);
     }
 
     public AdminServiceDto toAdminDto(SalonService service, List<MediaImage> images) {

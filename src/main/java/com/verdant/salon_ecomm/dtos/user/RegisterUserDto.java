@@ -1,9 +1,10 @@
 package com.verdant.salon_ecomm.dtos.user;
 
+import com.verdant.salon_ecomm.validation.ValidPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.ToString;
 
 @Data
 public class RegisterUserDto {
@@ -13,8 +14,8 @@ public class RegisterUserDto {
     @Email(message = "Please provide a valid email address")
     private String email;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least {min} characters long")
+    @ValidPassword
+    @ToString.Exclude
     private String password;
     private String phoneNumber;
 }

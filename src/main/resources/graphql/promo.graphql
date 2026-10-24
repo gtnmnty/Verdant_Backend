@@ -8,8 +8,8 @@ enum PromoCodeStatus {
 type PromoCode {
     id: ID!
     code: String!
-    discountPercent: Float!
-    minOrderAmount: Float
+    discountPercent: BigDecimal!
+    minOrderAmount: BigDecimal
     maxUsesPerUser: Int!
     status: PromoCodeStatus!
     startsAt: DateTime
@@ -18,15 +18,15 @@ type PromoCode {
 }
 
 type PromoCodeValidationResult {
-    discountAmount: Float!
+    discountAmount: BigDecimal!
     promoCode: PromoCode!
 }
 
 input AdminUpsertPromoCodeInput {
     id: ID
     code: String!
-    discountPercent: Float!
-    minOrderAmount: Float
+    discountPercent: BigDecimal!
+    minOrderAmount: BigDecimal
     maxUsesPerUser: Int
     startsAt: DateTime
     endsAt: DateTime
@@ -34,7 +34,7 @@ input AdminUpsertPromoCodeInput {
 }
 
 extend type Query {
-    previewPromoCode(code: String!, subtotal: Float!): PromoCodeValidationResult!
+    previewPromoCode(code: String!, subtotal: BigDecimal!): PromoCodeValidationResult!
     adminPromoCodes: [PromoCode!]!
 }
 

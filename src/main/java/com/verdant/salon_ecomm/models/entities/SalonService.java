@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.hibernate.annotations.BatchSize;
 
 @Setter
 @Getter
@@ -44,6 +45,7 @@ public class SalonService {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private CollectionStatus status = CollectionStatus.ACTIVE;
 
     @Column(columnDefinition = "text")
@@ -51,10 +53,12 @@ public class SalonService {
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]")
-    private String[] images = {};
+    @Builder.Default
+    private String[] images = new String[0];
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]")
+    @Builder.Default
     private List<String> info = new ArrayList<>();
 
     @JdbcTypeCode(SqlTypes.ARRAY)
@@ -65,15 +69,19 @@ public class SalonService {
     private String badge;
 
     @Column(name = "review_count", nullable = false)
+    @Builder.Default
     private Integer reviewCount = 0;
 
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
+    @Builder.Default
     private BigDecimal averageRating = BigDecimal.ZERO;
 
     @Column(name = "is_home_service", nullable = false)
+    @Builder.Default
     private Boolean isHomeService = false;
 
     @Column(name = "is_featured", nullable = false)
+    @Builder.Default
     private boolean isFeatured = false;
 
     @Column(name = "created_at")
@@ -82,6 +90,8 @@ public class SalonService {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    // Batch-loaded so mapping a page of services doesn't query stylists once per service.
+    @BatchSize(size = 50)
     @ManyToMany
     @JoinTable(
         name = "stylist_services",

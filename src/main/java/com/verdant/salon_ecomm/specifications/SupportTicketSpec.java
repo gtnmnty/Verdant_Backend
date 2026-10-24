@@ -54,8 +54,7 @@ public class SupportTicketSpec {
     public static Specification<SupportTicket> orderedByPriority() {
         return (root, query, cb) -> {
             // The same spec also builds the COUNT query, where an ORDER BY is invalid - skip it there.
-            assert query != null;
-            if (query.getResultType() != Long.class && query.getResultType() != long.class) {
+            if (query != null && query.getResultType() != Long.class && query.getResultType() != long.class) {
                 Expression<Integer> rank = cb.<Integer>selectCase()
                     .when(cb.equal(root.get("priority"), SupportTicketPriority.URGENT), 0)
                     .when(cb.equal(root.get("priority"), SupportTicketPriority.HIGH), 1)
@@ -70,12 +69,12 @@ public class SupportTicketSpec {
     // Matches ticket number, subject, contact email, or the customer's name.
     public static Specification<SupportTicket> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.trim().toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) -> cb.or(
-            cb.like(cb.lower(root.get("ticketNumber")), pattern),
-            cb.like(cb.lower(root.get("subject")), pattern),
-            cb.like(cb.lower(root.get("contactEmail")), pattern),
-            cb.like(cb.lower(root.join("user", JoinType.LEFT).get("fullName")), pattern)
+            cb.like(cb.lower(root.get("ticketNumber")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.get("subject")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.get("contactEmail")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.join("user", JoinType.LEFT).get("fullName")), pattern, LikePatterns.ESCAPE)
         );
     }
 }

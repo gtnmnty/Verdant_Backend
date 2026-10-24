@@ -62,20 +62,6 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public List<NotificationGroupDto> getNotificationsGroupedByDate(UUID userId, NotificationQueryDto query) {
-        NotificationQueryDto resolved = applyDefaults(query);
-        Pageable pageable = buildPageable(resolved);
-
-        Page<Notification> result = notificationRepository.findAll(
-            NotificationSpec.forUserWithFilters(userId, resolved),
-            pageable
-        );
-
-        List<NotificationResponseDto> content = notificationMapper.toResponseDtoList(result.getContent());
-        return notificationMapper.toGroupedByDate(content);
-    }
-
-    @Transactional(readOnly = true)
     public int getUnreadCount(UUID userId) {
         return notificationRepository.countByUser_IdAndIsReadFalse(userId);
     }
@@ -155,7 +141,8 @@ public class NotificationService {
             case IS_READ -> "isRead";
         };
 
-        // fetch one extra row to cheaply detect hasNextPage without a COUNT query
+        // Fetch one extra row to detect hasNextPage. findAll(spec, pageable) still runs a COUNT
+        // for the Page it returns; only the row content is used here.
         return PageRequest.of(0, normalizedSize + 1,
             Sort.by(direction, property).and(Sort.by(direction, "id")));
     }

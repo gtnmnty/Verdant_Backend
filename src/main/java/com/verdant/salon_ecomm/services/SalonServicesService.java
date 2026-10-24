@@ -16,7 +16,7 @@ import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.ServiceSort;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.ServiceSpec;
-import com.verdant.salon_ecomm.utils.IsEmpty;
+import com.verdant.salon_ecomm.utils.CloudinaryCleanup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -32,6 +32,7 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -52,8 +53,8 @@ public class SalonServicesService {
         String category, String search, ServiceSort sort,
         int page, int pageSize
     ) {
-        int normalizePage = Math.max(page - 1, 0) + 1;
-        int normalizePageSize = Math.max(pageSize, 1);
+        int normalizePage = PageRequests.page(page);
+        int normalizePageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
@@ -131,8 +132,8 @@ public class SalonServicesService {
         CollectionStatus status,
         int page, int pageSize
     ) {
-        int normalizePage = Math.max(page - 1, 0) + 1;
-        int normalizePageSize = Math.max(pageSize, 1);
+        int normalizePage = PageRequests.page(page);
+        int normalizePageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizePage - 1, normalizePageSize, toSort(sort));
 
@@ -172,7 +173,7 @@ public class SalonServicesService {
         SalonService service = serviceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
 
-        return serviceMapper.toAdminDto(service);
+        return serviceMapper.toAdminDto(service, imagesOf(service));
     }
 
     // ---------- Mutations ----------
@@ -203,7 +204,7 @@ public class SalonServicesService {
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
 
-        return serviceMapper.toAdminDto(saved);
+        return serviceMapper.toAdminDto(saved, imagesOf(saved));
     }
 
     @Transactional
@@ -352,7 +353,7 @@ public class SalonServicesService {
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceUpdatedEvent(saved, actor, changes));
 
-        return serviceMapper.toAdminDto(saved);
+        return serviceMapper.toAdminDto(saved, imagesOf(saved));
     }
 
     @Transactional
@@ -398,7 +399,7 @@ public class SalonServicesService {
             eventPublisher.publishEvent(new SalonServicesBulkDeletedEvent(services, actor));
         }
 
-        IsEmpty.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
+        CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
 
         return services;
     }
@@ -432,5 +433,10 @@ public class SalonServicesService {
 
     private User resolveActor(UUID actorId) {
         return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
+    }
+
+    // Image lookup for single-service responses; list endpoints batch-load images instead.
+    private List<MediaImage> imagesOf(SalonService service) {
+        return mediaImageRepository.findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.SALON_SERVICE, service.getId());
     }
 }

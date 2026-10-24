@@ -14,7 +14,7 @@ public record AdminStylistsDto(
     String phone,
     String avatarUrl,
     String bio,
-    BranchDto branch,
+    StylistBranchDto branch,
     List<SalonService> services,
     List<OperatingHours> workingHours,
     StylistAccountStatus status,

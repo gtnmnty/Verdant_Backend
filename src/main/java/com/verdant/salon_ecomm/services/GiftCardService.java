@@ -2,8 +2,8 @@ package com.verdant.salon_ecomm.services;
 
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
-import com.verdant.salon_ecomm.dtos.gitftcards.*;
-import com.verdant.salon_ecomm.dtos.gitftcards.events.*;
+import com.verdant.salon_ecomm.dtos.giftcards.*;
+import com.verdant.salon_ecomm.dtos.giftcards.events.*;
 import com.verdant.salon_ecomm.exceptions.PaymentException;
 import com.verdant.salon_ecomm.mappers.GiftCardMapper;
 import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
@@ -33,7 +33,7 @@ import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.regex.Pattern;
+import com.verdant.salon_ecomm.utils.InputValidators;
 
 @Service
 @RequiredArgsConstructor
@@ -53,7 +53,6 @@ public class GiftCardService {
     private static final int MAX_NAME_LENGTH = 100;     // matches recipient_name column
     private static final int MAX_NOTE_LENGTH = 500;
     private static final int ABANDONED_AFTER_HOURS = 24;
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final String INVALID_CODE_MESSAGE = "This gift card code is invalid or can't be redeemed.";
 
     private final GiftCardRepository giftCardRepository;
@@ -102,9 +101,12 @@ public class GiftCardService {
                 .build()
         ));
 
+        if (created == null) {
+            throw new IllegalStateException("Gift card purchase could not be saved");
+        }
+
         PaymentIntent intent;
         try {
-            assert created != null;
             intent = stripeGateway.createPaymentIntent(created, stripeCustomerId);
         } catch (StripeException ex) {
             transactionTemplate.executeWithoutResult(status -> giftCardRepository.findById(created.getId())
@@ -423,7 +425,7 @@ public class GiftCardService {
 
     // Expires ACTIVE and REDEEMED cards past expiry:
     // zeroes the balance and writes an EXPIRY ledger row.
-    @Transactional
+    // Deliberately not @Transactional: each batch commits in its own transactionTemplate call.
     public int sweepExpiredCards() {
         int total = 0;
         int processed;
@@ -458,7 +460,8 @@ public class GiftCardService {
     }
 
     // Cancels purchases that were never paid (PENDING/FAILED for 24h+) and their Stripe intents.
-    @Transactional
+    // Deliberately not @Transactional: an outer transaction would make every transactionTemplate call
+    // join it, putting the Stripe calls below back inside an open transaction.
     public int cancelAbandonedPurchases() {
         OffsetDateTime cutoff = OffsetDateTime.now().minusHours(ABANDONED_AFTER_HOURS);
         int total = 0;
@@ -477,7 +480,7 @@ public class GiftCardService {
                 }
                 return batch.size();
             });
-            intentIds.forEach(stripeGateway::cancelPaymentIntent); // after commit, no network calls inside the transaction
+            intentIds.forEach(stripeGateway::cancelPaymentIntent); // after the batch commits, outside any transaction
             processed = n == null ? 0 : n;
             total += processed;
         } while (processed == SWEEP_BATCH_SIZE);
@@ -535,7 +538,7 @@ public class GiftCardService {
 
     private String cleanEmail(String value) {
         String trimmed = cleanText(value, 254, "Recipient email");
-        if (trimmed != null && !EMAIL.matcher(trimmed).matches()) {
+        if (trimmed != null && !InputValidators.isEmail(trimmed)) {
             throw new IllegalArgumentException("Recipient email is not a valid email address");
         }
         return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);

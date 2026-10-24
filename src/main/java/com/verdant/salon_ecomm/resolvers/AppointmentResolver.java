@@ -5,7 +5,6 @@ import com.verdant.salon_ecomm.models.entities.Address;
 import com.verdant.salon_ecomm.models.entities.Appointment;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.services.AppointmentService;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +19,14 @@ import org.springframework.stereotype.Controller;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
 @RequiredArgsConstructor
 public class AppointmentResolver {
 
     private final AppointmentService appointmentService;
+    private final SecurityHelper securityHelper;
     private final AppointmentMapper appointmentMapper;
 
     // ---------- Queries ----------
@@ -51,7 +52,7 @@ public class AppointmentResolver {
     @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public Appointment appointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        boolean isAdmin = hasElevatedRole(principal);
+        boolean isAdmin = securityHelper.isStaff(principal);
         return appointmentService.getAppointmentById(id, principal.getId(), isAdmin);
     }
 
@@ -88,14 +89,14 @@ public class AppointmentResolver {
         @Argument UUID id, @AuthenticationPrincipal User principal
     ) {
         return appointmentService.getAdminAppointmentById(
-            id, principal.getId(), hasElevatedRole(principal)
+            id, principal.getId(), securityHelper.isStaff(principal)
         );
     }
 
     @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public AppointmentStatusCounts appointmentStatusCounts(@AuthenticationPrincipal User principal) {
-        UUID userId = hasElevatedRole(principal) ? null : principal.getId();
+        UUID userId = securityHelper.isStaff(principal) ? null : principal.getId();
         return appointmentService.getAppointmentStatusCounts(userId);
     }
 
@@ -107,7 +108,7 @@ public class AppointmentResolver {
         @Argument("input") CreateAppointmentInput input,
         @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.bookAppointment(input, principal.getId());
+        return appointmentService.bookAppointment(input, principal.getId(), securityHelper.isStaff(principal));
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -124,14 +125,14 @@ public class AppointmentResolver {
         @AuthenticationPrincipal User principal
     ) {
         return appointmentService.rescheduleAppointment(
-            id, newScheduledAt, principal.getId(), hasElevatedRole(principal)
+            id, newScheduledAt, principal.getId(), securityHelper.isStaff(principal)
         );
     }
 
     @PreAuthorize("isAuthenticated()")
     @MutationMapping
     public Appointment cancelAppointment(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        return appointmentService.cancelAppointment(id, principal.getId(), hasElevatedRole(principal));
+        return appointmentService.cancelAppointment(id, principal.getId(), securityHelper.isStaff(principal));
     }
 
     @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
@@ -140,7 +141,7 @@ public class AppointmentResolver {
         @Argument UUID id, @AuthenticationPrincipal User principal
     ) {
         return appointmentService.completeAppointment(
-            id, principal.getId(), hasElevatedRole(principal)
+            id, principal.getId(), securityHelper.isStaff(principal)
         );
     }
 
@@ -159,7 +160,7 @@ public class AppointmentResolver {
         @AuthenticationPrincipal User principal
     ) {
         return appointmentService.updateAppointmentRequest(
-            id, input, principal.getId(), hasElevatedRole(principal)
+            id, input, principal.getId(), securityHelper.isStaff(principal)
         );
     }
 
@@ -182,13 +183,5 @@ public class AppointmentResolver {
     @SchemaMapping(typeName = "Appointment", field = "homeAddress")
     public Address homeAddressMap(Appointment appointment) {
         return appointmentMapper.fromHomeAddressMap(appointment.getHomeAddress());
-    }
-
-    private boolean hasElevatedRole(User principal) {
-        AccountRole role = principal.getRole();
-        return role == AccountRole.RECEPTIONIST
-            || role == AccountRole.MANAGER
-            || role == AccountRole.OWNER
-            || role == AccountRole.ADMIN;
     }
 }
