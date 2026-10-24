@@ -40,7 +40,7 @@ public class User implements UserDetails {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private AccountRole role = AccountRole.ADMIN;
+    private AccountRole role = AccountRole.CUSTOMER;
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
@@ -91,6 +91,18 @@ public class User implements UserDetails {
     @Column(name = "reset_password_code_expiration")
     private OffsetDateTime resetPasswordCodeExpiration;
 
+    // Self-service email change: the new address sits here until its code is confirmed,
+    // so a stolen session can't silently move the account to another mailbox.
+    @Column(name = "pending_email", length = 255)
+    private String pendingEmail;
+
+    // BCrypt hash of the code mailed to pendingEmail.
+    @Column(name = "pending_email_code")
+    private String pendingEmailCode;
+
+    @Column(name = "pending_email_code_expiration")
+    private OffsetDateTime pendingEmailCodeExpiration;
+
     @Column
     private boolean enabled;
 
@@ -122,9 +134,13 @@ public class User implements UserDetails {
         return true;
     }
 
+    // Allow-list, so it fails closed: a null status (User.builder() skips the field defaults)
+    // or a status added to the enum later counts as locked until it is listed here.
+    // UNVERIFIED stays unlocked because isEnabled() already blocks it until the email is confirmed.
     @Override
-    public boolean isAccountNonLocked(){
-        return true;
+    public boolean isAccountNonLocked() {
+        return status == AccountStatus.ACTIVE
+            || status == AccountStatus.UNVERIFIED;
     }
 
     @Override

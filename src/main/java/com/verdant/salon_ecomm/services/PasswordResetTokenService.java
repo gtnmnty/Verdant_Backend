@@ -1,9 +1,9 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
+import com.verdant.salon_ecomm.exceptions.ForbiddenException;
 import com.verdant.salon_ecomm.models.entities.PasswordResetToken;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.exceptions.ForbiddenException;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.PasswordResetTokenRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +35,7 @@ public class PasswordResetTokenService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public String issueToken(User user) {
@@ -59,9 +61,9 @@ public class PasswordResetTokenService {
         return rawToken;
     }
 
-     // Validates the raw token from a reset link and, if valid, sets the new
-     //password and burns the token (and any other outstanding ones for that
-     // user) so it can't be replayed.
+    // Validates the raw token from a reset link and, if valid, sets the new
+    // password and burns the token (and any other outstanding ones for that
+    // user) so it can't be replayed.
     @Transactional
     public void redeem(String rawToken, String newPassword) {
         if (rawToken == null || rawToken.isBlank()) {
@@ -69,7 +71,7 @@ public class PasswordResetTokenService {
         }
 
         String tokenHash = hash(rawToken);
-               OffsetDateTime claimTime = OffsetDateTime.now();
+        OffsetDateTime claimTime = OffsetDateTime.now();
 
         // Atomically claim the token: only one concurrent caller can flip
         // used_at from NULL to a value, closing the check-then-act race.
@@ -94,6 +96,7 @@ public class PasswordResetTokenService {
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+        refreshTokenService.deleteByUserId(user.getId());
 
         tokenRepository.invalidateAllActiveTokensForUser(user.getId(), claimTime);
 
@@ -113,5 +116,12 @@ public class PasswordResetTokenService {
             // unreachable in practice.
             throw new IllegalStateException("SHA-256 not available", e);
         }
+    }
+
+    // Used when staff change an account's email: any reset link already mailed out
+    // is marked used, so it can't be redeemed after the address moves.
+    @Transactional
+    public void invalidateAllFor(UUID userId) {
+        tokenRepository.invalidateAllActiveTokensForUser(userId, OffsetDateTime.now());
     }
 }

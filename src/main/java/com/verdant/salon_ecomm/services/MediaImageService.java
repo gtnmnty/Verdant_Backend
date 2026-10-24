@@ -12,6 +12,7 @@ import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.tika.Tika;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;

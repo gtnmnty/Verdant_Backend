@@ -147,6 +147,37 @@ public class GlobalExceptionHandler {
             .build();
     }
 
+    // The three below carry messages we write ourselves (no internals), so they're passed through.
+    // The email-change flow needs them: without these they fell into the catch-all as "Something went wrong".
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleDuplicateEmailGraphQL(DuplicateEmailException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message("An account with this email already exists.")
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "EMAIL_TAKEN", "status", 409))
+            .build();
+    }
+
+    @GraphQlExceptionHandler
+    public GraphQLError handleInvalidCodeGraphQL(InvalidVerificationCodeException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message("Invalid or expired code.")
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "INVALID_CODE", "status", 400))
+            .build();
+    }
+
+    // Wrong or missing current password (e.g. on an email change).
+    @GraphQlExceptionHandler
+    public GraphQLError handleInvalidCredentialsGraphQL(InvalidCredentialsException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.UNAUTHORIZED)
+            .extensions(Map.of("code", "INVALID_CREDENTIALS", "status", 401))
+            .build();
+    }
+
     // Catch-all fallback: keep this last among the GraphQL handlers
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {

@@ -4,15 +4,17 @@ import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
 import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
+import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
+import com.verdant.salon_ecomm.exceptions.*;
 import com.verdant.salon_ecomm.models.entities.RefreshToken;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.exceptions.*;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.response.AuthResult;
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,6 +38,7 @@ public class AuthenticationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public User signUp(RegisterUserDto input) {
 
@@ -60,6 +63,8 @@ public class AuthenticationService {
     public AuthResult authenticate(LogInUserDto input) throws InvalidCredentialsException {
         User user = userRepository.findByEmail(input.getEmail())
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!user.isAccountNonLocked()) throw new ForbiddenException("Account is suspended.");
 
         if (!user.isEnabled()) {
             throw new AccountNotVerifiedException("Account is not verified. Please check your email.");
@@ -107,7 +112,7 @@ public class AuthenticationService {
         }
 
         user.setEnabled(true);
-        user.setStatus(AccountStatus.ACTIVE);
+        if (user.getStatus() == AccountStatus.UNVERIFIED) user.setStatus(AccountStatus.ACTIVE);
         user.setVerificationCode(null);
         user.setVerificationCodeExpiration(null);
         user.setEmailVerified(true);
@@ -138,7 +143,10 @@ public class AuthenticationService {
     // either way stops an attacker from using this endpoint to discover
     // which emails have accounts.
     public void forgotPassword(String email) {
-        userRepository.findByEmail(email).ifPresent(user -> {
+        userRepository.findByEmail(email)
+            .filter(User::isEmailVerified)
+            .filter(User::isAccountNonLocked)
+            .ifPresent(user -> {
             String plainCode = generateVerificationCode();
             // CHANGED: BCrypt via the existing passwordEncoder bean, same as
             // real passwords — salted per-call, deliberately slow.
@@ -176,6 +184,7 @@ public class AuthenticationService {
         userRepository.save(user);
 
         refreshTokenService.deleteByUserId(user.getId());
+        eventPublisher.publishEvent(new UserPasswordChangedEvent(user));
     }
 
     private void sendPasswordResetEmail(User user, String plainCode) {
@@ -207,5 +216,14 @@ public class AuthenticationService {
     public void logout(String refreshToken) {
         RefreshToken token = refreshTokenService.findByToken(refreshToken);
         refreshTokenService.deleteByUserId(token.getUser().getId());
+    }
+
+    // Lifetime of a code mailed to a new address (staff change here, self-service change in UserService).
+    // Shared so the email text and the real expiry can't drift apart.
+    public static final int EMAIL_CHANGE_CODE_TTL_MINUTES = 15;
+
+    public void prepareVerification(User user) {
+        user.setVerificationCode(generateVerificationCode());
+        user.setVerificationCodeExpiration(OffsetDateTime.now().plusMinutes(EMAIL_CHANGE_CODE_TTL_MINUTES));
     }
 }

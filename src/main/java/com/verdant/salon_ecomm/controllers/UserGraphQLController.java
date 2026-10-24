@@ -33,4 +33,14 @@ public class UserGraphQLController {
         return userService.updateUserProfile(principal.getId(), input);
     }
 
+    // Finishes a pending email change started by updateProfile, using the code sent to the new address.
+    @MutationMapping
+    @PreAuthorize("isAuthenticated()")
+    public UserDto.Profile confirmEmailChange(
+        @Argument String code,
+        @AuthenticationPrincipal User principal
+    ) {
+        return userService.confirmEmailChange(principal.getId(), code);
+    }
+
 }

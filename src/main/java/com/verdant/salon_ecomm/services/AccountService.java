@@ -1,15 +1,11 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.account.*;
-import com.verdant.salon_ecomm.dtos.account.events.AccountCreatedEvent;
-import com.verdant.salon_ecomm.dtos.account.events.AccountPasswordResetRequestedEvent;
-import com.verdant.salon_ecomm.dtos.account.events.AccountUpdatedEvent;
-import com.verdant.salon_ecomm.dtos.account.events.AccountsDeletedEvent;
-import com.verdant.salon_ecomm.dtos.account.events.AccountsSuspendedEvent;
-import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.dtos.account.events.*;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AccountMapper;
+import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.*;
@@ -26,13 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +38,8 @@ public class AccountService {
     private final ReviewRepository reviewRepository;
     private final PasswordResetTokenService passwordResetTokenService;
     private final GiftCardRepository giftCardRepository;
+    private final RefreshTokenService refreshTokenService;
+    private final AuthenticationService authenticationService;
 
     // Safety cap for bulk mutations — protects against an unbounded payload
     // locking rows / holding the transaction open too long.
@@ -57,8 +49,8 @@ public class AccountService {
     // promoting an account to a role senior to their own (privilege escalation).
     private static final Map<AccountRole, Integer> ROLE_RANK = Map.of(
         AccountRole.OWNER, 0,
-        AccountRole.ADMIN, 1,
-        AccountRole.MANAGER, 2,
+        AccountRole.MANAGER, 1,
+        AccountRole.ADMIN, 2,
         AccountRole.RECEPTIONIST, 3,
         AccountRole.STYLIST, 4,
         AccountRole.CUSTOMER, 5
@@ -98,14 +90,16 @@ public class AccountService {
 
     @Transactional
     public AccountDetailDto createAccount(CreateAccountInput input, User actor) {
+        // Permission check first, so an actor who may not create this role can't
+        // use the "already exists" error to probe which emails have accounts.
+        requireCanAssignRole(actor, input.role());
+
         // Case-insensitive uniqueness check — matches AccountSpec.hasEmail, which
         // lower-cases both sides. Without this, "Foo@x.com" and "foo@x.com" would
         // both be accepted as "unique".
         if (accountRepository.exists(AccountSpec.hasEmail(input.email()))) {
             throw new DataIntegrityViolationException("An account with this email already exists");
         }
-
-        requireCanAssignRole(actor, input.role());
 
         String temporaryPassword = UUID.randomUUID().toString();
         User user = accountMapper.toEntity(input, passwordEncoder.encode(temporaryPassword));
@@ -126,6 +120,8 @@ public class AccountService {
     public AccountDetailDto updateAccount(UUID id, UpdateAccountInput input, User actor) {
         User user = findAccountOrThrow(id);
 
+        requireCanManage(actor, user);
+
         // Case-insensitive duplicate check when the email is actually changing.
         if (input.email() != null && !input.email().equalsIgnoreCase(user.getEmail())
             && accountRepository.exists(AccountSpec.hasEmail(input.email()))) {
@@ -136,7 +132,7 @@ public class AccountService {
             requireCanAssignRole(actor, input.role());
         }
 
-        boolean actorTargetsSelf = actor != null && actor.getId().equals(user.getId());
+        boolean actorTargetsSelf = actor.getId().equals(user.getId());
         if (actorTargetsSelf && input.status() != null && isLockedOutStatus(input.status())) {
             throw new ForbiddenException("You cannot lock yourself out by changing your own account status.");
         }
@@ -153,14 +149,51 @@ public class AccountService {
         // A role/status change that moves the last active OWNER out of that seat
         // must be blocked explicitly — role-assignment checks above don't cover
         // "demoting/locking the only owner left".
+        // Only an ACTIVE owner counts toward that total, so demoting an owner who is already
+        // suspended must not be blocked just because exactly one other active owner remains.
         if (previousRole == AccountRole.OWNER
+            && previousStatus == AccountStatus.ACTIVE
             && ((input.role() != null && input.role() != AccountRole.OWNER)
             || (input.status() != null && isLockedOutStatus(input.status())))) {
             requireAnotherActiveOwnerRemains();
         }
 
+        boolean emailChanging = input.email() != null
+            && !input.email().equalsIgnoreCase(user.getEmail());
+
+        if (actorTargetsSelf && emailChanging) {
+            throw new ForbiddenException("You cannot change your own email here.");
+        }
+
         accountMapper.updateEntity(user, input);
+
+        // Staff changed someone else's email (C-1). Treat the new address as unproven:
+        // the account can't sign in or use forgot-password until the new mailbox enters the code.
+        if (emailChanging) {
+            user.setEmailVerified(false);
+            user.setEmailVerifiedAt(null);
+            // Kill any forgot-password code that was mailed to the old address.
+            user.setResetPasswordCode(null);
+            user.setResetPasswordCodeExpiration(null);
+            // Fresh verification code + expiry; the listener mails it to the new address after commit.
+            authenticationService.prepareVerification(user);
+            // Sign out every session. Existing access JWTs also die, because their subject is the old email.
+            refreshTokenService.deleteByUserId(user.getId());
+            // Burn any staff-issued reset links still outstanding.
+            passwordResetTokenService.invalidateAllFor(user.getId());
+            // Drop a self-service change in progress, or confirming it later would undo this one.
+            user.setPendingEmail(null);
+            user.setPendingEmailCode(null);
+            user.setPendingEmailCodeExpiration(null);
+        }
+
         User saved = accountRepository.save(user);
+
+        // Notifies the OLD address (so the real owner can spot a hijack) and sends the code to the new one.
+        if (emailChanging) {
+            eventPublisher.publishEvent(new AccountEmailChangedEvent(
+                saved.getId(), previousEmail, saved.getEmail(), saved.getVerificationCode(), actor));
+        }
 
         List<AccountUpdatedEvent.FieldChange> changes = new ArrayList<>();
         if (!Objects.equals(previousFullName, saved.getFullName())) {
@@ -193,6 +226,8 @@ public class AccountService {
     @Transactional
     public boolean sendPasswordReset(UUID id, User actor) {
         User user = findAccountOrThrow(id);
+        requireCanManage(actor, user);
+
         String resetToken = passwordResetTokenService.issueToken(user);
         eventPublisher.publishEvent(
             new AccountPasswordResetRequestedEvent(user.getId(), user.getEmail(), resetToken, actor)
@@ -206,6 +241,7 @@ public class AccountService {
 
         List<User> accounts = accountRepository.findAllById(requestedIds);
         assertAllFound(requestedIds, accounts);
+        accounts.forEach(a -> requireCanManage(actor, a));
 
         if (actor != null && requestedIds.contains(actor.getId())) {
             throw new ForbiddenException("You cannot suspend your own account.");
@@ -228,6 +264,7 @@ public class AccountService {
 
         accounts.forEach(account -> account.setStatus(AccountStatus.SUSPENDED));
         List<User> saved = accountRepository.saveAll(accounts);
+        saved.forEach(a -> refreshTokenService.deleteByUserId(a.getId()));
 
         eventPublisher.publishEvent(new AccountsSuspendedEvent(saved, actor));
 
@@ -240,6 +277,7 @@ public class AccountService {
 
         List<User> accounts = accountRepository.findAllById(requestedIds);
         assertAllFound(requestedIds, accounts);
+        accounts.forEach(a -> requireCanManage(actor, a));
 
         if (actor != null && requestedIds.contains(actor.getId())) {
             throw new ForbiddenException("You cannot delete your own account.");
@@ -260,15 +298,16 @@ public class AccountService {
         List<UUID> idsWithOrders = orderRepository.findDistinctUserIdsWithOrders(requestedIds);
         List<UUID> idsWithAppointments = appointmentRepository.findDistinctUserIdsWithAppointments(requestedIds);
         List<UUID> idsWithReviews = reviewRepository.findDistinctUserIdsWithReviews(requestedIds);
-        List<UUID> idsWithGiftCardBalance = giftCardRepository.findDistinctOwnerIdsWithBalance(requestedIds);
+        // Any owned card blocks, not just ones with balance: gift_cards.owner_id has no ON DELETE rule.
+        List<UUID> idsWithGiftCards = giftCardRepository.findDistinctOwnerIdsWithCards(requestedIds);
 
         if (!idsWithOrders.isEmpty() || !idsWithAppointments.isEmpty() || !idsWithReviews.isEmpty()
-            || !idsWithGiftCardBalance.isEmpty()) {
+            || !idsWithGiftCards.isEmpty()) {
             Set<UUID> blockedIds = new LinkedHashSet<>();
             blockedIds.addAll(idsWithOrders);
             blockedIds.addAll(idsWithAppointments);
             blockedIds.addAll(idsWithReviews);
-            blockedIds.addAll(idsWithGiftCardBalance);
+            blockedIds.addAll(idsWithGiftCards);
 
             List<String> blockedNames = accounts.stream()
                 .filter(a -> blockedIds.contains(a.getId()))
@@ -277,15 +316,23 @@ public class AccountService {
 
             throw new ForbiddenException(
                 "Cannot delete the following accounts because they have order, appointment, review, "
-                    + "or gift card balance history: " + String.join(", ", blockedNames)
+                    + "or gift card history: " + String.join(", ", blockedNames)
                     + ". Suspend the account instead, or use self-service deletion for gift card refund handling."
             );
         }
 
-        accountRepository.deleteAllInBatch(accounts);
-
+        // Bulk JPQL delete skips JPA cascades. V2 migration makes the DB cascade tokens, cart,
+        // favorites and notifications, and null out audit/ticket/promo/gift-card-purchaser refs.
+        // Anything still pointing at the user (tickets they opened, ticket messages, promo
+        // redemptions, newsletter campaigns) raises an FK violation, translated below.
+        try {
+            accountRepository.deleteAllInBatch(accounts);
+        } catch (DataIntegrityViolationException e) {
+            throw new ForbiddenException(
+                "Cannot delete these accounts because other records (support tickets, promo redemptions, "
+                    + "newsletter campaigns) still reference them. Suspend them instead.");
+        }
         eventPublisher.publishEvent(new AccountsDeletedEvent(accounts, actor));
-
         return accounts.stream().map(User::getId).toList();
     }
 
@@ -324,17 +371,53 @@ public class AccountService {
     private boolean isLockedOutStatus(AccountStatus status) {
         return status == AccountStatus.SUSPENDED
             || status == AccountStatus.BANNED
-            || status == AccountStatus.INACTIVE;
+            || status == AccountStatus.INACTIVE
+            || status == AccountStatus.DELETED;
+    }
+
+    // Blocks acting on an account that is equally or more senior than the actor
+    // (e.g. an ADMIN editing/suspending/deleting/resetting an OWNER or another ADMIN).
+    private void requireCanManage(User actor, User target) {
+        if (actor == null || target == null) {
+            throw new ForbiddenException("Actor and target are required.");
+        }
+
+        // Acting on yourself is covered by the self-protection checks in each method.
+        if (actor.getId().equals(target.getId())) {
+            return;
+        }
+
+        Integer actorRank = ROLE_RANK.get(actor.getRole());
+        Integer targetRank = ROLE_RANK.get(target.getRole());
+
+        // Fail closed: if we can't prove the actor outranks the target, deny.
+        if (actorRank == null || targetRank == null) {
+            throw new ForbiddenException("Cannot determine role rank.");
+        }
+
+        // Lower number = more senior. Target must be strictly junior (higher number).
+        // Optional: let an OWNER manage another OWNER.
+        boolean ownerOnOwner = actor.getRole() == AccountRole.OWNER
+            && target.getRole() == AccountRole.OWNER;
+
+        if (targetRank <= actorRank && !ownerOnOwner) {
+            throw new ForbiddenException("You cannot manage an account with an equal or higher role.");
+        }
     }
 
     // Blocks privilege escalation: an actor may only create/assign a role that is
-    // no more senior than their own (e.g. a MANAGER can never grant ADMIN/OWNER).
+    // no more senior than their own (e.g. an ADMIN can never grant MANAGER/OWNER).
+    // Equal rank is allowed here, so an ADMIN may create another ADMIN but can't manage it afterwards.
     private void requireCanAssignRole(User actor, AccountRole targetRole) {
-        if (actor == null || targetRole == null) return;
+        if (actor == null || targetRole == null) {
+            throw new ForbiddenException("Actor and role are required.");
+        }
 
         Integer actorRank = ROLE_RANK.get(actor.getRole());
         Integer targetRank = ROLE_RANK.get(targetRole);
-        if (actorRank == null || targetRank == null) return;
+        if (actorRank == null || targetRank == null) {
+            throw new ForbiddenException("Cannot determine role rank.");
+        }
 
         if (actorRank > targetRank) {
             throw new ForbiddenException(
@@ -342,6 +425,7 @@ public class AccountService {
             );
         }
     }
+
 
     private void requireAnotherActiveOwnerRemains() {
         long activeOwners = accountRepository.countByRoleAndStatus(AccountRole.OWNER, AccountStatus.ACTIVE);

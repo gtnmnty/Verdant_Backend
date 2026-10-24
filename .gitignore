@@ -45,3 +45,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Supabase CLI ###
+# Local link state (project ref, pooler URL); machine-specific, not source.
+supabase/.temp/

@@ -135,4 +135,25 @@ public class EmailService {
 
         emailSender.send(mimeMessage);
     }
+
+    // Sent to the OLD address after an email change, so the real owner can spot a hijack.
+    // changedByStaff switches the wording: staff changes also sign the user out everywhere.
+    public void sendEmailChangedNoticeEmail(String to, String newEmail, boolean changedByStaff)
+            throws MessagingException {
+        Context context = new Context();
+        context.setVariable("newEmail", newEmail);
+        context.setVariable("changedByStaff", changedByStaff);
+        String htmlBody = templateEngine.process("emails/email-changed", context);
+        sendEmail(to, "Your account email was changed", htmlBody);
+    }
+
+    // Code that proves the user controls a new address (self-service change or a staff change).
+    public void sendEmailChangeCodeEmail(String to, String verificationCode, int expiresInMinutes)
+            throws MessagingException {
+        Context context = new Context();
+        context.setVariable("verificationCode", verificationCode);
+        context.setVariable("expiresInMinutes", expiresInMinutes);
+        String htmlBody = templateEngine.process("emails/email-change-code", context);
+        sendEmail(to, "Confirm your new email address", htmlBody);
+    }
 }
