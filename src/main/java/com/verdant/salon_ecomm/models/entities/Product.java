@@ -1,6 +1,6 @@
 package com.verdant.salon_ecomm.models.entities;
 
-import com.verdant.salon_ecomm.StringListConverter;
+import com.verdant.salon_ecomm.models.converters.StringListConverter;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import jakarta.persistence.*;
@@ -41,26 +41,32 @@ public class Product {
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "image_urls", columnDefinition = "text[]")
-    private String[] images = {};
+    @Builder.Default
+    private String[] images = new String[0];
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]")
-    private String[] info = {};
+    @Builder.Default
+    private String[] info = new String[0];
 
     @Column(length = 50)
     private String badge;
 
     @Column(name = "stock_quantity", nullable = false)
+    @Builder.Default
     private Integer stockQuantity = 0;
 
     @Column(name = "review_count", nullable = false)
+    @Builder.Default
     private Integer reviewCount = 0;
 
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
+    @Builder.Default
     private BigDecimal averageRating = BigDecimal.ZERO;
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private CollectionStatus status = CollectionStatus.ACTIVE;
 
     @Column(name = "created_at")
@@ -73,6 +79,7 @@ public class Product {
     private BigDecimal salePrice;
 
     @Column(name = "low_stock_threshold")
+    @Builder.Default
     private int lowStockThreshold = 10;
 
     @Column(columnDefinition = "jsonb")
@@ -80,6 +87,7 @@ public class Product {
     private List<String> tags;
 
     @Column(name = "is_featured")
+    @Builder.Default
     private boolean isFeatured = false;
 
     @Column(name = "updated_at")

@@ -34,9 +34,11 @@ public class PendingCleanUpJob {
     private String stripeCustomerId;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean processed = false;
 
     @Column(name = "retry_count", nullable = false)
+    @Builder.Default
     private int retryCount = 0;
 
     @Column(name = "claimed_by")

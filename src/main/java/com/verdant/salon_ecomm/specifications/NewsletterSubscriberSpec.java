@@ -22,8 +22,8 @@ public class NewsletterSubscriberSpec {
 
     public static Specification<NewsletterSubscriber> emailContains(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.trim().toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) ->
-            cb.like(cb.lower(root.get("email")), pattern);
+            cb.like(cb.lower(root.get("email")), pattern, LikePatterns.ESCAPE);
     }
 }

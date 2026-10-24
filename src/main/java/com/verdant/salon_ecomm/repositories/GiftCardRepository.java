@@ -4,10 +4,12 @@ import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardStatus;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
@@ -80,6 +82,10 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
     // ── sweeps ───────────────────────────────────────────────────
 
     // owner fetched eagerly for the AFTER_COMMIT listeners (name/id lookups).
+    // Both sweep queries claim their rows with FOR UPDATE SKIP LOCKED (lock timeout -2), so two
+    // instances running the sweep at once work on different cards instead of writing duplicate ledger rows.
+    @Lock(PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
     @Query("""
             SELECT g FROM GiftCard g LEFT JOIN FETCH g.owner
             WHERE g.status IN :statuses AND g.expiresAt IS NOT NULL AND g.expiresAt < :now AND g.balance > 0
@@ -88,6 +94,8 @@ public interface GiftCardRepository extends JpaRepository<GiftCard, UUID> {
         @Param("statuses") Collection<GiftCardStatus> statuses,
         @Param("now") OffsetDateTime now, Pageable pageable);
 
+    @Lock(PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
     @Query("""
             SELECT g FROM GiftCard g
             WHERE g.status = :status AND g.paymentStatus IN :paymentStatuses AND g.createdAt < :cutoff

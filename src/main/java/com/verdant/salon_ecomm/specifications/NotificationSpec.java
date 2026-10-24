@@ -25,10 +25,10 @@ public class NotificationSpec {
             }
 
             if (query.search() != null && !query.search().isBlank()) {
-                String pattern = "%" + query.search().toLowerCase() + "%";
+                String pattern = LikePatterns.contains(query.search());
                 predicates.add(cb.or(
-                    cb.like(cb.lower(root.get("title")), pattern),
-                    cb.like(cb.lower(root.get("message")), pattern)
+                    cb.like(cb.lower(root.get("title")), pattern, LikePatterns.ESCAPE),
+                    cb.like(cb.lower(root.get("message")), pattern, LikePatterns.ESCAPE)
                 ));
             }
 

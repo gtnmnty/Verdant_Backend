@@ -46,10 +46,19 @@ public class Order {
     @Embedded
     private Address shippingAddress;
 
+    // Name/phone entered by staff for an order placed on a customer's behalf.
+    // Kept on the order so the customer's saved profile isn't overwritten; null = use the account's details.
+    @Column(name = "contact_name", length = 100)
+    private String contactName;
+
+    @Column(name = "contact_phone", length = 20)
+    private String contactPhone;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
 
     @Column(name = "delivery_fee", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
     private BigDecimal deliveryFee = BigDecimal.ZERO;
 
     @Column(nullable = false, precision = 10, scale = 2)
@@ -62,6 +71,7 @@ public class Order {
     private BigDecimal walletAmountApplied = BigDecimal.ZERO;
 
     @Column(name = "promo_discount_amount", precision = 10, scale = 2)
+    @Builder.Default
     private BigDecimal promoDiscountAmount = BigDecimal.ZERO;
 
     @Column(name = "created_at")

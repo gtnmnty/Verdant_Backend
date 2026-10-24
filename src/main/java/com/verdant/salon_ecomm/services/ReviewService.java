@@ -31,6 +31,7 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -55,8 +56,8 @@ public class ReviewService {
             ReviewSpec.starsEquals(toStars(filter))
         );
 
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, toClientSort(sort));
         Page<Review> result = reviewRepository.findAll(spec, pageable);
@@ -107,8 +108,8 @@ public class ReviewService {
         ItemType itemType, ReviewsClientFilter filter, String search,
         AdminReviewSort sort, int page, int pageSize
     ) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Specification<Review> spec = Specification.allOf(
             ReviewSpec.hasItemType(itemType),

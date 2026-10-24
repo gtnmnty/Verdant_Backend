@@ -29,15 +29,11 @@ public class AccountSpec {
 
     public static Specification<User> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String escaped = search.toLowerCase(java.util.Locale.ROOT)
-            .replace("!", "!!")
-            .replace("%", "!%")
-            .replace("_", "!_");
-        String pattern = "%" + escaped + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) -> cb.or(
-            cb.like(cb.lower(root.get("fullName")), pattern, '!'),
-            cb.like(cb.lower(root.get("email")), pattern, '!'),
-            cb.like(cb.lower(root.get("phone")), pattern, '!')
+            cb.like(cb.lower(root.get("fullName")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.get("email")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.get("phone")), pattern, LikePatterns.ESCAPE)
         );
     }
 

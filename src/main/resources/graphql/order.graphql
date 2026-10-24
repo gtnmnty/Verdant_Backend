@@ -55,10 +55,11 @@ input AdminCreateOrderInput {
 }
 
 input AdminUpdateOrderInput {
-    userId: ID
+    userId: ID @deprecated(reason: "Ignored: an order can't be moved to another customer.")
+    # Contact details for this order only; the customer's saved profile is not changed.
     fullName: String
     phone: String
-    email: String
+    email: String @deprecated(reason: "Ignored: the email belongs to the customer's account, not the order.")
     shippingAddress: AddressInput
     paymentMethod: String
     orderStatus: OrderStatus
@@ -187,7 +188,6 @@ type AdminOrderItem {
     unitPrice: BigDecimal!
     subtotal: BigDecimal!
     deliveryOption: DeliveryOption!
-    itemLine: String!
     quantityLabel: String!
 }
 

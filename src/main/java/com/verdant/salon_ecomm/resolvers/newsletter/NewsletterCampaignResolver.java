@@ -11,17 +11,17 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 
 import java.util.UUID;
+import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
 @RequiredArgsConstructor
 public class NewsletterCampaignResolver {
 
     private final NewsletterCampaignService campaignService;
+    private final SecurityHelper securityHelper;
 
     @QueryMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
@@ -38,7 +38,7 @@ public class NewsletterCampaignResolver {
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public AdminNewsletterCampaignDto createNewsletterCampaign(@Argument CreateNewsletterCampaignInput input) {
-        return campaignService.createCampaign(getCurrentUserId(), input);
+        return campaignService.createCampaign(securityHelper.currentUserId(), input);
     }
 
     @MutationMapping
@@ -65,13 +65,5 @@ public class NewsletterCampaignResolver {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public boolean sendNewsletterTest(@Argument UUID id, @Argument String email) {
         return campaignService.sendTest(id, email);
-    }
-
-    private UUID getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User user) {
-            return user.getId();
-        }
-        throw new IllegalStateException("No authenticated user found");
     }
 }

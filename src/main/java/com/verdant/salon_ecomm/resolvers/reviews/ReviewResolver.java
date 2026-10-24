@@ -15,17 +15,17 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 
 import java.util.UUID;
+import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
 @RequiredArgsConstructor
 public class ReviewResolver {
 
     private final ReviewService reviewService;
+    private final SecurityHelper securityHelper;
 
     @QueryMapping
     public ReviewConnection reviews(
@@ -42,7 +42,7 @@ public class ReviewResolver {
         @Argument ItemType targetType, @Argument UUID targetId,
         @Argument int stars, @Argument String text
     ) {
-        return reviewService.upsertReview(getCurrentUserId(), targetType, targetId, (short) stars, text);
+        return reviewService.upsertReview(securityHelper.currentUserId(), targetType, targetId, (short) stars, text);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
@@ -58,13 +58,5 @@ public class ReviewResolver {
     @QueryMapping
     public AdminReviewDto adminReview(@Argument UUID id) {
         return reviewService.getAdminReviewById(id);
-    }
-
-    private UUID getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User user) {
-            return user.getId();
-        }
-        throw new IllegalStateException("No authenticated user found");
     }
 }

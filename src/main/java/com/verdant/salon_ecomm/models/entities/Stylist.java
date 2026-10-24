@@ -36,6 +36,7 @@ public class Stylist {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private StylistAccountStatus status = StylistAccountStatus.ACTIVE;
 
     @Column(columnDefinition = "text")

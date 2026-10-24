@@ -43,10 +43,10 @@ public class AppointmentSpec {
 
     public static Specification<Appointment> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) -> cb.or(
-            cb.like(cb.lower(root.get("appointmentCode")), pattern),
-            cb.like(cb.lower(root.get("serviceName")), pattern)
+            cb.like(cb.lower(root.get("appointmentCode")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.get("serviceName")), pattern, LikePatterns.ESCAPE)
         );
     }
 

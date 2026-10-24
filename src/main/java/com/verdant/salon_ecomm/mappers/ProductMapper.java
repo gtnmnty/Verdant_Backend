@@ -4,20 +4,13 @@ import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.product.AdminProductDto;
 import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.entities.Product;
-import com.verdant.salon_ecomm.models.enums.ItemType;
-import com.verdant.salon_ecomm.repositories.MediaImageRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
 
 @Component
-@RequiredArgsConstructor
 public class ProductMapper {
-
-    private final MediaImageRepository mediaImageRepository;
-
 
     public AdminProductDto toAdminDTO(Product product, List<MediaImage> images) {
         return new AdminProductDto(
@@ -41,12 +34,6 @@ public class ProductMapper {
             product.getCreatedAt(),
             product.getUpdatedAt()
         );
-    }
-
-    public AdminProductDto toAdminDTO(Product product) {
-        List<MediaImage> images = mediaImageRepository
-            .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.PRODUCT, product.getId());
-        return toAdminDTO(product, images);
     }
 
     private MediaImageDto toImageDTO(MediaImage image) {

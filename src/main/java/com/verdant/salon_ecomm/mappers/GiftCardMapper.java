@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.dtos.gitftcards.GiftCardDto;
-import com.verdant.salon_ecomm.dtos.gitftcards.GiftCardTransactionDto;
+import com.verdant.salon_ecomm.dtos.giftcards.GiftCardDto;
+import com.verdant.salon_ecomm.dtos.giftcards.GiftCardTransactionDto;
 import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import com.verdant.salon_ecomm.models.entities.giftcards.GiftCardTransaction;
 import org.springframework.stereotype.Component;

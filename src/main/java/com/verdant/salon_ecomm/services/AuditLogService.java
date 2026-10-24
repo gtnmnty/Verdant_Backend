@@ -8,6 +8,7 @@ import com.verdant.salon_ecomm.models.entities.AuditLog;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.mappers.AuditLogMapper;
 import com.verdant.salon_ecomm.repositories.AuditLogRepository;
+import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ public class AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
     private final AuditLogMapper auditLogMapper;
+    private final UserRepository userRepository;
 
     // ---------- Queries ----------
 
@@ -62,17 +64,32 @@ public class AuditLogService {
         auditLogRepository.save(log);
     }
 
+    // Something a user did to their own data (booked, reviewed, changed their password, ...); actor is that user.
+    // Webhook and scheduled-job events are not self-service: record them with record(..., null) ("System").
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSelfService(
         AuditEntityType entityType, UUID entityId, AuditActionType actionType,
-        String title, String detail
+        String title, String detail, User actor
     ) {
+        recordSelfService(entityType, entityId, actionType, title, detail, actor != null ? actor.getId() : null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordSelfService(
+        AuditEntityType entityType, UUID entityId, AuditActionType actionType,
+        String title, String detail, UUID actorId
+    ) {
+        // Listeners call this after the original transaction closed, so the caller's User can be an
+        // uninitialized proxy. Load the actor here before reading its name for the label.
+        User managedActor = actorId != null ? userRepository.findById(actorId).orElse(null) : null;
         AuditLog log = AuditLog.builder()
             .entityType(entityType)
             .entityId(entityId.toString())
             .actionType(actionType)
             .title(title)
             .detail(detail)
+            .actor(managedActor)
+            .actorLabel(managedActor != null ? resolveActorLabel(managedActor) : null)
             .selfService(true)
             .build();
         auditLogRepository.save(log);

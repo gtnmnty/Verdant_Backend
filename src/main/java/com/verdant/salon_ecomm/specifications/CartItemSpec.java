@@ -1,7 +1,6 @@
 package com.verdant.salon_ecomm.specifications;
 
 import com.verdant.salon_ecomm.models.entities.CartItem;
-import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
@@ -17,16 +16,6 @@ public class CartItemSpec {
     public static Specification<CartItem> hasIds(List<UUID> ids) {
         return (root, query, cb) ->
             root.get("id").in(ids);
-    }
-
-    public static Specification<CartItem> hasProduct(UUID productId) {
-        return (root, query, cb) ->
-            cb.equal(root.get("product").get("id"), productId);
-    }
-
-    public static Specification<CartItem> hasDeliveryOption(DeliveryOption deliveryOption) {
-        return (root, query, cb) -> 
-            cb.equal(root.get("deliveryOption"), deliveryOption);
     }
 
     // Scopes to a user's cart, optionally narrowed to a specific set of cart item ids.

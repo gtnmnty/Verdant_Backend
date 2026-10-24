@@ -22,7 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -32,7 +31,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.regex.Pattern;
+import static com.verdant.salon_ecomm.utils.InputValidators.requireText;
+import static com.verdant.salon_ecomm.utils.InputValidators.optionalText;
+import com.verdant.salon_ecomm.utils.InputValidators;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -44,7 +46,6 @@ public class NewsletterCampaignService {
     private static final int MAX_CTA_LABEL = 60;
     private static final int MAX_CTA_URL = 500;
     private static final int MAX_PAGE_SIZE = 50;
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     private final NewsletterCampaignRepository campaignRepository;
     private final NewsletterDeliveryRepository deliveryRepository;
@@ -64,11 +65,7 @@ public class NewsletterCampaignService {
 
     @Transactional(readOnly = true)
     public AdminNewsletterCampaignPage getCampaigns(int page, int pageSize) {
-        Pageable pageable = PageRequest.of(
-            Math.max(page, 1) - 1,
-            Math.clamp(pageSize, 1, MAX_PAGE_SIZE),
-            Sort.by(Sort.Order.desc("createdAt"))
-        );
+        Pageable pageable = PageRequests.of(page, pageSize, MAX_PAGE_SIZE, Sort.by(Sort.Order.desc("createdAt")));
         Page<NewsletterCampaign> result = campaignRepository.findAll(pageable);
 
         Map<UUID, int[]> counts = loadCounts(result.getContent().stream().map(NewsletterCampaign::getId).toList());
@@ -183,7 +180,7 @@ public class NewsletterCampaignService {
     public boolean sendTest(UUID id, String rawEmail) {
         NewsletterCampaign campaign = findOrThrow(id);
         String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase(Locale.ROOT);
-        if (email.isEmpty() || email.length() > 254 || !EMAIL.matcher(email).matches()) {
+        if (email.isEmpty() || email.length() > 254 || !InputValidators.isEmail(email)) {
             throw new IllegalArgumentException("Please enter a valid email address.");
         }
         try {
@@ -230,21 +227,6 @@ public class NewsletterCampaignService {
     private AdminNewsletterCampaignDto toDto(NewsletterCampaign campaign, Map<UUID, int[]> counts) {
         int[] pair = counts.getOrDefault(campaign.getId(), new int[2]);
         return newsletterMapper.toCampaignDto(campaign, pair[0], pair[1]);
-    }
-
-    private String requireText(String value, int max, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required");
-        String trimmed = value.trim();
-        if (trimmed.length() > max) {
-            throw new IllegalArgumentException(label + " must be at most " + max + " characters");
-        }
-        return trimmed;
-    }
-
-    /** Blank or null -> null; otherwise trimmed and length-checked. */
-    private String optionalText(String value, int max, String label) {
-        if (value == null || value.isBlank()) return null;
-        return requireText(value, max, label);
     }
 
     /** Only https links: this URL goes into an email button, so no javascript:, data:, or plain http. */

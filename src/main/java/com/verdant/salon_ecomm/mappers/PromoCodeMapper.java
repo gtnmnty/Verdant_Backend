@@ -1,7 +1,7 @@
 package com.verdant.salon_ecomm.mappers;
 
-import com.verdant.salon_ecomm.dtos.promo_code.PromoCodeDto;
-import com.verdant.salon_ecomm.models.entities.promo_code.PromoCode;
+import com.verdant.salon_ecomm.dtos.promocode.PromoCodeDto;
+import com.verdant.salon_ecomm.models.entities.promocode.PromoCode;
 import org.springframework.stereotype.Component;
 
 @Component

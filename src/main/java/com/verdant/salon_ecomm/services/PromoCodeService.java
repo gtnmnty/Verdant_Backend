@@ -1,15 +1,15 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.dtos.promo_code.PromoCodeDto;
-import com.verdant.salon_ecomm.dtos.promo_code.PromoCodeValidationResult;
-import com.verdant.salon_ecomm.dtos.promo_code.admin.AdminUpsertPromoCodeInput;
-import com.verdant.salon_ecomm.dtos.promo_code.events.PromoCodeAppliedToOrderEvent;
-import com.verdant.salon_ecomm.dtos.promo_code.events.PromoCodeCreatedEvent;
+import com.verdant.salon_ecomm.dtos.promocode.PromoCodeDto;
+import com.verdant.salon_ecomm.dtos.promocode.PromoCodeValidationResult;
+import com.verdant.salon_ecomm.dtos.promocode.admin.AdminUpsertPromoCodeInput;
+import com.verdant.salon_ecomm.dtos.promocode.events.PromoCodeAppliedToOrderEvent;
+import com.verdant.salon_ecomm.dtos.promocode.events.PromoCodeCreatedEvent;
 import com.verdant.salon_ecomm.mappers.PromoCodeMapper;
 import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.models.entities.promo_code.PromoCode;
-import com.verdant.salon_ecomm.models.entities.promo_code.PromoCodeRedemption;
+import com.verdant.salon_ecomm.models.entities.promocode.PromoCode;
+import com.verdant.salon_ecomm.models.entities.promocode.PromoCodeRedemption;
 import com.verdant.salon_ecomm.models.enums.PromoCodeStatus;
 import com.verdant.salon_ecomm.repositories.PromoCodeRedemptionRepository;
 import com.verdant.salon_ecomm.repositories.PromoCodeRepository;

@@ -3,8 +3,8 @@ package com.verdant.salon_ecomm.mappers;
 import com.verdant.salon_ecomm.dtos.help.admin.AdminHelpTopicDto;
 import com.verdant.salon_ecomm.dtos.help.HelpArticleDto;
 import com.verdant.salon_ecomm.dtos.help.HelpTopicDto;
-import com.verdant.salon_ecomm.models.entities.help_support.HelpTopic;
-import com.verdant.salon_ecomm.models.entities.help_support.HelpArticle;
+import com.verdant.salon_ecomm.models.entities.helpsupport.HelpTopic;
+import com.verdant.salon_ecomm.models.entities.helpsupport.HelpArticle;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

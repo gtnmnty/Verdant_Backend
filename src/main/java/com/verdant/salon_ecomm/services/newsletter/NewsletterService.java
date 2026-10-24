@@ -16,7 +16,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,14 +29,14 @@ import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.regex.Pattern;
+import com.verdant.salon_ecomm.utils.InputValidators;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class NewsletterService {
 
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MAX_EMAIL = 254;
     private static final int MAX_TOKEN = 64;
     private static final int MAX_PAGE_SIZE = 100;
@@ -134,11 +133,7 @@ public class NewsletterService {
             NewsletterSubscriberSpec.hasSource(source),
             NewsletterSubscriberSpec.emailContains(search)
         );
-        Pageable pageable = PageRequest.of(
-            Math.max(page, 1) - 1,
-            Math.clamp(pageSize, 1, MAX_PAGE_SIZE),
-            Sort.by(Sort.Order.desc("createdAt"))
-        );
+        Pageable pageable = PageRequests.of(page, pageSize, MAX_PAGE_SIZE, Sort.by(Sort.Order.desc("createdAt")));
 
         Page<NewsletterSubscriber> result = subscriberRepository.findAll(spec, pageable);
         return new AdminNewsletterSubscriberPage(
@@ -163,7 +158,7 @@ public class NewsletterService {
 
     private String normalizeEmail(String raw) {
         String email = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
-        if (email.isEmpty() || email.length() > MAX_EMAIL || !EMAIL.matcher(email).matches()) {
+        if (email.isEmpty() || email.length() > MAX_EMAIL || !InputValidators.isEmail(email)) {
             throw new IllegalArgumentException("Please enter a valid email address.");
         }
         return email;

@@ -7,8 +7,8 @@ import com.verdant.salon_ecomm.dtos.help.UpdateHelpTopicInput;
 import com.verdant.salon_ecomm.dtos.help.admin.AdminHelpTopicDto;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.HelpTopicMapper;
-import com.verdant.salon_ecomm.models.entities.help_support.HelpArticle;
-import com.verdant.salon_ecomm.models.entities.help_support.HelpTopic;
+import com.verdant.salon_ecomm.models.entities.helpsupport.HelpArticle;
+import com.verdant.salon_ecomm.models.entities.helpsupport.HelpTopic;
 import com.verdant.salon_ecomm.models.enums.help.HelpTopicIcon;
 import com.verdant.salon_ecomm.models.enums.help.HelpTopicLayout;
 import com.verdant.salon_ecomm.repositories.HelpTopicRepository;
@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.stream.Collectors;
+import static com.verdant.salon_ecomm.utils.InputValidators.requireText;
+import static com.verdant.salon_ecomm.utils.InputValidators.optionalText;
 
 @Service
 @RequiredArgsConstructor
@@ -185,20 +187,5 @@ public class HelpTopicService {
             candidate = base + "-" + n;
         }
         return candidate;
-    }
-
-    private String requireText(String value, int max, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required");
-        String trimmed = value.trim();
-        if (trimmed.length() > max) {
-            throw new IllegalArgumentException(label + " must be at most " + max + " characters");
-        }
-        return trimmed;
-    }
-
-    // Blank or null -> null; otherwise trimmed and length-checked.
-    private String optionalText(String value, int max, String label) {
-        if (value == null || value.isBlank()) return null;
-        return requireText(value, max, label);
     }
 }

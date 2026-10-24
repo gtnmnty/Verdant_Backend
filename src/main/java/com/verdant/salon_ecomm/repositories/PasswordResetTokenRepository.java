@@ -22,11 +22,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     @Query("UPDATE PasswordResetToken t SET t.usedAt = :now WHERE t.user.id = :userId AND t.usedAt IS NULL")
     void invalidateAllActiveTokensForUser(@Param("userId") UUID userId, @Param("now") OffsetDateTime now);
 
-    // Housekeeping hook for a scheduled cleanup job, if one gets added later.
-    @Modifying
-    @Query("DELETE FROM PasswordResetToken t WHERE t.expiresAt < :cutoff")
-    int deleteExpiredBefore(@Param("cutoff") OffsetDateTime cutoff);
-
     @Modifying
     @Query("UPDATE PasswordResetToken t SET t.usedAt = :now "
         + "WHERE t.tokenHash = :tokenHash AND t.usedAt IS NULL AND t.expiresAt > :now")

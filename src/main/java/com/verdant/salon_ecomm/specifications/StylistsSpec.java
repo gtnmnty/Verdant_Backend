@@ -43,11 +43,11 @@ public class StylistsSpec {
             return null;
         }
 
-        String pattern = "%" + search.toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) ->
             cb.or(
-                cb.like(cb.lower(root.get("name")), pattern),
-                cb.like(cb.lower(root.get("bio")), pattern)
+                cb.like(cb.lower(root.get("name")), pattern, LikePatterns.ESCAPE),
+                cb.like(cb.lower(root.get("bio")), pattern, LikePatterns.ESCAPE)
             );
     }
 

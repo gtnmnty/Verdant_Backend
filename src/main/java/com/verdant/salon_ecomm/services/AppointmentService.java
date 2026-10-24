@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -49,8 +50,8 @@ public class AppointmentService {
         UUID userId, AppointmentClientFilter status, AppointmentTimeFrame timeframe,
         String search, AppointmentClientSort sort, int page, int pageSize
     ) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime windowStart = now.minusDays(30);
@@ -86,8 +87,8 @@ public class AppointmentService {
         AppointmentStatus status, UUID stylistId, String branch, AppointmentServiceType serviceType,
         String search, AdminAppointmentSort sort, int page, int pageSize
     ) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.clamp(pageSize, 1, 100);
+        int normalizedPage = PageRequests.page(page);
+        int normalizedPageSize = PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE);
 
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, toAdminSort(sort));
 
@@ -158,9 +159,20 @@ public class AppointmentService {
     // ---------- Mutations ----------
 
     @Transactional
-    public Appointment bookAppointment(CreateAppointmentInput input, UUID currentUserId) {
-        User user = userRepository.findById(currentUserId)
+    // Staff may book for any active customer via input.userId(); everyone else always books for
+    // themselves, whatever userId they send.
+    public Appointment bookAppointment(CreateAppointmentInput input, UUID currentUserId, boolean isStaff) {
+        User actor = userRepository.findById(currentUserId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + currentUserId));
+
+        User user = actor;
+        if (isStaff && input.userId() != null && !input.userId().equals(currentUserId)) {
+            user = userRepository.findById(input.userId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + input.userId()));
+            if (!user.isAccountNonLocked() || !user.isEnabled()) {
+                throw new InvalidAppointmentException("Appointments can only be booked for active, verified accounts");
+            }
+        }
 
         SalonService service = salonServiceRepository.findById(input.serviceId())
             .orElseThrow(() -> new ResourceNotFoundException("Service not found: " + input.serviceId()));
@@ -187,7 +199,7 @@ public class AppointmentService {
         appointment.setAppointmentCode(generateAppointmentCode());
 
         Appointment saved = saveAppointmentSafely(appointment);
-        eventPublisher.publishEvent(new AppointmentBookedEvent(saved));
+        eventPublisher.publishEvent(new AppointmentBookedEvent(saved, actor));
         return saved;
     }
 
@@ -228,6 +240,11 @@ public class AppointmentService {
 
         OffsetDateTime previousScheduledAt = appointment.getScheduledAt();
         appointment.setScheduledAt(newScheduledAt);
+        // Staff approval covered the old time slot. A customer moving an approved appointment
+        // sends it back for approval; staff reschedules keep the current status.
+        if (!isAdmin && appointment.getStatus() == AppointmentStatus.UPCOMING) {
+            appointment.setStatus(AppointmentStatus.PENDING);
+        }
         Appointment saved = saveAppointmentSafely(appointment);
 
         User actor = resolveActor(currentUserId);
@@ -516,16 +533,27 @@ public class AppointmentService {
         }
     }
 
+    // Flushes so the overlap exclusion constraint fires here, inside the try, rather than at commit
+    // where it would surface as a 500 instead of AppointmentConflictException.
     private Appointment saveAppointmentSafely(Appointment appointment) {
         try {
-            return appointmentRepository.save(appointment);
+            return appointmentRepository.saveAndFlush(appointment);
         } catch (DataIntegrityViolationException e) {
-            String message = e.getMessage();
-            if (message != null && message.contains("overlapping_appointment_constraint")) {
+            if (isExclusionViolation(e)) {
                 throw new AppointmentConflictException("Stylist is already booked in that time slot");
             }
             throw e;
         }
+    }
+
+    // 23P01 = PostgreSQL exclusion_violation. Matching the SQLState doesn't depend on the constraint's name.
+    private static boolean isExclusionViolation(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.sql.SQLException sql && "23P01".equals(sql.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Sort toClientSort(AppointmentClientSort sort) {
@@ -557,9 +585,9 @@ public class AppointmentService {
         return "AP-" + String.format("%06d", sequenceValue);
     }
 
-    private void validateNoOverlap(UUID stylistId, OffsetDateTime start, Integer end, UUID excludeId) {
+    private void validateNoOverlap(UUID stylistId, OffsetDateTime start, Integer durationMinutes, UUID excludeId) {
         if (stylistId == null) return;
-        if (appointmentRepository.existsOverlappingAppointment(stylistId, start, end, excludeId)) {
+        if (appointmentRepository.existsOverlappingAppointment(stylistId, start, durationMinutes, excludeId)) {
             throw new AppointmentConflictException("Stylist is already booked in that time slot");
         }
     }

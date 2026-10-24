@@ -11,7 +11,6 @@ import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.entities.Address;
 import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.orders.*;
 import com.verdant.salon_ecomm.repositories.OrderItemRepository;
 import com.verdant.salon_ecomm.services.OrderService;
@@ -26,12 +25,14 @@ import org.springframework.stereotype.Controller;
 
 import java.util.List;
 import java.util.UUID;
+import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
 @RequiredArgsConstructor
 public class OrderResolver {
 
     private final OrderService orderService;
+    private final SecurityHelper securityHelper;
     private final OrderMapper orderMapper;
     private final OrderItemRepository orderItemRepository;
 
@@ -54,7 +55,7 @@ public class OrderResolver {
     @PreAuthorize("isAuthenticated()")
     @QueryMapping
     public Order order(@Argument UUID id, @AuthenticationPrincipal User principal) {
-        boolean isAdmin = hasElevatedRole(principal);
+        boolean isAdmin = securityHelper.isStaff(principal);
         return orderService.getOrderById(id, principal.getId(), isAdmin);
     }
 
@@ -119,13 +120,5 @@ public class OrderResolver {
     @SchemaMapping(typeName = "Order", field = "address")
     public Address address(Order order) {
         return order.getShippingAddress();
-    }
-
-    private boolean hasElevatedRole(User principal) {
-        AccountRole role = principal.getRole();
-        return role == AccountRole.RECEPTIONIST
-            || role == AccountRole.MANAGER
-            || role == AccountRole.OWNER
-            || role == AccountRole.ADMIN;
     }
 }

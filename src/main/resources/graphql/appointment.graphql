@@ -153,9 +153,11 @@ type AdminAppointmentDto {
 }
 
 input CreateAppointmentInput {
-    userId: ID!
+    # Customer to book for. Honored only for staff (receptionist and up); others always book for themselves.
+    userId: ID
     serviceId: ID!
-    stylistId: ID!
+    # Optional: without a stylist the appointment is booked unassigned.
+    stylistId: ID
     serviceType: AppointmentServiceType!
     branchId: ID
     scheduledAt: DateTime!

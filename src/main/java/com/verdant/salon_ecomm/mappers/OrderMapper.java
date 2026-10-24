@@ -13,15 +13,25 @@ import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
+import com.verdant.salon_ecomm.config.StripeConfig;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
 
 @Component
 public class OrderMapper {
+
+    // Symbol of the store currency (stripe.currency), e.g. "$" for usd, used in item labels.
+    private final String currencySymbol;
+
+    public OrderMapper(StripeConfig stripeConfig) {
+        this.currencySymbol = Currency.getInstance(stripeConfig.getCurrency().toUpperCase(Locale.ROOT))
+            .getSymbol(Locale.US);
+    }
 
     // ---------- Entity -> DTO ----------
 
@@ -55,7 +65,7 @@ public class OrderMapper {
         return new AdminOrderDto(
             order.getId(),
             order.getOrderCode(),
-            toAdminOrderUserDto(order.getUser()),
+            toAdminOrderUserDto(order),
             order.getOrderStatus(),
             order.getPaymentStatus(),
             order.getPaymentMethod(),
@@ -73,15 +83,15 @@ public class OrderMapper {
         );
     }
 
-    private AdminOrderUserDto toAdminOrderUserDto(User user) {
+    // Contact details entered for a staff-placed order win over the account's saved ones.
+    private AdminOrderUserDto toAdminOrderUserDto(Order order) {
+        User user = order.getUser();
         if (user == null) return null;
-        // ASSUMPTION: matches the field names on AdminOrderUserDto - adjust
-        // getters to your actual User entity API.
         return new AdminOrderUserDto(
             user.getId(),
-            user.getFullName(),
+            order.getContactName() != null ? order.getContactName() : user.getFullName(),
             user.getEmail(),
-            user.getPhone()
+            order.getContactPhone() != null ? order.getContactPhone() : user.getPhone()
         );
     }
 
@@ -210,11 +220,11 @@ public class OrderMapper {
     // ---------- Formatting helpers ----------
 
     private String formatPriceFixed(BigDecimal price) {
-        return String.format(Locale.US, "$%.2f", price);
+        return currencySymbol + String.format(Locale.US, "%.2f", price);
     }
 
     private String formatPriceCompact(BigDecimal price) {
-        return "$" + price.stripTrailingZeros().toPlainString();
+        return currencySymbol + price.stripTrailingZeros().toPlainString();
     }
 
     private String formatDeliveryOption(DeliveryOption option) {

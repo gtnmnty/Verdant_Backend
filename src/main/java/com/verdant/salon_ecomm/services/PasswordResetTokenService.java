@@ -7,6 +7,7 @@ import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.PasswordResetTokenRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
+import com.verdant.salon_ecomm.validation.PasswordPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -69,6 +70,10 @@ public class PasswordResetTokenService {
         if (rawToken == null || rawToken.isBlank()) {
             throw new ForbiddenException("Invalid or expired reset link.");
         }
+        // Checked before the token is claimed, so a rejected password doesn't burn the link.
+        if (!PasswordPolicy.isValid(newPassword)) {
+            throw new ForbiddenException(PasswordPolicy.MESSAGE);
+        }
 
         String tokenHash = hash(rawToken);
         OffsetDateTime claimTime = OffsetDateTime.now();
@@ -88,10 +93,6 @@ public class PasswordResetTokenService {
 
         if (AccountStatus.BANNED.equals(user.getStatus()) || AccountStatus.DELETED.equals(user.getStatus())) {
             throw new ForbiddenException("Account is " + user.getStatus().toString().toLowerCase());
-        }
-
-        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 8) {
-            throw new ForbiddenException("Password does not meet the minimum requirements.");
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));

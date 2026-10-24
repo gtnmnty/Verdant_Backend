@@ -30,10 +30,10 @@ public class ReviewSpec {
 
     public static Specification<Review> matchesSearch(String search) {
         if (search == null || search.isBlank()) return null;
-        String pattern = "%" + search.toLowerCase() + "%";
+        String pattern = LikePatterns.contains(search);
         return (root, query, cb) -> cb.or(
-            cb.like(cb.lower(root.get("text")), pattern),
-            cb.like(cb.lower(root.join("user", JoinType.LEFT).get("fullName")), pattern)
+            cb.like(cb.lower(root.get("text")), pattern, LikePatterns.ESCAPE),
+            cb.like(cb.lower(root.join("user", JoinType.LEFT).get("fullName")), pattern, LikePatterns.ESCAPE)
         );
     }
 }
