@@ -43,13 +43,28 @@ enum StylistSort{
     Z_TO_A
 }
 
+# Must match the Java StylistAccountStatus enum value for value (EnumSchemaParityTest).
 enum StylistAccountStatus {
     ACTIVE
     INACTIVE
     SUSPENDED
+    ARCHIVED
     PENDING
 }
 
+# Customer-facing view of a stylist (audit C-2). /graphql is public, so anything a
+# customer or anonymous visitor can reach uses this type: no email, phone, status,
+# working hours, or service list (which would also reveal unpublished services).
+# The full Stylist type below is only returned by staff-guarded queries and mutations.
+type PublicStylist {
+    id: ID!
+    name: String!
+    bio: String
+    avatarUrl: String
+    branch: Branch
+}
+
+# Staff-only. Never reference this from a type that public queries can return.
 type Stylist {
     id: ID!
     name: String!

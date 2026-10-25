@@ -104,4 +104,13 @@ public class Product {
         updatedAt = OffsetDateTime.now();
     }
 
+    // H-4: the one price a customer is actually charged. The sale price applies only when it is set,
+    // positive and below the regular price, so a stale or mistyped sale price can never raise the
+    // charge or make it free. Not a getter on purpose, so JPA and MapStruct don't treat it as a property.
+    public BigDecimal effectivePrice() {
+        if (salePrice != null && salePrice.signum() > 0 && price != null && salePrice.compareTo(price) < 0) {
+            return salePrice;
+        }
+        return price;
+    }
 }

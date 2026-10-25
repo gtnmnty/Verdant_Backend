@@ -111,7 +111,8 @@ type Appointment {
     service: SalonService
     serviceName: String!
     priceSnapshot: BigDecimal!
-    stylist: Stylist
+    # Customer-facing type: the customer sees who their stylist is, not their contact details.
+    stylist: PublicStylist
     branch: Branch
     scheduledAt: DateTime!
     durationMinutes: Int!

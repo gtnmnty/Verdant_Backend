@@ -128,6 +128,16 @@ public class GlobalExceptionHandler {
     }
 
     // Insufficient Stock
+    // H-5: per-customer cap on unpaid orders holding stock. Message is ours, safe to show.
+    @GraphQlExceptionHandler(UnpaidOrderLimitException.class)
+    public GraphQLError handleUnpaidOrderLimit(UnpaidOrderLimitException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .errorType(ErrorType.BAD_REQUEST)
+            .message(ex.getMessage())
+            .extensions(Map.of("code", "UNPAID_ORDER_LIMIT", "status", 409))
+            .build();
+    }
+
     @GraphQlExceptionHandler(InsufficientStockException.class)
     public GraphQLError handleInsufficientStockException(InsufficientStockException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)

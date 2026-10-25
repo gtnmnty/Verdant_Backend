@@ -70,7 +70,8 @@ type SalonService implements CatalogItem {
     isFeatured: Boolean!
     images: [MediaImage!]!
     primaryImage: MediaImageDto
-    stylists: [Stylist!]!
+    # Public: only ACTIVE stylists, without contact details (audit C-2).
+    stylists: [PublicStylist!]!
     isFavorited: Boolean!
 }
 

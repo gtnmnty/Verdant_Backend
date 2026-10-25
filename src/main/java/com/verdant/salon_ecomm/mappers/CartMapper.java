@@ -65,7 +65,8 @@ public class CartMapper {
             .sum();
 
         BigDecimal subtotal = items.stream()
-            .map(item -> item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+            // H-4: same price the order will charge (sale price when it applies), so cart and checkout agree.
+            .map(item -> item.getProduct().effectivePrice().multiply(BigDecimal.valueOf(item.getQuantity())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return CartDto.builder()

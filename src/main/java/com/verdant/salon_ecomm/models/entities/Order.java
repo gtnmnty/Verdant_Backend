@@ -43,6 +43,12 @@ public class Order {
     @Column(name = "stripe_payment_intent_id")
     private String stripePaymentIntentId;
 
+    // H-5: true once this order's reserved stock has been put back on the shelf.
+    // Only ever flipped through OrderRepository.claimStockRelease (atomic), never set blindly.
+    @Builder.Default
+    @Column(name = "stock_released", nullable = false)
+    private boolean stockReleased = false;
+
     @Embedded
     private Address shippingAddress;
 
