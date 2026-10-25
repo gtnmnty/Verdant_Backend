@@ -177,7 +177,7 @@
 			<artifactId>tika-core</artifactId>
 			<!-- M-41: the 2.x line is end-of-life. Only Tika.detect() is used (ImageUploadValidator), which is
 			     unchanged in 3.x. -->
-			<version>3.3.3</version>
+			<version>4.1.0</version>
 		</dependency>
 
 		<!-- ─── Integration Tests ─────────────────────────────────────────── -->
