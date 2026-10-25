@@ -5,7 +5,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Profile({"local", "dev"})   // Only active in these profiles, 404 in docker/prod
+// M-6: local only. dev is a deployed, production-like profile (Secure cookie), so test endpoints
+// don't belong there; any other profile answers 404.
+@Profile("local")
 @RestController
 @RequestMapping("/test")
 public class TestController {

@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.services.newsletter;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
+import org.springframework.http.HttpStatus;
 import com.verdant.salon_ecomm.dtos.newsletter.CampaignDeliveryCount;
 import com.verdant.salon_ecomm.dtos.newsletter.CreateNewsletterCampaignInput;
 import com.verdant.salon_ecomm.dtos.newsletter.UpdateNewsletterCampaignInput;
@@ -138,16 +140,16 @@ public class NewsletterCampaignService {
      */
     public AdminNewsletterCampaignDto sendCampaign(UUID id) {
         if (!sender.tryClaim(id)) {
-            throw new IllegalStateException("This newsletter is already being sent");
+            throw BusinessRuleException.conflict("This newsletter is already being sent");
         }
         try {
             AdminNewsletterCampaignDto started = transactionTemplate.execute(tx -> {
                 NewsletterCampaign campaign = findOrThrow(id);
 
                 long total = subscriberRepository.countByStatus(NewsletterStatus.SUBSCRIBED);
-                if (total == 0) throw new IllegalArgumentException("There are no subscribers to send to");
+                if (total == 0) throw BusinessRuleException.invalid("There are no subscribers to send to");
                 if (total > maxRecipients) {
-                    throw new IllegalArgumentException("This list has " + total + " subscribers, above the safety limit of "
+                    throw BusinessRuleException.invalid("This list has " + total + " subscribers, above the safety limit of "
                         + maxRecipients + " per newsletter (app.newsletter.max-recipients). "
                         + "Move to a bulk email provider before raising it.");
                 }
@@ -168,7 +170,7 @@ public class NewsletterCampaignService {
             return started;
         } catch (TaskRejectedException busy) {
             sender.release(id);
-            throw new IllegalStateException("Another newsletter is queued ahead of this one. Try again in a few minutes.");
+            throw BusinessRuleException.conflict("Another newsletter is queued ahead of this one. Try again in a few minutes.");
         } catch (RuntimeException e) {
             sender.release(id);
             throw e;
@@ -176,13 +178,16 @@ public class NewsletterCampaignService {
     }
 
     /** Sends the campaign to ONE address so an admin can proof it first. Counts nothing and records nothing. */
-    @Transactional(readOnly = true)
+    // M-26: no longer @Transactional. The SMTP send used to run inside a read-only transaction, holding a
+    // pooled DB connection for as long as the mail server took. Flow: validate the address -> load the
+    // campaign in a short read-only transaction -> send with no connection held. Only plain columns
+    // (subject, body, CTA) are read after the transaction ends, so nothing lazy is touched.
     public boolean sendTest(UUID id, String rawEmail) {
-        NewsletterCampaign campaign = findOrThrow(id);
         String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase(Locale.ROOT);
         if (email.isEmpty() || email.length() > 254 || !InputValidators.isEmail(email)) {
-            throw new IllegalArgumentException("Please enter a valid email address.");
+            throw BusinessRuleException.invalid("Please enter a valid email address.");
         }
+        NewsletterCampaign campaign = readOnlyTransaction().execute(tx -> findOrThrow(id));
         try {
             emailService.sendNewsletterEmail(
                 email,
@@ -195,11 +200,21 @@ public class NewsletterCampaignService {
             return true;
         } catch (MessagingException | RuntimeException e) {
             log.warn("Newsletter test send failed for campaign {}", id, e);
-            throw new IllegalStateException("The test email could not be sent. Check the mail settings.");
+            // M-9: a message for the admin, so it is a BusinessRuleException (shown) rather than an
+            // IllegalStateException (hidden behind "Something went wrong"). 503: the mail server failed, not the request.
+            throw new BusinessRuleException("EMAIL_DELIVERY_FAILED",
+                "The test email could not be sent. Check the mail settings.", HttpStatus.SERVICE_UNAVAILABLE);
         }
     }
 
     // ── Helpers ──────────────────────────────────────────────────
+
+    // A read-only copy of the shared template (the injected one is used for writes, so it isn't changed).
+    private TransactionTemplate readOnlyTransaction() {
+        TransactionTemplate template = new TransactionTemplate(transactionTemplate.getTransactionManager());
+        template.setReadOnly(true);
+        return template;
+    }
 
     private NewsletterCampaign findOrThrow(UUID id) {
         return campaignRepository.findDetailedById(id)
@@ -208,7 +223,7 @@ public class NewsletterCampaignService {
 
     private void requireDraft(NewsletterCampaign campaign, String verb) {
         if (campaign.getStatus() != NewsletterCampaignStatus.DRAFT) {
-            throw new IllegalArgumentException("Only drafts can be " + verb + ". This newsletter has already been sent.");
+            throw BusinessRuleException.invalid("Only drafts can be " + verb + ". This newsletter has already been sent.");
         }
     }
 
@@ -235,17 +250,17 @@ public class NewsletterCampaignService {
         try {
             URI uri = URI.create(url);
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
-                throw new IllegalArgumentException("Button link must be a full https:// address");
+                throw BusinessRuleException.invalid("Button link must be a full https:// address");
             }
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Button link must be a full https:// address");
+            throw BusinessRuleException.invalid("Button link must be a full https:// address");
         }
         return url;
     }
 
     private void requireBothOrNeither(String label, String url) {
         if ((label == null) != (url == null)) {
-            throw new IllegalArgumentException("Button needs both a label and a link (or neither)");
+            throw BusinessRuleException.invalid("Button needs both a label and a link (or neither)");
         }
     }
 }

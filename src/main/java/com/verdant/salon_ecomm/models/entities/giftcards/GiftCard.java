@@ -23,6 +23,12 @@ public class GiftCard {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // M-15: optimistic lock (column added in V9). Redeem, checkout and the sweeps already row-lock the card;
+    // this also covers the Stripe webhook path, which reads the card without a lock. If it races a redeem,
+    // its save fails, the webhook answers non-2xx and Stripe retries it on the fresh row.
+    @Version
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     private User owner;
@@ -53,6 +59,13 @@ public class GiftCard {
     @Column(name = "payment_status", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
+    // M-14: total of the purchase that Stripe has refunded so far and that was already taken off the
+    // balance (column added in V8). charge.refunded sends a running total, so only the difference to
+    // this value is deducted: a repeated webhook can't deduct the same refund twice.
+    @Builder.Default
+    @Column(name = "refunded_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal refundedAmount = BigDecimal.ZERO;
 
     @Column(name = "stripe_payment_intent_id")
     private String stripePaymentIntentId;

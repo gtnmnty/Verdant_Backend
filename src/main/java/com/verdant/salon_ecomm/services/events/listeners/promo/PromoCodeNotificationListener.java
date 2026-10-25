@@ -3,43 +3,31 @@ package com.verdant.salon_ecomm.services.events.listeners.promo;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.dtos.promocode.events.PromoCodeAppliedToOrderEvent;
 import com.verdant.salon_ecomm.dtos.promocode.events.PromoCodeCreatedEvent;
-import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
-import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
+import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class PromoCodeNotificationListener {
 
-    private static final List<AccountRole> STAFF_ROLES = List.of(
-        AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
-    );
-
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final StaffNotifier staffNotifier;
 
+    // M-38: staff fan-out through StaffNotifier (active staff only, one transaction, failures isolated).
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPromoCodeCreated(PromoCodeCreatedEvent event) {
-        for (User staffMember : userRepository.findByRoleIn(STAFF_ROLES)) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(),
-                NotificationType.PROMO_CODE_ISSUED,
-                "Promo code created",
-                event.promoCode().getCode() + " created by " + event.actor().getFullName(),
-                ReferenceType.PROMOTION, event.promoCode().getId(),
-                NotificationPriority.INFO, event.actor().getId(), event.actor().getFullName()
-            ));
-        }
+        staffNotifier.notify(ReferenceType.PROMOTION, event.promoCode().getId(), NotificationType.PROMO_CODE_ISSUED,
+            "Promo code created",
+            event.promoCode().getCode() + " created by " + event.actor().getFullName(),
+            event.actor());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

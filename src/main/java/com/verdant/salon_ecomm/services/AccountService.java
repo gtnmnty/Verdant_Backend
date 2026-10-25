@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
+import com.verdant.salon_ecomm.exceptions.DuplicateEmailException;
 import com.verdant.salon_ecomm.dtos.account.*;
 import com.verdant.salon_ecomm.dtos.account.events.*;
 import com.verdant.salon_ecomm.exceptions.ForbiddenException;
@@ -12,6 +14,8 @@ import com.verdant.salon_ecomm.models.enums.accounts.ResetLinkStatus;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AccountSpec;
 import com.verdant.salon_ecomm.utils.PageRequests;
+import com.verdant.salon_ecomm.utils.EmailNormalizer;
+import com.verdant.salon_ecomm.utils.PiiMasking;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -43,6 +47,7 @@ public class AccountService {
     private final GiftCardRepository giftCardRepository;
     private final RefreshTokenService refreshTokenService;
     private final AuthenticationService authenticationService;
+    private final UserDataCleanup userDataCleanup;
 
     // Safety cap for bulk mutations — protects against an unbounded payload
     // locking rows / holding the transaction open too long.
@@ -102,7 +107,8 @@ public class AccountService {
         // lower-cases both sides. Without this, "Foo@x.com" and "foo@x.com" would
         // both be accepted as "unique".
         if (accountRepository.exists(AccountSpec.hasEmail(input.email()))) {
-            throw new DataIntegrityViolationException("An account with this email already exists");
+            // M-9: was DataIntegrityViolationException, which GraphQL turned into "Something went wrong".
+            throw new DuplicateEmailException("An account with this email already exists");
         }
 
         // Flow for a staff-created account:
@@ -117,7 +123,7 @@ public class AccountService {
         String temporaryPassword = UUID.randomUUID().toString();
         User user = accountMapper.toEntity(input, passwordEncoder.encode(temporaryPassword));
 
-        User saved = accountRepository.save(user);
+        User saved = saveFlushingEmailRace(user);
 
         eventPublisher.publishEvent(new AccountCreatedEvent(saved, actor));
 
@@ -138,9 +144,12 @@ public class AccountService {
         requireCanManage(actor, user);
 
         // Case-insensitive duplicate check when the email is actually changing.
-        if (input.email() != null && !input.email().equalsIgnoreCase(user.getEmail())
-            && accountRepository.exists(AccountSpec.hasEmail(input.email()))) {
-            throw new DataIntegrityViolationException("An account with this email already exists");
+        // M-36: compared normalized (trim + lower-case), so " Jane@x.com" isn't treated as a new address.
+        String requestedEmail = EmailNormalizer.normalize(input.email());
+        if (requestedEmail != null && !requestedEmail.equals(user.getEmail())
+            && accountRepository.exists(AccountSpec.hasEmail(requestedEmail))) {
+            // M-9: was DataIntegrityViolationException, which GraphQL turned into "Something went wrong".
+            throw new DuplicateEmailException("An account with this email already exists");
         }
 
         if (input.role() != null && input.role() != user.getRole()) {
@@ -173,8 +182,8 @@ public class AccountService {
             requireAnotherActiveOwnerRemains();
         }
 
-        boolean emailChanging = input.email() != null
-            && !input.email().equalsIgnoreCase(user.getEmail());
+        boolean emailChanging = requestedEmail != null
+            && !requestedEmail.equals(user.getEmail());
 
         if (actorTargetsSelf && emailChanging) {
             throw new ForbiddenException("You cannot change your own email here.");
@@ -210,7 +219,7 @@ public class AccountService {
             refreshTokenService.deleteByUserId(user.getId());
         }
 
-        User saved = accountRepository.save(user);
+        User saved = saveFlushingEmailRace(user);
 
         // Notifies the OLD address (so the real owner can spot a hijack) and sends the code to the new one.
         if (emailChanging) {
@@ -225,8 +234,11 @@ public class AccountService {
         if (!Objects.equals(previousEmail, saved.getEmail())) {
             changes.add(new AccountUpdatedEvent.FieldChange("email", previousEmail, saved.getEmail(), true));
         }
+        // M-22: the phone goes into the audit entry and the account holder's notification masked to its last
+        // 4 digits. Not flagged sensitive: that marks security changes ([SECURITY] title, WARNING priority).
         if (!Objects.equals(previousPhone, saved.getPhone())) {
-            changes.add(new AccountUpdatedEvent.FieldChange("phone", previousPhone, saved.getPhone(), false));
+            changes.add(new AccountUpdatedEvent.FieldChange("phone",
+                PiiMasking.maskPhone(previousPhone), PiiMasking.maskPhone(saved.getPhone()), false));
         }
         if (!Objects.equals(previousRole, saved.getRole())) {
             changes.add(new AccountUpdatedEvent.FieldChange(
@@ -348,11 +360,22 @@ public class AccountService {
             );
         }
 
-        // Bulk JPQL delete skips JPA cascades. V2 migration makes the DB cascade tokens, cart,
-        // favorites and notifications, and null out audit/ticket/promo/gift-card-purchaser refs.
+        // M-28 flow: same per-user cleanup as self-deletion (UserDataCleanup) -> queue the avatar and
+        // Stripe customer for DeletedUserCleanupJob -> flush, so those deletes reach the DB before the users
+        // go -> bulk delete. Before, only the V2 ON DELETE CASCADE constraints removed tokens, cart,
+        // favorites and notifications; without them this failed on a foreign key, and the external files
+        // and Stripe customers were never cleaned up. V2 still nulls out audit/ticket/promo/gift-card-purchaser refs.
         // Anything still pointing at the user (tickets they opened, ticket messages, promo
         // redemptions, newsletter campaigns) raises an FK violation, translated below.
+        for (User account : accounts) {
+            userDataCleanup.deletePersonalRows(account.getId());
+            // M-39: same erasure as self-deletion (newsletter subscription, email in old audit text).
+            userDataCleanup.eraseFromRetainedRecords(account.getId(), account.getEmail(),
+                "deleted-" + account.getId() + "@deleted.verdant.local");
+            userDataCleanup.scheduleExternalCleanup(account);
+        }
         try {
+            accountRepository.flush();
             accountRepository.deleteAllInBatch(accounts);
         } catch (DataIntegrityViolationException e) {
             throw new ForbiddenException(
@@ -364,6 +387,17 @@ public class AccountService {
     }
 
     // ---------- Helpers ----------
+
+    // M-36: the duplicate-email checks above run first, but two staff members saving the same address at the
+    // same moment both pass them. saveAndFlush makes the unique lower(email) index (V12) fire here, inside
+    // the try, so the loser gets the normal "already exists" error instead of a failure at commit.
+    private User saveFlushingEmailRace(User user) {
+        try {
+            return accountRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateEmailException("An account with this email already exists");
+        }
+    }
 
     // H-9: the link is issued but not yet sent. AccountPasswordResetEmailListener flips this to SENT or
     // FAILED. Setting it here, inside the issuing transaction, means a stale SENT from an earlier link
@@ -380,14 +414,14 @@ public class AccountService {
 
     private Set<UUID> normalizeAndCapBulkIds(List<UUID> ids) {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("No account ids were provided.");
+            throw BusinessRuleException.invalid("No account ids were provided.");
         }
         // De-dupe first: without this, a request with repeated ids would fail the
         // "accounts.size() != ids.size()" check even when every id is valid, since
         // findAllById() naturally returns distinct rows.
         Set<UUID> requestedIds = new LinkedHashSet<>(ids);
         if (requestedIds.size() > MAX_BULK_SIZE) {
-            throw new IllegalArgumentException(
+            throw BusinessRuleException.invalid(
                 "Cannot act on more than " + MAX_BULK_SIZE + " accounts in a single request."
             );
         }

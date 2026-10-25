@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.journal.*;
 import com.verdant.salon_ecomm.dtos.journal.admin.AdminJournalStoryDto;
 import com.verdant.salon_ecomm.dtos.journal.admin.AdminJournalStoryPage;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
 import static com.verdant.salon_ecomm.utils.InputValidators.requireText;
 import static com.verdant.salon_ecomm.utils.InputValidators.optionalText;
 import com.verdant.salon_ecomm.utils.PageRequests;
+import com.verdant.salon_ecomm.validation.ImageUploadValidator;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +52,7 @@ public class JournalService {
     private static final int MAX_SEARCH = 100;
     private static final int MAX_PRODUCTS = 12;
     private static final int MAX_PAGE_SIZE = 50;
+    private static final long JOURNAL_IMAGE_MAX_BYTES = 10L * 1024 * 1024;
 
     private final JournalStoryRepository journalStoryRepository;
     private final JournalStoryProductRepository journalStoryProductRepository;
@@ -134,11 +137,11 @@ public class JournalService {
         String quote = requireText(input.quote(), MAX_QUOTE, "Quote");
         String service = requireText(input.service(), MAX_SERVICE, "Service");
         String stylist = requireText(input.stylist(), MAX_STYLIST, "Stylist");
-        if (input.category() == null) throw new IllegalArgumentException("Category is required");
+        if (input.category() == null) throw BusinessRuleException.invalid("Category is required");
         List<UUID> productIds = distinctIds(input.productIds());
         JournalStoryStatus status = input.status() != null ? input.status() : JournalStoryStatus.DRAFT;
 
-        if (!hasFile(resultImage)) throw new IllegalArgumentException("A result image is required");
+        if (!hasFile(resultImage)) throw BusinessRuleException.invalid("A result image is required");
         validateImage(resultImage, "Result image");
         if (hasFile(productImage)) validateImage(productImage, "Product image");
 
@@ -238,7 +241,7 @@ public class JournalService {
     // Moving DRAFT -> PUBLISHED stamps publishedAt = now (so it appears at the top of the Journal).
     @Transactional
     public AdminJournalStoryDto setStatus(UUID id, JournalStoryStatus status) {
-        if (status == null) throw new IllegalArgumentException("Status is required");
+        if (status == null) throw BusinessRuleException.invalid("Status is required");
         JournalStory story = findStoryOrThrow(id);
 
         if (status == JournalStoryStatus.PUBLISHED && story.getStatus() != JournalStoryStatus.PUBLISHED) {
@@ -326,7 +329,7 @@ public class JournalService {
         List<Product> ordered = new ArrayList<>();
         for (UUID id : ids) {
             Product product = found.get(id);
-            if (product == null) throw new IllegalArgumentException("One or more selected products no longer exist");
+            if (product == null) throw BusinessRuleException.invalid("One or more selected products no longer exist");
             ordered.add(product);
         }
         return ordered;
@@ -336,7 +339,7 @@ public class JournalService {
         if (ids == null) return List.of();
         List<UUID> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();
         if (distinct.size() > MAX_PRODUCTS) {
-            throw new IllegalArgumentException("A story can feature at most " + MAX_PRODUCTS + " products");
+            throw BusinessRuleException.invalid("A story can feature at most " + MAX_PRODUCTS + " products");
         }
         return distinct;
     }
@@ -355,12 +358,11 @@ public class JournalService {
         return file != null && !file.isEmpty();
     }
 
+    // M-25: was a check of file.getContentType(), a header the client chooses: any file sent as "image/png"
+    // was accepted. The shared validator reads the real type from the file's bytes (SVG still refused).
+    // 10 MB: journal photos are full-size before/after shots; the multipart limit is 10 MB anyway.
     private void validateImage(MultipartFile file, String label) {
-        String type = file.getContentType();
-        // SVG is rejected on purpose: it can carry scripts and is served back from a public URL.
-        if (type == null || !type.startsWith("image/") || type.equals("image/svg+xml")) {
-            throw new IllegalArgumentException(label + " must be an image file (JPEG, PNG, WebP or AVIF)");
-        }
+        ImageUploadValidator.validate(file, label, JOURNAL_IMAGE_MAX_BYTES);
     }
 
     private StoredImage upload(MultipartFile file) {

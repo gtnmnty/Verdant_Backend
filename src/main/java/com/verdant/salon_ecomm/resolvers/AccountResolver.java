@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.resolvers;
 
+import jakarta.validation.Valid;
 import com.verdant.salon_ecomm.dtos.account.AccountDetailDto;
 import com.verdant.salon_ecomm.dtos.account.AccountFilterInput;
 import com.verdant.salon_ecomm.dtos.account.AccountPage;
@@ -46,9 +47,11 @@ public class AccountResolver {
     // ---------- Mutations ----------
 
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','OWNER')")
+    // M-10: @Valid makes Spring GraphQL run the input's bean constraints before this method;
+    // a violation becomes a 400 listing the bad fields (GlobalExceptionHandler.handleConstraintViolation).
     @MutationMapping
     public AccountDetailDto createAccount(
-        @Argument("input") CreateAccountInput input, @AuthenticationPrincipal User principal
+        @Argument("input") @Valid CreateAccountInput input, @AuthenticationPrincipal User principal
     ) {
         return accountService.createAccount(input, principal);
     }

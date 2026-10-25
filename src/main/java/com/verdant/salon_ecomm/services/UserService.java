@@ -1,11 +1,12 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.user.*;
 import com.verdant.salon_ecomm.dtos.user.events.UserEmailChangeRequestedEvent;
+import com.verdant.salon_ecomm.dtos.user.events.UserDeletedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserEmailChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserProfileUpdatedEvent;
-import com.verdant.salon_ecomm.models.entities.PendingCleanUpJob;
 import com.verdant.salon_ecomm.models.entities.Address;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.exceptions.DuplicateEmailException;
@@ -17,14 +18,14 @@ import com.verdant.salon_ecomm.mappers.UserMapper;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.*;
 import jakarta.validation.Validator;
+import com.verdant.salon_ecomm.validation.ImageUploadValidator;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.SecureRandom;
@@ -43,17 +44,16 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
-    private final CartItemRepository cartItemRepository;
-    private final FavoriteRepository favoriteRepository;
-    private final NotificationRepository notificationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
-    private final CleanUpJobRepository cleanUpJobRepository;
     private final PublicFormRateLimiter rateLimiter;
     private final Validator validator;
 
     private final CloudinaryService cloudinaryService;
+    private final CloudinaryAsyncCleanup cloudinaryAsyncCleanup;
     private final GiftCardService giftCardService;
+    private final TransactionTemplate transactionTemplate;
+    private final UserDataCleanup userDataCleanup;
 
     public UserDto.Profile getUserById(UUID id) {
         return userRepository.findById(id)
@@ -79,7 +79,7 @@ public class UserService {
             // so check just the email constraints from UpdateUserRequest by hand.
             if (requestedEmail.isEmpty() || !validator.validateValue(
                     UpdateUserRequest.class, "email", requestedEmail).isEmpty()) {
-                throw new IllegalArgumentException("Invalid email address.");
+                throw BusinessRuleException.invalid("Invalid email address.");
             }
 
             // Caps password guesses through this endpoint for anyone holding a stolen access token.
@@ -120,16 +120,18 @@ public class UserService {
         }
 
         // Email isn't in this list: it hasn't changed yet. confirmEmailChange() records it.
+        // M-22: phone and address are personal data (sensitive = true), so the audit entry says only that
+        // they changed, not the old and new values. The name stays visible: staff need it to recognize the account.
         List<UserProfileUpdatedEvent.FieldChange> changes = new ArrayList<>();
         if (!Objects.equals(previousFullName, saved.getFullName())) {
-            changes.add(new UserProfileUpdatedEvent.FieldChange("fullName", previousFullName, saved.getFullName()));
+            changes.add(new UserProfileUpdatedEvent.FieldChange("fullName", previousFullName, saved.getFullName(), false));
         }
         if (!Objects.equals(previousPhone, saved.getPhone())) {
-            changes.add(new UserProfileUpdatedEvent.FieldChange("phone", previousPhone, saved.getPhone()));
+            changes.add(new UserProfileUpdatedEvent.FieldChange("phone", previousPhone, saved.getPhone(), true));
         }
 
         if (!Objects.equals(previousAddressSignature, addressSignature(saved.getAddress()))) {
-            changes.add(new UserProfileUpdatedEvent.FieldChange("address", null, null));
+            changes.add(new UserProfileUpdatedEvent.FieldChange("address", null, null, true));
         }
 
         if (!changes.isEmpty()) {
@@ -179,14 +181,22 @@ public class UserService {
         user.setResetPasswordCodeExpiration(null);
         passwordResetTokenRepository.invalidateAllActiveTokensForUser(id, now);
 
-        User saved = userRepository.save(user);
+        // M-36: flushed so a simultaneous registration of the same address trips the unique lower(email)
+        // index here and becomes the normal "already in use" error, not a failure at commit.
+        User saved;
+        try {
+            saved = userRepository.saveAndFlush(user);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new DuplicateEmailException("Email already in use");
+        }
 
         // Refresh tokens are kept on purpose: the change was password- and code-verified.
         // The current access JWT names the old email, so the next request gets 401 and the
         // frontend's refresh issues a token for the new one with no re-login.
         eventPublisher.publishEvent(new UserEmailChangedEvent(saved.getId(), oldEmail, newEmail));
+        // M-22: sensitive, so the audit entry reads "email: updated" instead of storing both addresses.
         eventPublisher.publishEvent(new UserProfileUpdatedEvent(saved,
-            List.of(new UserProfileUpdatedEvent.FieldChange("email", oldEmail, newEmail))));
+            List.of(new UserProfileUpdatedEvent.FieldChange("email", oldEmail, newEmail, true))));
 
         return userMapper.toProfile(saved);
     }
@@ -207,6 +217,13 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         // No save() needed: user is managed in this transaction, so the change is flushed on commit.
 
+        // M-2: revoke every refresh token, like the forgot-password reset already does. Someone changing
+        // their password because the account was compromised must also sign the attacker out.
+        // Same transaction, so a failed change keeps the sessions. UserRESTController.changePassword then
+        // issues a fresh token for the device that made the change, so only that one stays signed in.
+        // Limit: an access JWT already handed out stays valid until it expires (JWT_EXPIRATION).
+        refreshTokenRepository.deleteByUserId(id);
+
         eventPublisher.publishEvent(new UserPasswordChangedEvent(user));
     }
 
@@ -219,17 +236,25 @@ public class UserService {
         // Same transaction as the deletion, so the forfeit and the anonymization commit (or fail) together.
         giftCardService.forfeitAndRefundOnAccountDeletion(user, user.getEmail());
 
-        String avatarPublicId = user.getAvatarPublicId();
-        String stripeCustomerId = user.getStripeCustomerId();
+        String originalEmail = user.getEmail();
+        String anonymizedEmail = "deleted-" + user.getId() + "@deleted.verdant.local";
 
-        cartItemRepository.deleteByUserId(id);
-        favoriteRepository.deleteByUserId(id);
-        notificationRepository.deleteByUserId(id);
-        refreshTokenRepository.deleteByUserId(id);
-        passwordResetTokenRepository.deleteByUserId(id);
+        // M-35: published here, inside the deletion's transaction and before anything is anonymized, so the
+        // AFTER_COMMIT audit listener runs exactly once, when (and only if) the deletion commits. It used to
+        // be published by DeletedUserCleanupJob from a non-transactional @Scheduled method, where a
+        // @TransactionalEventListener never fires, so account deletions were never audited.
+        eventPublisher.publishEvent(new UserDeletedEvent(id));
 
-        user.setFullName("Deleted User");
-        user.setEmail("deleted-" + user.getId() + "@deleted.verdant.local");
+        // M-28: the same routine the admin hard-delete uses (cart, favorites, notifications, tokens).
+        userDataCleanup.deletePersonalRows(id);
+        // M-39: personal data in the records that are kept (ticket contact details, newsletter
+        // subscription, email in old audit text). Needs the original email, so it runs before the swap below.
+        userDataCleanup.eraseFromRetainedRecords(id, originalEmail, anonymizedEmail);
+        // Avatar and Stripe customer are removed by DeletedUserCleanupJob after commit (read before nulling).
+        userDataCleanup.scheduleExternalCleanup(user);
+
+        user.setFullName(UserDataCleanup.DELETED_USER_NAME);
+        user.setEmail(anonymizedEmail);
         user.setPhone(null);
         user.setAddress(null);
         user.setAvatarUrl(null);
@@ -250,60 +275,49 @@ public class UserService {
         user.setPendingEmailCodeExpiration(null);
 
         userRepository.save(user);
-
-        // Record what still needs cleaning up externally. This commits atomically
-        // with the user deletion — if this transaction commits, we're guaranteed
-        // to eventually process (and retry) the external cleanup, even if the
-        // app crashes right after this method returns. DeletedUserCleanupJob picks it up.
-        cleanUpJobRepository.save(PendingCleanUpJob.builder()
-            .userId(id)
-            .avatarPublicId(avatarPublicId)
-            .stripeCustomerId(stripeCustomerId)
-            .build());
-
     }
 
-    // Uploads the new avatar first, then swaps it in and deletes the old one
-    // only after the swap succeeds — avoids leaving the user with no avatar
-    // if the delete step were to fail, and avoids deleting the old image
-    // before we're sure the new one actually made it to Cloudinary.
-    // The old avatar is deleted only after the DB transaction actually commits —
-    // if the transaction rolls back, the old image is left alone, and we clean
-    // up the newly-uploaded (now-orphaned) image instead.
-    @Transactional
+    // Uploads the new avatar first, then swaps it in and deletes the old one only after the swap
+    // committed: the user is never left without an avatar, and the old image is never deleted before
+    // the new one is safely stored.
+    // M-25: the file is checked first (real image type from its bytes, allow-list, 5 MB). Before, any
+    // logged-in user could upload any file as an avatar (SVG, HTML, PDF) and get a public URL for it.
+    // M-26: deliberately NOT @Transactional, so no DB connection is held during the Cloudinary calls.
+    // Flow: validate -> user exists? -> upload (no DB connection) -> short TransactionTemplate swaps the
+    // avatar -> on failure the new upload is deleted -> on success the old avatar is deleted in the
+    // background (CloudinaryAsyncCleanup, with retries), not on the request thread.
     public UserDto.Profile updateAvatar(UUID id, MultipartFile file) {
-        User user = findUserOrThrow(id);
-
-        String previousPublicId = user.getAvatarPublicId();
+        ImageUploadValidator.validate(file, "Avatar", ImageUploadValidator.DEFAULT_MAX_BYTES);
+        findUserOrThrow(id); // 404 before uploading anything
 
         CloudinaryService.CloudinaryUploadResult uploaded = cloudinaryService.upload(file);
 
-        user.setAvatarUrl(uploaded.url());
-        user.setAvatarPublicId(uploaded.publicId());
-        User saved = userRepository.save(user);
-
-        boolean publicIdChanged = previousPublicId != null && !previousPublicId.equals(uploaded.publicId());
-
-        TransactionSynchronizationManager.registerSynchronization(
-            new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    if (publicIdChanged) {
-                        deletePreviousAvatarWithRetry(previousPublicId);
-                    }
-                }
-
-                @Override
-                public void afterCompletion(int status) {
-                    if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-                        cloudinaryService.delete(uploaded.publicId());
-                    }
-                }
+        AvatarSwap swap;
+        try {
+            swap = transactionTemplate.execute(tx -> {
+                User user = findUserOrThrow(id);
+                String previousPublicId = user.getAvatarPublicId();
+                user.setAvatarUrl(uploaded.url());
+                user.setAvatarPublicId(uploaded.publicId());
+                return new AvatarSwap(userMapper.toProfile(userRepository.save(user)), previousPublicId);
+            });
+        } catch (RuntimeException e) {
+            // Nothing references the new file: the swap never committed.
+            try {
+                cloudinaryService.delete(uploaded.publicId());
+            } catch (RuntimeException cleanupEx) {
+                e.addSuppressed(cleanupEx);
             }
-        );
+            throw e;
+        }
 
-        return userMapper.toProfile(saved);
+        if (swap.previousPublicId() != null && !swap.previousPublicId().equals(uploaded.publicId())) {
+            cloudinaryAsyncCleanup.deleteWithRetry(swap.previousPublicId());
+        }
+        return swap.profile();
     }
+
+    private record AvatarSwap(UserDto.Profile profile, String previousPublicId) {}
 
     // ----- Helpers -----------------------
     private User findUserOrThrow(UUID id) {
@@ -323,29 +337,5 @@ public class UserService {
             Objects.toString(address.getPostal(), ""),
             Objects.toString(address.getCountry(), "")
         );
-    }
-
-    private void deletePreviousAvatarWithRetry(String publicId) {
-        int maxAttempts = 3;
-        long delayMs = 1000;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                cloudinaryService.delete(publicId);
-                return;
-            } catch (Exception e) {
-                log.warn("Cloudinary delete failed for {} (attempt {}/{})", publicId, attempt, maxAttempts, e);
-                if (attempt == maxAttempts) {
-                    log.error("Giving up deleting previous avatar {} after {} attempts", publicId, maxAttempts, e);
-                    return;
-                }
-                try {
-                    Thread.sleep(delayMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-                delayMs *= 2;
-            }
-        }
     }
 }

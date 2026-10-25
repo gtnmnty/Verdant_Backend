@@ -11,6 +11,7 @@ import com.verdant.salon_ecomm.config.StripeConfig;
 import com.verdant.salon_ecomm.dtos.giftcards.events.GiftCardStripeWebhookEvent;
 import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
 import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
+import com.verdant.salon_ecomm.dtos.payment.OrderPaymentDisputedEvent;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
 import com.verdant.salon_ecomm.models.entities.Order;
@@ -51,8 +52,14 @@ public class PaymentService {
     // H-3: FAILED is deliberately NOT terminal. payment_intent.payment_failed puts the intent back to
     // requires_payment_method and the customer can retry the same intent (createPaymentIntent hands
     // it back), so a later requires_action / processing / succeeded must still be applied.
+    // M-14: PARTIALLY_REFUNDED is settled money too: only a further (partial or full) refund may follow.
     private static final Set<PaymentStatus> TERMINAL_STATUSES = EnumSet.of(
-        PaymentStatus.PAID, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
+        PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
+    );
+
+    // Statuses from which a refund (charge.refunded, or a lost dispute) may still move the order on.
+    private static final Set<PaymentStatus> REFUNDABLE_STATUSES = EnumSet.of(
+        PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED
     );
 
     private final OrderRepository orderRepository;
@@ -75,13 +82,10 @@ public class PaymentService {
     public PaymentIntentDto createPaymentIntent(CreatePaymentInput input, UUID currentUserId, boolean isAdmin) {
         Order order = self.loadAndAuthorizeOrder(input.orderId(), currentUserId, isAdmin);
 
-        if (order.getPaymentStatus() == PaymentStatus.PAID) {
-            throw new PaymentException("Order " + order.getId() + " is already fully paid — no payment intent needed");
-        }
-        // H-5: a cancelled or expired order has handed its stock back, so it must not be payable.
-        if (order.getOrderStatus() == OrderStatus.CANCELLED || order.isStockReleased()) {
-            throw new PaymentException("Order " + order.getId() + " was cancelled and can no longer be paid");
-        }
+        // M-17 flow: check payable -> (existing intent? hand it back) -> create the intent at Stripe ->
+        // persistPaymentIntentId re-checks under the row lock -> if the order died in between, cancel the
+        // new intent and refuse. The re-check closes the window between this check and the Stripe call.
+        requirePayable(order);
 
         if (order.getStripePaymentIntentId() != null) {
             return paymentMapper.toDto(retrieveExistingIntent(order.getStripePaymentIntentId()));
@@ -104,6 +108,12 @@ public class PaymentService {
         }
 
         Order updated = self.persistPaymentIntentId(order.getId(), order.getUser().getId(), intent.getId());
+        // M-17: cancelled, expired or refunded while the intent was being created. The intent was not
+        // saved on the order; cancel it at Stripe (outside any DB transaction) so it can never be paid.
+        if (!isPayable(updated)) {
+            cancelIntentQuietly(intent.getId());
+            requirePayable(updated); // throws with the matching message
+        }
         if (!intent.getId().equals(updated.getStripePaymentIntentId())) {
             // Lost the race — another request already persisted its intent id first.
             return paymentMapper.toDto(retrieveExistingIntent(updated.getStripePaymentIntentId()));
@@ -171,24 +181,65 @@ public class PaymentService {
             .eventType(event.getType())
             .build());
 
-        String paymentIntentId = extractPaymentIntentId(event);
-        if (paymentIntentId == null) {
+        StripePaymentRef ref = extractPaymentRef(event);
+        if (ref == null || ref.paymentIntentId() == null) {
             log.debug("Ignoring webhook event {} - no PaymentIntent reference", event.getType());
             return;
         }
 
-        Order order = orderRepository.findByStripePaymentIntentId(paymentIntentId).orElse(null);
+        // M-15: row-locked, so concurrent events for the same intent are applied one after another.
+        Order order = orderRepository.findByStripePaymentIntentIdForUpdate(ref.paymentIntentId()).orElse(null);
         if (order != null) {
-            applyStripeEvent(order, event.getType());
+            applyStripeEvent(order, event.getType(), ref);
             return;
         }
 
         // Not an order payment - hand it to GiftCardService via an event (a direct call created a
         // PaymentService <-> GiftCardService circular dependency). Unknown intents are ignored there.
-        eventPublisher.publishEvent(new GiftCardStripeWebhookEvent(paymentIntentId, event.getType()));
+        // M-14: the refund details travel along, so a partial refund no longer voids the whole card.
+        eventPublisher.publishEvent(new GiftCardStripeWebhookEvent(
+            ref.paymentIntentId(), event.getType(),
+            "charge.refunded".equals(event.getType()) ? ref.isFullRefund() : null,
+            ref.majorUnits(ref.amountRefunded())
+        ));
     }
 
     // ---------- Private helpers ----------
+
+    // M-17: payment states after which no new charge may be taken. CANCELLED/REFUNDED/PARTIALLY_REFUNDED:
+    // the order's money was already voided or returned (wallet funds included), so a later succeeded
+    // webhook would mark a dead order PAID. Only PAID used to be checked.
+    private static final Set<PaymentStatus> NOT_PAYABLE_STATUSES = EnumSet.of(
+        PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
+    );
+
+    private static boolean isPayable(Order order) {
+        return order.getOrderStatus() != OrderStatus.CANCELLED
+            && !order.isStockReleased()
+            && !NOT_PAYABLE_STATUSES.contains(order.getPaymentStatus());
+    }
+
+    private static void requirePayable(Order order) {
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new PaymentException("Order " + order.getId() + " is already fully paid — no payment intent needed");
+        }
+        // H-5: a cancelled or expired order has handed its stock back, so it must not be payable.
+        // M-17: the same goes for an order whose payment was cancelled or refunded.
+        if (!isPayable(order)) {
+            throw new PaymentException("Order " + order.getId() + " was cancelled or refunded and can no longer be paid");
+        }
+    }
+
+    // Best effort: if this fails the intent stays open, but it is not saved on the order, so
+    // createPaymentIntent never hands it out again; Stripe cancels abandoned intents eventually.
+    private void cancelIntentQuietly(String paymentIntentId) {
+        try {
+            stripeClient.paymentIntents().cancel(paymentIntentId);
+        } catch (StripeException ex) {
+            log.warn("Could not cancel PaymentIntent {} for an order that is no longer payable: {}",
+                paymentIntentId, ex.getMessage());
+        }
+    }
 
     @Transactional(readOnly = true)
     protected Order loadAndAuthorizeOrder(UUID orderId, UUID currentUserId, boolean isAdmin) {
@@ -206,7 +257,8 @@ public class PaymentService {
         Order order = orderRepository.findByIdForUpdate(orderId)
             .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
 
-        if (order.getStripePaymentIntentId() == null) {
+        // M-17: the caller cancels the new intent when the order is no longer payable; it must not be saved.
+        if (order.getStripePaymentIntentId() == null && isPayable(order)) {
             order.setStripePaymentIntentId(paymentIntentId);
             orderRepository.save(order);
 
@@ -260,7 +312,32 @@ public class PaymentService {
         return stripeCustomerId;
     }
 
-    private String extractPaymentIntentId(Event event) {
+    // What a webhook says about the payment it belongs to. Amounts are Stripe minor units (cents).
+    // chargeAmount / amountRefunded / fullyRefunded: Charge events only (charge.refunded).
+    // chargeAmount / disputeStatus: Dispute events only (charge.dispute.*).
+    private record StripePaymentRef(
+        String paymentIntentId, Long chargeAmount, Long amountRefunded,
+        Boolean fullyRefunded, String currency, String disputeStatus
+    ) {
+        static StripePaymentRef of(String paymentIntentId) {
+            return new StripePaymentRef(paymentIntentId, null, null, null, null, null);
+        }
+
+        // M-14: Stripe sends charge.refunded for partial refunds too. Charge.refunded is only true
+        // once the whole charge is refunded; amount_refunded is the running total of all refunds.
+        boolean isFullRefund() {
+            if (Boolean.TRUE.equals(fullyRefunded)) return true;
+            return chargeAmount != null && amountRefunded != null && amountRefunded >= chargeAmount;
+        }
+
+        BigDecimal majorUnits(Long minorUnits) {
+            if (minorUnits == null || currency == null) return null;
+            int digits = Currency.getInstance(currency.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
+            return BigDecimal.valueOf(minorUnits).movePointLeft(digits).setScale(digits, RoundingMode.HALF_UP);
+        }
+    }
+
+    private StripePaymentRef extractPaymentRef(Event event) {
         EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
         StripeObject stripeObject = deserializer.getObject().orElse(null);
 
@@ -277,25 +354,58 @@ public class PaymentService {
         }
 
         if (stripeObject instanceof PaymentIntent intent) {
-            return intent.getId();
+            return StripePaymentRef.of(intent.getId());
         }
         if (stripeObject instanceof Charge charge) {
-            return charge.getPaymentIntent();
+            return new StripePaymentRef(charge.getPaymentIntent(), charge.getAmount(), charge.getAmountRefunded(),
+                charge.getRefunded(), charge.getCurrency(), null);
+        }
+        // M-13: charge.dispute.* events carry a Dispute, not a Charge. This branch was missing, so the
+        // method returned null and every chargeback was dropped as "no PaymentIntent reference".
+        if (stripeObject instanceof Dispute dispute) {
+            return new StripePaymentRef(dispute.getPaymentIntent(), dispute.getAmount(), null,
+                null, dispute.getCurrency(), dispute.getStatus());
         }
         return null;
     }
 
-    private void applyStripeEvent(Order order, String eventType) {
-        PaymentStatus next = mapEventToStatus(eventType);
+    private void applyStripeEvent(Order order, String eventType, StripePaymentRef ref) {
+        // M-13: how a disputed order is handled. A dispute being opened does NOT change the payment
+        // status: the money is only held, and the salon can still win it with evidence in the Stripe
+        // Dashboard (Stripe also emails the account owner). It is recorded for staff (audit entry) and
+        // logged. Only a lost dispute moves the order on, to REFUNDED, via charge.dispute.closed below.
+        // Requires charge.dispute.created and charge.dispute.closed to be enabled on the Stripe webhook.
+        if ("charge.dispute.created".equals(eventType)) {
+            log.warn("Stripe dispute opened on order {} ({} minor units, status {})",
+                order.getOrderCode(), ref.chargeAmount(), ref.disputeStatus());
+            UUID ownerId = order.getUser() != null ? order.getUser().getId() : null;
+            eventPublisher.publishEvent(new OrderPaymentDisputedEvent(
+                order.getId(), order.getOrderCode(), ownerId, ref.majorUnits(ref.chargeAmount()), ref.disputeStatus()));
+            return;
+        }
+
+        PaymentStatus next = mapEventToStatus(eventType, ref);
         if (next == null) { log.debug("Unhandled Stripe event type: {}", eventType); return; }
 
         PaymentStatus current = order.getPaymentStatus();
-        boolean isRefund = current == PaymentStatus.PAID && next == PaymentStatus.REFUNDED;
+        // M-14: a settled payment can still be refunded further: PAID -> PARTIALLY_REFUNDED -> REFUNDED.
+        // A repeated partial refund (PARTIALLY_REFUNDED -> PARTIALLY_REFUNDED) is not a change.
+        boolean isRefund = REFUNDABLE_STATUSES.contains(current)
+            && (next == PaymentStatus.REFUNDED || next == PaymentStatus.PARTIALLY_REFUNDED)
+            && next != current;
 
         if (TERMINAL_STATUSES.contains(current) && !isRefund) {
             log.info("Order {} payment already {}, ignoring late/out-of-order event -> {}",
                 order.getId(), current, next);
             return;
+        }
+
+        // M-17: should no longer happen (createPaymentIntent refuses dead orders), but an intent created
+        // before the order was cancelled can still be paid. The status records the truth (money was
+        // taken); the log line is what tells staff to refund it.
+        if (next == PaymentStatus.PAID && order.getOrderStatus() == OrderStatus.CANCELLED) {
+            log.error("Order {} was paid after it was cancelled (intent {}). Refund it in the Stripe Dashboard.",
+                order.getOrderCode(), ref.paymentIntentId());
         }
 
         order.setPaymentStatus(next);
@@ -315,14 +425,18 @@ public class PaymentService {
         ));
     }
 
-    private PaymentStatus mapEventToStatus(String eventType) {
+    private PaymentStatus mapEventToStatus(String eventType, StripePaymentRef ref) {
         return switch (eventType) {
             case "payment_intent.requires_action" -> PaymentStatus.REQUIRES_ACTION;
             case "payment_intent.processing" -> PaymentStatus.PROCESSED;
             case "payment_intent.succeeded" -> PaymentStatus.PAID;
             case "payment_intent.payment_failed" -> PaymentStatus.FAILED;
             case "payment_intent.canceled" -> PaymentStatus.CANCELLED;
-            case "charge.refunded" -> PaymentStatus.REFUNDED;
+            // M-14: was always REFUNDED, so refunding one item of a three-item order showed the
+            // whole order as refunded.
+            case "charge.refunded" -> ref.isFullRefund() ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
+            // M-13: a lost dispute means Stripe took the money back. Won / warning_closed: nothing changes.
+            case "charge.dispute.closed" -> "lost".equals(ref.disputeStatus()) ? PaymentStatus.REFUNDED : null;
             default -> null;
         };
     }

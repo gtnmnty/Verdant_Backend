@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.TooManyRequestsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -7,8 +8,12 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
@@ -29,16 +34,23 @@ public class PublicFormRateLimiter {
     private static final DefaultRedisScript<Long> SCRIPT = new DefaultRedisScript<>(LUA, Long.class);
 
     private final StringRedisTemplate redis;
+    private final LocalWindow fallback = new LocalWindow();
 
     public PublicFormRateLimiter(StringRedisTemplate redis) {
         this.redis = redis;
     }
 
+    // M-5 flow: Redis sliding window -> on a Redis error, the same window kept in this JVM's memory
+    // -> over the limit: TooManyRequestsException (HTTP 429 / GraphQL TOO_MANY_REQUESTS).
+    // Explicit decision for a Redis outage: neither fail open (the old behaviour: no protection at all,
+    // so login could be brute-forced and signup could mail-bomb) nor fail closed (nobody could sign in
+    // until Redis is back). The local fallback keeps the limits per instance, so with N instances an
+    // attacker gets up to N times the limit during the outage, which is still bounded.
     public void check(String key, int maxAttempts, Duration window) {
         long now = System.currentTimeMillis();
-        long allowed;
+        boolean allowed;
         try {
-            allowed = redis.execute(
+            Long result = redis.execute(
                 SCRIPT,
                 List.of(PREFIX + key),
                 String.valueOf(now),
@@ -46,12 +58,51 @@ public class PublicFormRateLimiter {
                 String.valueOf(maxAttempts),
                 now + "-" + UUID.randomUUID()   // unique member so same-millisecond hits aren't merged
             );
+            allowed = result != null && result == 1L;
         } catch (DataAccessException e) {
-            log.error("Rate limiter unavailable, failing open", e);
-            return; // see note below
+            log.warn("Rate limiter: Redis unavailable, using the in-memory fallback: {}", e.getMessage());
+            allowed = fallback.tryAcquire(key, maxAttempts, window.toMillis(), now);
         }
-        if (allowed == 0L) {
-            throw new IllegalStateException("Too many requests. Please try again later.");
+        if (!allowed) {
+            throw new TooManyRequestsException("Too many requests. Please try again later.");
+        }
+    }
+
+    // Per-instance sliding window, only used while Redis is down.
+    // Bounded: once MAX_KEYS keys are tracked, expired ones are dropped, and if every tracked key is
+    // still active a NEW key is refused (fails closed). Without the cap, a flood of distinct keys
+    // (random emails) during an outage would grow the map until the JVM ran out of memory.
+    static final class LocalWindow {
+        private static final int MAX_KEYS = 10_000;
+
+        private final Map<String, Deque<Long>> hits = new ConcurrentHashMap<>();
+        private final Map<String, Long> windows = new ConcurrentHashMap<>();
+
+        boolean tryAcquire(String key, int maxAttempts, long windowMs, long now) {
+            if (!hits.containsKey(key) && hits.size() >= MAX_KEYS) {
+                evictExpired(now);
+                if (hits.size() >= MAX_KEYS) return false;
+            }
+            windows.put(key, windowMs);
+            Deque<Long> deque = hits.computeIfAbsent(key, k -> new ArrayDeque<>());
+            synchronized (deque) {
+                while (!deque.isEmpty() && deque.peekFirst() <= now - windowMs) deque.pollFirst();
+                if (deque.size() >= maxAttempts) return false;
+                deque.addLast(now);
+                return true;
+            }
+        }
+
+        private void evictExpired(long now) {
+            hits.entrySet().removeIf(entry -> {
+                long windowMs = windows.getOrDefault(entry.getKey(), 0L);
+                Deque<Long> deque = entry.getValue();
+                synchronized (deque) {
+                    boolean expired = deque.isEmpty() || deque.peekLast() <= now - windowMs;
+                    if (expired) windows.remove(entry.getKey());
+                    return expired;
+                }
+            });
         }
     }
 }

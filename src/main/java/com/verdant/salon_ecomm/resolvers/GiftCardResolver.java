@@ -1,7 +1,6 @@
 package com.verdant.salon_ecomm.resolvers;
 
 import com.verdant.salon_ecomm.dtos.giftcards.*;
-import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.services.GiftCardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Controller;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.UUID;
 import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller

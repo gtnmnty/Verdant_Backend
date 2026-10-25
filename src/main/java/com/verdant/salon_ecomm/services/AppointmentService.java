@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.appointment.*;
 import com.verdant.salon_ecomm.dtos.appointment.events.*;
@@ -8,10 +9,10 @@ import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
 import com.verdant.salon_ecomm.models.entities.*;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AppointmentSpec;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -174,8 +175,11 @@ public class AppointmentService {
             }
         }
 
-        SalonService service = salonServiceRepository.findById(input.serviceId())
-            .orElseThrow(() -> new ResourceNotFoundException("Service not found: " + input.serviceId()));
+        // M-20: no bookings in the past (also checked on reschedule and update).
+        requireFutureTime(input.scheduledAt());
+
+        // M-19: only ACTIVE services can be booked; an unpublished one answers "not found", like the catalog.
+        SalonService service = findBookableServiceOrThrow(input.serviceId());
 
         Stylist stylist = input.stylistId() != null
             ? stylistRepository.findById(input.stylistId())
@@ -228,6 +232,7 @@ public class AppointmentService {
         Appointment appointment = getAppointmentById(id, currentUserId, isAdmin);
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
+        requireFutureTime(newScheduledAt); // M-20
 
         if (appointment.getStylist() != null) {
             validateNoOverlap(
@@ -319,12 +324,13 @@ public class AppointmentService {
 
         if (input.userId() != null) {
             User user = userRepository.findById(input.userId())
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + input.userId()));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + input.userId()));
             appointment.setUser(user);
         }
-        if (input.serviceId() != null) {
-            SalonService service = salonServiceRepository.findById(input.serviceId())
-                .orElseThrow(() -> new EntityNotFoundException("Service not found: " + input.serviceId()));
+        // M-19: switching to another service follows the booking rule (ACTIVE only). Re-saving the same
+        // service is allowed, so an appointment whose service was unpublished later can still be edited.
+        if (input.serviceId() != null && !input.serviceId().equals(previousService != null ? previousService.getId() : null)) {
+            SalonService service = findBookableServiceOrThrow(input.serviceId());
             appointment.setService(service);
             appointment.setServiceName(service.getName());
             appointment.setPriceSnapshot(service.getPrice());
@@ -332,10 +338,14 @@ public class AppointmentService {
         }
         if (input.stylistId() != null) {
             Stylist stylist = stylistRepository.findById(input.stylistId())
-                .orElseThrow(() -> new EntityNotFoundException("Stylist not found: " + input.stylistId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Stylist not found: " + input.stylistId()));
             appointment.setStylist(stylist);
         }
-        if (input.scheduledAt() != null) {
+        // M-20: a new time must be in the future. Only checked when the time actually changes, so notes or
+        // guests of a past appointment can still be corrected.
+        if (input.scheduledAt() != null
+            && (previousScheduledAt == null || !input.scheduledAt().isEqual(previousScheduledAt))) {
+            requireFutureTime(input.scheduledAt());
             appointment.setScheduledAt(input.scheduledAt());
         }
         if (input.guests() != null) {
@@ -526,10 +536,33 @@ public class AppointmentService {
         }
     }
 
+    // M-20: book, reschedule and update had no "is it in the future" check (and no @Future on the input),
+    // so an appointment could be booked for last week. A null time is refused here too: booking without one
+    // used to fail later with an unclear error. Applies to staff as well; past visits are not recorded here.
+    private void requireFutureTime(OffsetDateTime scheduledAt) {
+        // BusinessRuleException, not InvalidAppointmentException: that one's message is replaced by a generic
+        // "Invalid appointment request.", and the user needs to know why the time was refused.
+        if (scheduledAt == null) {
+            throw BusinessRuleException.invalid("Choose a date and time for the appointment.");
+        }
+        if (!scheduledAt.isAfter(OffsetDateTime.now())) {
+            throw BusinessRuleException.invalid("Appointments can only be booked for a future date and time.");
+        }
+    }
+
+    // M-19: the catalog only lists ACTIVE services, but booking looked the service up with findById, so an
+    // unpublished (INACTIVE) service could still be booked by id. Same message as an unknown id, so the
+    // existence of hidden services isn't revealed.
+    private SalonService findBookableServiceOrThrow(UUID serviceId) {
+        return salonServiceRepository.findById(serviceId)
+            .filter(service -> service.getStatus() == CollectionStatus.ACTIVE)
+            .orElseThrow(() -> new ResourceNotFoundException("Service not found: " + serviceId));
+    }
+
     private void requireNotTerminal(Appointment appointment) {
         AppointmentStatus status = appointment.getStatus();
         if (status == AppointmentStatus.COMPLETED || status == AppointmentStatus.CANCELLED) {
-            throw new IllegalStateException("Cannot modify a " + status + " appointment");
+            throw BusinessRuleException.conflict("Cannot modify a " + status + " appointment");
         }
     }
 

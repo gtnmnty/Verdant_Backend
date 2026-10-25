@@ -23,6 +23,13 @@ public record AccountUpdatedEvent(User account, User actor, List<FieldChange> ch
         return hasChanges() && changes.stream().anyMatch(FieldChange::sensitive);
     }
 
+    // M-22: only the names of the changed fields ("fullName, phone"), for messages sent to all staff, which
+    // must not repeat a customer's phone or email values.
+    public String changedFields() {
+        if (!hasChanges()) return "nothing";
+        return String.join(", ", changes.stream().map(FieldChange::field).toList());
+    }
+
     public String changeSummary() {
         if (!hasChanges()) return "No field changes detected";
         return String.join("; ", changes.stream().map(FieldChange::toString).toList());

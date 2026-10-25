@@ -21,11 +21,25 @@ public class CloudinaryService {
         "lh3.googleusercontent.com"   // Google OAuth profile pictures
     );
 
+    // M-25: second line of defence behind ImageUploadValidator. resource_type=image makes Cloudinary treat
+    // the upload as an image (no raw/video files), and allowed_formats makes it reject any other format,
+    // so even a caller that skipped the validator can't store an SVG, HTML or PDF under our account.
+    // Same list as ImageUploadValidator.ALLOWED_TYPES.
+    static final String ALLOWED_FORMATS = "jpg,png,webp,avif";
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> imageUploadOptions() {
+        return ObjectUtils.asMap(
+            "resource_type", "image",
+            "allowed_formats", ALLOWED_FORMATS
+        );
+    }
+
 
     @SuppressWarnings("unchecked")
     public CloudinaryUploadResult upload(MultipartFile file) {
         try {
-            Map<String, Object> result = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+            Map<String, Object> result = cloudinary.uploader().upload(file.getBytes(), imageUploadOptions());
             return new CloudinaryUploadResult(
                 (String) result.get("secure_url"),
                 (String) result.get("public_id")
@@ -58,7 +72,7 @@ public class CloudinaryService {
             throw new IllegalArgumentException("Invalid or disallowed source URL: " + sourceUrl, e);
         }
         try {
-            Map<String, Object> result = cloudinary.uploader().upload(sourceUrl, ObjectUtils.emptyMap());
+            Map<String, Object> result = cloudinary.uploader().upload(sourceUrl, imageUploadOptions());
             return new CloudinaryUploadResult(
                 (String) result.get("secure_url"),
                 (String) result.get("public_id")
@@ -73,7 +87,7 @@ public class CloudinaryService {
     @SuppressWarnings("unchecked")
     public CloudinaryImageResult uploadWithDimensions(MultipartFile file) {
         try {
-            Map<String, Object> result = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+            Map<String, Object> result = cloudinary.uploader().upload(file.getBytes(), imageUploadOptions());
             return new CloudinaryImageResult(
                 (String) result.get("secure_url"),
                 (String) result.get("public_id"),

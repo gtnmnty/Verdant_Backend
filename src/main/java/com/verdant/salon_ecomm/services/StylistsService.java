@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.branch.OperatingHoursInput;
 import com.verdant.salon_ecomm.dtos.stylists.AdminStylistsDto;
 import com.verdant.salon_ecomm.dtos.stylists.AdminStylistsPage;
@@ -238,7 +239,7 @@ public class StylistsService {
     @Transactional
     public List<AdminStylistsDto> deleteStylists(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("No stylist ids were provided.");
+            throw BusinessRuleException.invalid("No stylist ids were provided.");
         }
 
         List<Stylist> stylists = stylistRepository.findAllById(ids);
@@ -298,8 +299,12 @@ public class StylistsService {
         return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 
+    // M-27: sort is optional in the schema (adminStylists(sort: StylistSort), no default), so it arrives as
+    // null when the client leaves it out, and switch (null) threw a NullPointerException (INTERNAL_ERROR).
+    // Falls back to NEWEST, the same default ProductService.toSort uses.
     private Sort toSort(StylistSort sort) {
-        return switch (sort) {
+        StylistSort safeSort = sort != null ? sort : StylistSort.NEWEST;
+        return switch (safeSort) {
             case NEWEST -> Sort.by(Sort.Direction.DESC, "createdAt");
             case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
             case A_TO_Z -> Sort.by(Sort.Direction.ASC, "name");
@@ -317,13 +322,13 @@ public class StylistsService {
             String close = in.getClose() == null ? "" : in.getClose().trim();
 
             if (days.isEmpty()) {
-                throw new IllegalArgumentException("Working hours need a days value, e.g. \"Mon-Fri\"");
+                throw BusinessRuleException.invalid("Working hours need a days value, e.g. \"Mon-Fri\"");
             }
             if (!HH_MM.matcher(open).matches() || !HH_MM.matcher(close).matches()) {
-                throw new IllegalArgumentException("Working hours must use 24-hour HH:mm format");
+                throw BusinessRuleException.invalid("Working hours must use 24-hour HH:mm format");
             }
             if (open.compareTo(close) >= 0) { // zero-padded HH:mm compares correctly as text
-                throw new IllegalArgumentException("Working hours: opening time must be before closing time");
+                throw BusinessRuleException.invalid("Working hours: opening time must be before closing time");
             }
             result.add(new OperatingHours(days, open, close));
         }

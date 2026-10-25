@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.help.CreateHelpTopicInput;
 import com.verdant.salon_ecomm.dtos.help.HelpArticleInput;
 import com.verdant.salon_ecomm.dtos.help.HelpTopicDto;
@@ -123,12 +124,12 @@ public class HelpTopicService {
     // ids must be every existing topic exactly once; the position in the list becomes the display order.
     @Transactional
     public List<AdminHelpTopicDto> reorder(List<UUID> ids) {
-        if (ids == null) throw new IllegalArgumentException("A list of topic ids is required");
+        if (ids == null) throw BusinessRuleException.invalid("A list of topic ids is required");
 
         List<HelpTopic> topics = helpTopicRepository.findAllByOrderBySortOrderAsc();
         Set<UUID> existing = topics.stream().map(HelpTopic::getId).collect(Collectors.toSet());
         if (ids.size() != existing.size() || !existing.equals(new HashSet<>(ids))) {
-            throw new IllegalArgumentException("The list must contain every topic exactly once");
+            throw BusinessRuleException.invalid("The list must contain every topic exactly once");
         }
 
         Map<UUID, HelpTopic> byId = topics.stream().collect(Collectors.toMap(HelpTopic::getId, t -> t));
@@ -159,7 +160,7 @@ public class HelpTopicService {
     private List<HelpArticle> buildArticles(List<HelpArticleInput> inputs) {
         if (inputs == null) return List.of();
         if (inputs.size() > MAX_ARTICLES) {
-            throw new IllegalArgumentException("A topic can have at most " + MAX_ARTICLES + " articles");
+            throw BusinessRuleException.invalid("A topic can have at most " + MAX_ARTICLES + " articles");
         }
         List<HelpArticle> articles = new ArrayList<>();
         for (HelpArticleInput in : inputs) {

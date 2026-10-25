@@ -24,7 +24,7 @@ public class PaymentNotificationListener {
         NotificationType type = switch (event.newStatus()) {
             case PAID -> NotificationType.ORDER_PAYMENT_SUCCESS;
             case FAILED -> NotificationType.ORDER_PAYMENT_FAILED;
-            case REFUNDED -> NotificationType.ORDER_REFUNDED;
+            case REFUNDED, PARTIALLY_REFUNDED -> NotificationType.ORDER_REFUNDED; // M-14
             default -> null;
         };
         if (type == null || event.userId() == null) return; // ownerless order: no one to notify

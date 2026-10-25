@@ -4,24 +4,16 @@ import com.verdant.salon_ecomm.dtos.cart.ProductSummaryDto;
 import com.verdant.salon_ecomm.models.entities.CartItem;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
 import com.verdant.salon_ecomm.dtos.cart.CartItemDto;
-import com.verdant.salon_ecomm.models.entities.Favorite;
 import com.verdant.salon_ecomm.models.entities.Product;
-import com.verdant.salon_ecomm.models.enums.ItemType;
-import com.verdant.salon_ecomm.repositories.FavoriteRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Component
-@RequiredArgsConstructor
 public class CartMapper {
-
-    private final FavoriteRepository favoriteRepository;
 
     public CartItemDto toDto(CartItem entity, Set<UUID> favoritedProductIds) {
         if (entity == null) return null;
@@ -39,7 +31,9 @@ public class CartMapper {
                 .name(product.getName())
                 .itemCatalog(product.getItemCatalog())
                 .price(product.getPrice())
-                .salePrice(product.getSalePrice())
+                // H-4: shown only when it really lowers the charged price (effectivePrice), so a stale or
+                // mistyped sale price (zero, or not below the regular price) isn't displayed as a sale.
+                .salePrice(product.effectivePrice().compareTo(product.getPrice()) < 0 ? product.effectivePrice() : null)
                 .image(primaryImageUrl)
                 .isFavorite(favoritedProductIds.contains(product.getId()))
                 .build();
@@ -53,9 +47,8 @@ public class CartMapper {
             .build();
     }
 
-    public CartDto toCartDto(List<CartItem> items, UUID userId) {
-        Set<UUID> favoritedProductIds = getFavoritedProductIds(items, userId);
-
+    // L-17: favoritedProductIds is looked up by CartService; the mapper no longer touches the database.
+    public CartDto toCartDto(List<CartItem> items, Set<UUID> favoritedProductIds) {
         List<CartItemDto> itemDTOs = items.stream()
             .map(item -> toDto(item, favoritedProductIds))
             .toList();
@@ -74,23 +67,5 @@ public class CartMapper {
             .totalItems(totalItems)
             .subtotal(subtotal)
             .build();
-    }
-
-    private Set<UUID> getFavoritedProductIds(List<CartItem> items, UUID userId) {
-        if (userId == null) return Set.of();
-
-        List<UUID> productIds = items.stream()
-            .map(CartItem::getProduct)
-            .filter(java.util.Objects::nonNull)
-            .map(Product::getId)
-            .toList();
-
-        if (productIds.isEmpty()) return Set.of();
-
-        return favoriteRepository
-            .findByUserIdAndTargetIdInAndTargetType(userId, productIds, ItemType.PRODUCT)
-            .stream()
-            .map(Favorite::getTargetId)
-            .collect(Collectors.toSet());
     }
 }

@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.reviews.*;
 import com.verdant.salon_ecomm.dtos.reviews.events.ReviewSubmittedEvent;
 import com.verdant.salon_ecomm.models.entities.Product;
@@ -15,9 +17,9 @@ import com.verdant.salon_ecomm.repositories.ReviewRepository;
 import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ReviewSpec;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +47,9 @@ public class ReviewService {
     private final ReviewMapper reviewMapper;
     private final ApplicationEventPublisher eventPublisher;
 
+    // M-32: reviews are rendered publicly; this caps the text.
+    private static final int MAX_REVIEW_TEXT = 2000;
+
     // ---------- Customer-facing ----------
 
     public ReviewConnection getReviews(
@@ -70,15 +75,29 @@ public class ReviewService {
         );
     }
 
+    // M-32 flow: validate -> lock the product/service row (SELECT ... FOR UPDATE) -> find this user's review
+    // -> insert or update it -> flush -> recompute the aggregates -> commit releases the lock.
+    // The lock serializes every review of the same target, which fixes two races at once:
+    //   - two parallel submissions by one user both found no review and both inserted (duplicate reviews)
+    //   - two parallel recomputes could each write a count/average that missed the other's review
+    // The unique index (V10) is the backstop; hitting it becomes a 409 instead of a 500.
     @Transactional
     public ReviewDto upsertReview(UUID userId, ItemType targetType, UUID targetId, short stars, String text) {
         if (targetType != ItemType.PRODUCT && targetType != ItemType.SALON_SERVICE) {
-            throw new IllegalArgumentException("Reviews only support PRODUCT or SALON_SERVICE targets");
+            throw BusinessRuleException.invalid("Reviews only support PRODUCT or SALON_SERVICE targets");
         }
 
         if (stars < 1 || stars > 5) {
-            throw new IllegalArgumentException("stars must be between 1 and 5");
+            throw BusinessRuleException.invalid("stars must be between 1 and 5");
         }
+
+        // M-32: the text is shown publicly on the product/service page; it had no limit at all.
+        String cleanText = text == null ? null : text.trim();
+        if (cleanText != null && cleanText.length() > MAX_REVIEW_TEXT) {
+            throw BusinessRuleException.invalid("Review text can be at most " + MAX_REVIEW_TEXT + " characters.");
+        }
+
+        String targetName = lockTargetAndGetName(targetType, targetId);
 
         Optional<Review> existing = reviewRepository
             .findByUser_IdAndTargetTypeAndTargetId(userId, targetType, targetId);
@@ -91,12 +110,18 @@ public class ReviewService {
             .build());
 
         review.setStars(stars);
-        review.setText(text);
-        Review saved = reviewRepository.save(review);
+        review.setText(cleanText);
+        Review saved;
+        try {
+            // Flushed here so the aggregate queries below count this review, and so a unique-index hit
+            // surfaces inside this try instead of at commit.
+            saved = reviewRepository.saveAndFlush(review);
+        } catch (DataIntegrityViolationException e) {
+            throw BusinessRuleException.conflict("You have already reviewed this. Refresh the page and edit your review.");
+        }
 
         updateAggregatesFor(targetType, targetId);
 
-        String targetName = resolveTargetName(targetType, targetId);
         eventPublisher.publishEvent(new ReviewSubmittedEvent(saved, isNewReview, targetName));
 
         return reviewMapper.toDto(saved);
@@ -135,7 +160,7 @@ public class ReviewService {
 
     public AdminReviewDto getAdminReviewById(UUID id) {
         Review review = reviewRepository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Review not found: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("Review not found: " + id));
         return reviewMapper.toAdminDto(review);
     }
     // ---------- Shared internals ----------
@@ -151,18 +176,21 @@ public class ReviewService {
         };
 
         if (rowsUpdated == 0) {
-            throw new IllegalStateException(
+            throw BusinessRuleException.conflict(
                 "Failed to update aggregates — no matching " + targetType + " row for id " + targetId
             );
         }
     }
 
-    private String resolveTargetName(ItemType targetType, UUID targetId) {
+    // M-32: locks the reviewed product/service row for the rest of the transaction and returns its name (for
+    // the staff notification). An unknown target is now refused before anything is written; before, the review
+    // was saved first and the aggregate update failed afterwards.
+    private String lockTargetAndGetName(ItemType targetType, UUID targetId) {
         return switch (targetType) {
-            case PRODUCT -> productRepository
-                .findById(targetId).map(Product::getName).orElse("Unknown product");
-            case SALON_SERVICE -> salonServiceRepository
-                .findById(targetId).map(SalonService::getName).orElse("Unknown service");
+            case PRODUCT -> productRepository.findByIdForUpdate(targetId).map(Product::getName)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+            case SALON_SERVICE -> salonServiceRepository.findByIdForUpdate(targetId).map(SalonService::getName)
+                .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
         };
     }
 

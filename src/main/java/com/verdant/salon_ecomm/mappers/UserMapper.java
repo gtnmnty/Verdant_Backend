@@ -21,7 +21,7 @@ public interface UserMapper {
     UserDto.Profile toProfile(User user);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(target = "phone", source = "phoneNumber")
+    // M-23: phone maps by name now (UpdateUserRequest.phoneNumber was renamed to phone, matching the schema).
     @Mapping(target = "passwordHash", ignore = true)
     // Replaced as a whole in replaceAddress(), so a field left empty (e.g. line2) is cleared
     // instead of being skipped by the IGNORE strategy and keeping its old value.

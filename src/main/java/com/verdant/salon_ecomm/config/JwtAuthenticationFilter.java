@@ -35,6 +35,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.userDetailsService = userDetailsService;
     }
 
+    // M-3: /auth/** (login, refresh, logout, signup, verify, password reset) never reads the access
+    // token: those endpoints identify the user by the refresh cookie or the request body. Skipping
+    // the filter there means a stale or malformed Authorization header can't turn them into a 401.
+    // Before, a client that still held an expired access token got 401 on /auth/refresh and
+    // /auth/login, so it could neither refresh nor sign in again.
+    // Every other path keeps the 401 below: the frontend's apiClient refreshes on 401, and /graphql
+    // must not quietly run as anonymous for a user whose token just expired.
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        return request.getServletPath().startsWith("/auth/");
+    }
+
     @Override
     protected void doFilterInternal(
         @NonNull HttpServletRequest httpRequest,

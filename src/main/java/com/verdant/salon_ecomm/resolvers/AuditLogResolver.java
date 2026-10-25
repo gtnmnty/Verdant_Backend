@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.resolvers;
 import com.verdant.salon_ecomm.dtos.audit.AuditLogPage;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
+import com.verdant.salon_ecomm.utils.PageRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -29,7 +30,10 @@ public class AuditLogResolver {
         return auditLogService.getForEntity(entityType, entityId, pageable);
     }
 
-    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN', 'RECEPTIONIST')")
+    // M-22: RECEPTIONIST removed. The feed covers every entity (account, order and gift card entries name
+    // customers), and receptionists are kept away from customer PII elsewhere. The frontend already hides
+    // the Audit Logs page for that role (lib/admin/roles.ts: audit "hidden").
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
     @QueryMapping
     public AuditLogPage auditDashboardFeed(@Argument int page, @Argument int size) {
         PageRequest pageable = createValidatedPageRequest(page, size);
@@ -38,7 +42,7 @@ public class AuditLogResolver {
 
     private PageRequest createValidatedPageRequest(int page, int size) {
         int validatedPage = Math.max(0, page);
-        int validatedSize = (size <= 0) ? 10 : Math.min(size, DEFAULT_MAX_PAGE_SIZE);
+        int validatedSize = (size <= 0) ? 10 : PageRequests.size(size, DEFAULT_MAX_PAGE_SIZE);
         return PageRequest.of(validatedPage, validatedSize);
     }
 }

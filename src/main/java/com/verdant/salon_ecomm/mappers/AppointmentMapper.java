@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.mappers;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.dtos.appointment.AdminAppointmentDto;
@@ -41,7 +42,7 @@ public class AppointmentMapper {
     ) {
         Integer guests = input.guests();
         if ((guests != null && (guests < 1 || guests > Short.MAX_VALUE))) {
-            throw new IllegalArgumentException("Guests must be between 1 and " + Short.MAX_VALUE);
+            throw BusinessRuleException.invalid("Guests must be between 1 and " + Short.MAX_VALUE);
         }
 
         return Appointment.builder()

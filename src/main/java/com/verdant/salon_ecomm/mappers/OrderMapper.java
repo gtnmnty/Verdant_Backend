@@ -133,6 +133,9 @@ public class OrderMapper {
             milestones.add(new OrderMilestoneDto("Payment failed", order.getUpdatedAt()));
         } else if (paymentStatus == PaymentStatus.REFUNDED) {
             milestones.add(new OrderMilestoneDto("Payment refunded", order.getUpdatedAt()));
+        } else if (paymentStatus == PaymentStatus.PARTIALLY_REFUNDED) {
+            // M-14: was shown as "Payment refunded" for any refund, even of one item.
+            milestones.add(new OrderMilestoneDto("Payment partially refunded", order.getUpdatedAt()));
         }
 
         OrderStatus status = order.getOrderStatus();

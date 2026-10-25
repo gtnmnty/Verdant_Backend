@@ -22,6 +22,16 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // M-15: optimistic lock (column added in V9). Two writers that loaded the same order (a Stripe webhook,
+    // an admin edit, the expiry job) can no longer overwrite each other: the second save updates 0 rows and
+    // fails with a 409; for a webhook that means a non-2xx, so Stripe retries it on fresh data.
+    // The main write paths also take a row lock (findByIdForUpdate / findByStripePaymentIntentIdForUpdate),
+    // so they wait for each other instead of failing; the version catches any path that doesn't lock.
+    // The atomic stock_released claims in OrderRepository deliberately don't bump it: they run inside the
+    // same transaction that later saves this order, and a bump there would fail that save.
+    @Version
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;

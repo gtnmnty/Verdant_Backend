@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.models.entities;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.models.enums.accounts.ResetLinkStatus;
+import com.verdant.salon_ecomm.utils.EmailNormalizer;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -118,15 +119,33 @@ public class User implements UserDetails {
     @Column
     private boolean enabled;
 
+    // M-36: every email written to a user goes through EmailNormalizer (trim + lower-case). The setters
+    // cover normal code; the persist/update callbacks also cover the Lombok builder, which bypasses setters.
+    // Lookups normalize the same way (UserRepository), and V12 adds a unique index on lower(email).
+    public void setEmail(String email) {
+        this.email = EmailNormalizer.normalize(email);
+    }
+
+    public void setPendingEmail(String pendingEmail) {
+        this.pendingEmail = EmailNormalizer.normalize(pendingEmail);
+    }
+
     @PrePersist
     protected void onCreate() {
         createdAt = OffsetDateTime.now();
         updatedAt = OffsetDateTime.now();
+        normalizeEmails();
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = OffsetDateTime.now();
+        normalizeEmails();
+    }
+
+    private void normalizeEmails() {
+        email = EmailNormalizer.normalize(email);
+        pendingEmail = EmailNormalizer.normalize(pendingEmail);
     }
 
     @Override

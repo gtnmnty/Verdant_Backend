@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services.newsletter;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.newsletter.NewsletterSubscribeResultDto;
 import com.verdant.salon_ecomm.dtos.newsletter.NewsletterSubscribedEvent;
 import com.verdant.salon_ecomm.dtos.newsletter.admin.AdminNewsletterSubscriberPage;
@@ -159,7 +160,7 @@ public class NewsletterService {
     private String normalizeEmail(String raw) {
         String email = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
         if (email.isEmpty() || email.length() > MAX_EMAIL || !InputValidators.isEmail(email)) {
-            throw new IllegalArgumentException("Please enter a valid email address.");
+            throw BusinessRuleException.invalid("Please enter a valid email address.");
         }
         return email;
     }

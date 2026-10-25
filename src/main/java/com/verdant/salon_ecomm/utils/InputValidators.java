@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.utils;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import java.util.regex.Pattern;
 
 // Shared checks for free-text fields on inputs that aren't bean-validated (GraphQL arguments).
@@ -11,10 +12,10 @@ public final class InputValidators {
 
     // Trimmed value; throws when it is missing, blank or longer than max.
     public static String requireText(String value, int max, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required");
+        if (value == null || value.isBlank()) throw BusinessRuleException.invalid(label + " is required");
         String trimmed = value.trim();
         if (trimmed.length() > max) {
-            throw new IllegalArgumentException(label + " must be at most " + max + " characters");
+            throw BusinessRuleException.invalid(label + " must be at most " + max + " characters");
         }
         return trimmed;
     }

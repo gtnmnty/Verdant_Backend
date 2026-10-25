@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
+import com.verdant.salon_ecomm.utils.PiiMasking;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -34,7 +35,8 @@ public class GiftCardAuditListener {
         auditLogService.record(
             AuditEntityType.GIFT_CARD, card.getId(), AuditActionType.ISSUED,
             "Gift card " + card.maskedCode() + " issued manually",
-            "Issued to " + (card.getRecipientEmail() != null ? card.getRecipientEmail() : "no recipient email")
+            // M-22: masked; the full address stays on the card record.
+            "Issued to " + (card.getRecipientEmail() != null ? PiiMasking.maskEmail(card.getRecipientEmail()) : "no recipient email")
                 + " for " + card.getInitialAmount(),
             event.actor()
         );
@@ -58,6 +60,22 @@ public class GiftCardAuditListener {
             "Gift card balance applied to " + event.order().getOrderCode(),
             event.totalApplied() + " deducted from " + event.customer().getFullName() + "'s gift card balance",
             event.customer()
+        );
+    }
+
+    // M-12: the "flag for admin review". A SECURITY entry on the card, filterable in the admin audit log:
+    // an order using this card's balance was cancelled, but the card is voided, so nothing went back.
+    // An admin decides whether the customer is owed anything. Fired from webhooks or staff actions: System.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onGiftCardRestoreBlocked(GiftCardRestoreBlockedEvent event) {
+        GiftCard card = event.giftCard();
+        auditLogService.record(
+            AuditEntityType.GIFT_CARD, card.getId(), AuditActionType.SECURITY,
+            "Wallet refund blocked for voided gift card " + card.maskedCode(),
+            event.amount() + " from cancelled order " + event.order().getOrderCode()
+                + " was not restored (card " + card.getStatus() + ", payment " + card.getPaymentStatus()
+                + "). Review needed.",
+            null
         );
     }
 

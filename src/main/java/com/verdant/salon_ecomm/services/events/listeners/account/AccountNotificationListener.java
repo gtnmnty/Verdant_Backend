@@ -7,19 +7,17 @@ import com.verdant.salon_ecomm.dtos.account.events.AccountsDeletedEvent;
 import com.verdant.salon_ecomm.dtos.account.events.AccountsSuspendedEvent;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
-import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
+import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -27,12 +25,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccountNotificationListener {
 
-    private static final List<AccountRole> STAFF_ROLES = List.of(
-        AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
-    );
-
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final StaffNotifier staffNotifier;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountCreated(AccountCreatedEvent event) {
@@ -67,8 +61,10 @@ public class AccountNotificationListener {
             actorName
         ));
 
+        // M-22: field names only. changeSummary() carries old/new values, so a phone change used to be
+        // broadcast to every staff member, receptionists included. The values stay in the audit entry.
         notifyStaff(NotificationType.ACCOUNT_UPDATED, "Account updated",
-            "\"" + account.getFullName() + "\" was updated: " + event.changeSummary(),
+            "\"" + account.getFullName() + "\" was updated: " + event.changedFields(),
             account.getId(), event.actor());
     }
 
@@ -132,50 +128,13 @@ public class AccountNotificationListener {
 
     // ── Helpers ──────────────────────────────────────────
 
+    // M-38: both helpers delegate to StaffNotifier (active staff only, one transaction, per-recipient fallback).
     private void notifyStaff(NotificationType type, String title, String message, UUID referenceAccountId, User actor) {
-        UUID actorId = actor != null ? actor.getId() : null;
-        String actorName = actor != null ? actor.getFullName() : null;
-
-        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
-        for (User staffMember : staff) {
-            // Isolate failures per recipient, same as notifyStaffBulk: one bad
-            // notification shouldn't stop the rest of the staff from being notified.
-            try {
-                notificationService.create(new NotificationCreateDto(
-                    staffMember.getId(),
-                    type,
-                    title,
-                    message,
-                    ReferenceType.USER,
-                    referenceAccountId,
-                    NotificationPriority.INFO,
-                    actorId,
-                    actorName
-                ));
-            } catch (Exception e) {
-                log.error("Failed to notify staff member {}", staffMember.getId(), e);
-            }
-        }
+        staffNotifier.notify(ReferenceType.USER, referenceAccountId, type, title, message, actor);
     }
 
     private void notifyStaffBulk(String title, String message, UUID referenceAccountId, UUID actorId, String actorName) {
-        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
-        for (User staffMember : staff) {
-            try {
-                notificationService.create(new NotificationCreateDto(
-                    staffMember.getId(),
-                    NotificationType.BULK_ACTION_PERFORMED,
-                    title,
-                    message,
-                    ReferenceType.USER,
-                    referenceAccountId,
-                    NotificationPriority.INFO,
-                    actorId,
-                    actorName
-                ));
-            } catch (Exception e) {
-                log.error("Failed to notify staff member {}", staffMember.getId(), e);
-            }
-        }
+        staffNotifier.notify(ReferenceType.USER, referenceAccountId, NotificationType.BULK_ACTION_PERFORMED,
+            title, message, actorId, actorName);
     }
 }

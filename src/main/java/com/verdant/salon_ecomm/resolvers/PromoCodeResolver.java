@@ -1,9 +1,9 @@
 package com.verdant.salon_ecomm.resolvers;
 
+import jakarta.validation.Valid;
 import com.verdant.salon_ecomm.dtos.promocode.PromoCodeDto;
 import com.verdant.salon_ecomm.dtos.promocode.PromoCodeValidationResult;
 import com.verdant.salon_ecomm.dtos.promocode.admin.AdminUpsertPromoCodeInput;
-import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.PromoCodeStatus;
 import com.verdant.salon_ecomm.services.PromoCodeService;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +37,11 @@ public class PromoCodeResolver {
         return promoCodeService.getAll();
     }
 
+    // M-10: @Valid makes Spring GraphQL run the input's bean constraints before this method;
+    // a violation becomes a 400 listing the bad fields (GlobalExceptionHandler.handleConstraintViolation).
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public PromoCodeDto adminUpsertPromoCode(@Argument AdminUpsertPromoCodeInput input) {
+    public PromoCodeDto adminUpsertPromoCode(@Argument @Valid AdminUpsertPromoCodeInput input) {
         return promoCodeService.upsert(securityHelper.currentUserId(), input);
     }
 

@@ -1,9 +1,12 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.branch.AdminBranchDto;
 import com.verdant.salon_ecomm.dtos.branch.AdminBranchPage;
 import com.verdant.salon_ecomm.dtos.branch.CreateBranchInput;
 import com.verdant.salon_ecomm.dtos.branch.UpdateBranchInput;
+import com.verdant.salon_ecomm.dtos.branch.events.BranchCreatedEvent;
+import com.verdant.salon_ecomm.dtos.branch.events.BranchUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.branch.events.BranchesBulkDeletedEvent;
 import com.verdant.salon_ecomm.dtos.branch.BranchDto;
 import com.verdant.salon_ecomm.models.entities.Branch;
@@ -28,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -99,8 +103,10 @@ public class BranchService {
         return branchMapper.toAdminDto(findBranchOrThrow(id));
     }
 
+    // M-29: publishes BranchCreatedEvent (audit entry + staff notification after commit). The actor now comes
+    // from the resolver; before, nothing was published, so branch creation left no trace.
     @Transactional
-    public AdminBranchDto createBranch(@Valid CreateBranchInput input) {
+    public AdminBranchDto createBranch(@Valid CreateBranchInput input, UUID actorId) {
         Branch branch = Branch.builder()
             .name(input.name())
             .address(branchMapper.toAddressEntity(input.address()))
@@ -112,39 +118,68 @@ public class BranchService {
             .status(input.status() != null ? input.status() : BranchStatus.OPEN)
             .build();
 
-        return branchMapper.toAdminDto(branchRepository.save(branch));
+        Branch saved = branchRepository.save(branch);
+        eventPublisher.publishEvent(new BranchCreatedEvent(saved, resolveActor(actorId)));
+        return branchMapper.toAdminDto(saved);
     }
 
+    // M-29: publishes BranchUpdatedEvent with the NAMES of the fields that were sent and differ. Names only:
+    // the audit entry says "phone, status changed" without copying the contact details into the log.
     @Transactional
-    public AdminBranchDto updateBranch(@Valid UpdateBranchInput input) {
+    public AdminBranchDto updateBranch(@Valid UpdateBranchInput input, UUID actorId) {
         Branch branch = findBranchOrThrow(input.id());
+        List<String> changed = new ArrayList<>();
 
-        if (input.name() != null) branch.setName(input.name());
-        if (input.address() != null) branch.setAddress(branchMapper.toAddressEntity(input.address()));
-        if (input.phone() != null) branch.setPhone(input.phone());
-        if (input.email() != null) branch.setEmail(input.email());
+        if (input.name() != null && !input.name().equals(branch.getName())) {
+            branch.setName(input.name());
+            changed.add("name");
+        }
+        if (input.address() != null) {
+            branch.setAddress(branchMapper.toAddressEntity(input.address()));
+            changed.add("address");
+        }
+        if (input.phone() != null && !input.phone().equals(branch.getPhone())) {
+            branch.setPhone(input.phone());
+            changed.add("phone");
+        }
+        if (input.email() != null && !input.email().equals(branch.getEmail())) {
+            branch.setEmail(input.email());
+            changed.add("email");
+        }
         if (input.operatingHours() != null) {
             branch.setOperatingHours(branchMapper.toOperatingHoursEntity(input.operatingHours()));
+            changed.add("operatingHours");
         }
-        if (input.googleMapsUrl() != null) branch.setGoogleMapsUrl(input.googleMapsUrl());
-        if (input.imageUrl() != null) branch.setImageUrl(input.imageUrl());
-        if (input.status() != null) branch.setStatus(input.status());
+        if (input.googleMapsUrl() != null && !input.googleMapsUrl().equals(branch.getGoogleMapsUrl())) {
+            branch.setGoogleMapsUrl(input.googleMapsUrl());
+            changed.add("googleMapsUrl");
+        }
+        if (input.imageUrl() != null && !input.imageUrl().equals(branch.getImageUrl())) {
+            branch.setImageUrl(input.imageUrl());
+            changed.add("imageUrl");
+        }
+        if (input.status() != null && input.status() != branch.getStatus()) {
+            branch.setStatus(input.status());
+            changed.add("status");
+        }
 
-        return branchMapper.toAdminDto(branchRepository.save(branch));
+        Branch saved = branchRepository.save(branch);
+        eventPublisher.publishEvent(new BranchUpdatedEvent(saved, resolveActor(actorId), changed));
+        return branchMapper.toAdminDto(saved);
     }
 
+    // M-30: routed through deleteBranches, so a single delete gets the same safety checks as the bulk one
+    // (refused while stylists are assigned or pending/upcoming appointments remain) and the same
+    // audit entry and staff notification. It used to call branchRepository.delete(branch) directly.
     @Transactional
-    public AdminBranchDto deleteBranch(UUID id) {
-        Branch branch = findBranchOrThrow(id);
-        AdminBranchDto dto = branchMapper.toAdminDto(branch);
-        branchRepository.delete(branch);
-        return dto;
+    public AdminBranchDto deleteBranch(UUID id, UUID actorId) {
+        return deleteBranches(List.of(id), actorId).getFirst();
     }
 
     @Transactional
     public List<AdminBranchDto> deleteBranches(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("No branch ids were provided.");
+            throw BusinessRuleException.invalid("No branch ids were provided.");
         }
 
         // De-dupe defensively — a client sending the same id twice shouldn't
@@ -152,7 +187,7 @@ public class BranchService {
         Set<UUID> requestedIds = new LinkedHashSet<>(ids);
 
         if (requestedIds.size() > MAX_BULK_DELETE_SIZE) {
-            throw new IllegalArgumentException(
+            throw BusinessRuleException.invalid(
                 "Cannot delete more than " + MAX_BULK_DELETE_SIZE + " branches in a single request."
             );
         }
@@ -180,7 +215,7 @@ public class BranchService {
                 .map(Branch::getName)
                 .toList();
 
-            throw new IllegalStateException(
+            throw BusinessRuleException.conflict(
                 "Cannot delete the following branches while they still have assigned stylists "
                     + "or active appointments: " + String.join(", ", blockedNames)
                     + ". Reassign stylists and resolve pending/upcoming appointments first."
@@ -194,6 +229,10 @@ public class BranchService {
         eventPublisher.publishEvent(new BranchesBulkDeletedEvent(branches, actor));
 
         return branches.stream().map(branchMapper::toAdminDto).toList();
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 
     private Branch findBranchOrThrow(UUID id) {

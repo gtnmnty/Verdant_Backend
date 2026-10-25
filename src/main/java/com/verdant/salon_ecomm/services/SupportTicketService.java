@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.support.*;
 import com.verdant.salon_ecomm.dtos.support.admin.AdminAddSupportTicketMessageInput;
 import com.verdant.salon_ecomm.dtos.support.admin.AdminSupportTicketPage;
@@ -56,19 +57,25 @@ public class SupportTicketService {
 
     // ── Customer ─────────────────────────────────────────────────
 
+    // M-42: paginated like getAdminTickets (page size capped at MAX_PAGE_SIZE by PageRequests.of). It returned
+    // every ticket the customer ever opened, and resolved tickets pile up forever.
+    // Message counts are loaded for the current page only.
     @Transactional(readOnly = true)
-    public List<SupportTicketSummaryDto> getMyTickets(UUID userId, SupportTicketStatus status) {
+    public SupportTicketPage getMyTickets(UUID userId, SupportTicketStatus status, int page, int pageSize) {
         Specification<SupportTicket> spec = Specification.allOf(
             SupportTicketSpec.belongsTo(userId),
             SupportTicketSpec.hasStatus(status)
         );
-        List<SupportTicket> tickets = ticketRepository.findAll(spec, Sort.by(Sort.Order.desc("updatedAt")));
+        Pageable pageable = PageRequests.of(page, pageSize, MAX_PAGE_SIZE, Sort.by(Sort.Order.desc("updatedAt")));
+        Page<SupportTicket> result = ticketRepository.findAll(spec, pageable);
 
         // Customers never see internal staff notes - not even in the count.
-        Map<UUID, Integer> counts = messageCounts(tickets, false);
-        return tickets.stream()
+        Map<UUID, Integer> counts = messageCounts(result.getContent(), false);
+        List<SupportTicketSummaryDto> items = result.getContent().stream()
             .map(t -> mapper.toSummary(t, counts.getOrDefault(t.getId(), 0)))
             .toList();
+        return new SupportTicketPage(items, pageable.getPageNumber() + 1, pageable.getPageSize(),
+            (int) result.getTotalElements(), result.getTotalPages());
     }
 
     /** Null when the ticket doesn't exist OR belongs to someone else - the two cases look identical. */
@@ -90,7 +97,7 @@ public class SupportTicketService {
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (ticketRepository.countByUserIdAndStatusNot(userId, SupportTicketStatus.RESOLVED) >= MAX_OPEN_TICKETS_PER_USER) {
-            throw new IllegalStateException("You already have " + MAX_OPEN_TICKETS_PER_USER
+            throw BusinessRuleException.conflict("You already have " + MAX_OPEN_TICKETS_PER_USER
                 + " open tickets. Please wait for a reply or resolution before opening another.");
         }
 
@@ -219,7 +226,7 @@ public class SupportTicketService {
             User assignee = userRepository.findById(assigneeId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
             if (!STAFF_ROLES.contains(assignee.getRole())) {
-                throw new IllegalArgumentException("Tickets can only be assigned to staff members");
+                throw BusinessRuleException.invalid("Tickets can only be assigned to staff members");
             }
             ticket.setAssignedTo(assignee);
         }
@@ -245,7 +252,7 @@ public class SupportTicketService {
 
     private void requireRoomForMessage(SupportTicket ticket) {
         if (ticket.getMessages().size() >= MAX_MESSAGES_PER_TICKET) {
-            throw new IllegalStateException("This ticket has reached the message limit. Please open a new ticket.");
+            throw BusinessRuleException.conflict("This ticket has reached the message limit. Please open a new ticket.");
         }
     }
 
@@ -271,7 +278,7 @@ public class SupportTicketService {
 
     private String requireEmail(String value) {
         String email = requireText(value, MAX_EMAIL, "Email").toLowerCase(Locale.ROOT);
-        if (!InputValidators.isEmail(email)) throw new IllegalArgumentException("Please enter a valid email address.");
+        if (!InputValidators.isEmail(email)) throw BusinessRuleException.invalid("Please enter a valid email address.");
         return email;
     }
 

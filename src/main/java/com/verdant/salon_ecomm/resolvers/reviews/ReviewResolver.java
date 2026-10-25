@@ -4,7 +4,6 @@ import com.verdant.salon_ecomm.dtos.reviews.AdminReviewDto;
 import com.verdant.salon_ecomm.dtos.reviews.AdminReviewPage;
 import com.verdant.salon_ecomm.dtos.reviews.ReviewConnection;
 import com.verdant.salon_ecomm.dtos.reviews.ReviewDto;
-import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.reviews.AdminReviewSort;
 import com.verdant.salon_ecomm.models.enums.reviews.ReviewClientSort;

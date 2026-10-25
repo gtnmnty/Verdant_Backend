@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
 import com.verdant.salon_ecomm.dtos.PageInfo;
 import com.verdant.salon_ecomm.dtos.service.*;
@@ -24,9 +25,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -48,6 +49,7 @@ public class SalonServicesService {
     private final FavoriteRepository favoriteRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final SalonServiceMapper serviceMapper;
+    private final TransactionTemplate transactionTemplate;
 
     public ServicePage getSalonServices(
         String category, String search, ServiceSort sort,
@@ -107,7 +109,7 @@ public class SalonServicesService {
             .toList();
 
         if (first < 0) {
-            throw new IllegalArgumentException("first must be non-negative");
+            throw BusinessRuleException.invalid("first must be non-negative");
         }
 
         List<UUID> pageIds = serviceIds.stream().limit(first).toList();
@@ -207,71 +209,85 @@ public class SalonServicesService {
         return serviceMapper.toAdminDto(saved, imagesOf(saved));
     }
 
-    @Transactional
+    // M-26: NOT_SUPPORTED overrides the class-level read-only transaction, so no DB connection is held
+    // while Cloudinary copies the images (one network round trip per image). Same pattern as
+    // JournalService.createStory. Flow:
+    //   1. source exists? + read its image rows (each a short read of its own; MediaImage has only
+    //      plain columns, so nothing lazy is touched outside a transaction)
+    //   2. copy every image in Cloudinary, no DB connection held. The copy gets its own files, so
+    //      deleting one service never breaks the other's images
+    //   3. one short TransactionTemplate: reload the source (its stylists are lazy), save the copy and
+    //      its image rows, publish the event
+    //   4. if step 2 or 3 fails, the copies already made are deleted, so Cloudinary keeps no orphans
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AdminServiceDto duplicateService(UUID sourceId, UUID actorId) {
-        SalonService source = serviceRepository.findById(sourceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
-
-        SalonService copy = SalonService.builder()
-            .name(source.getName() + " (Copy)")
-            .subName(source.getSubName())
-            .itemCatalog(source.getItemCatalog())
-            .durationMinutes(source.getDurationMinutes())
-            .price(source.getPrice())
-            .description(source.getDescription())
-            .status(CollectionStatus.INACTIVE) // never go live until an admin reviews it
-            .info(source.getInfo() != null ? new ArrayList<>(source.getInfo()) : new ArrayList<>())
-            .tags(source.getTags() != null ? new ArrayList<>(source.getTags()) : null)
-            .badge(source.getBadge())
-            .isHomeService(source.getIsHomeService())
-            .isFeatured(false) // a featured original shouldn't silently produce a second featured item
-            .stylists(new ArrayList<>(source.getStylists()))
-            .reviewCount(0)
-            .averageRating(BigDecimal.ZERO)
-            .build();
-
-        SalonService saved = serviceRepository.save(copy);
-
-        // Give the copy its own Cloudinary assets so deleting one service never breaks the other.
+        if (!serviceRepository.existsById(sourceId)) {
+            throw new ResourceNotFoundException("Service not found");
+        }
         List<MediaImage> sourceImages = mediaImageRepository
             .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.SALON_SERVICE, sourceId);
-        List<String> uploadedPublicIds = new ArrayList<>();
-        List<MediaImage> copiedImages = new ArrayList<>();
 
+        // Same order as sourceImages, so index i is the copy of image i.
+        List<CloudinaryService.CloudinaryUploadResult> uploads = new ArrayList<>();
         try {
             for (MediaImage image : sourceImages) {
-                CloudinaryService.CloudinaryUploadResult uploaded =
-                    cloudinaryService.uploadFromUrl(image.getUrl());
-                uploadedPublicIds.add(uploaded.publicId());
-                copiedImages.add(MediaImage.builder()
-                    .entityType(ItemType.SALON_SERVICE)
-                    .entityId(saved.getId())
-                    .url(uploaded.url())
-                    .publicId(uploaded.publicId())
-                    .isPrimary(image.isPrimary())
-                    .sortOrder(image.getSortOrder())
-                    .build());
+                uploads.add(cloudinaryService.uploadFromUrl(image.getUrl()));
             }
-        } catch (RuntimeException e) {
-            uploadedPublicIds.forEach(cloudinaryService::delete); // don't strand half-copied uploads
-            throw e;
-        }
-        mediaImageRepository.saveAll(copiedImages);
 
-        // If the DB transaction rolls back after uploading, remove the now-orphaned copies.
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-                    uploadedPublicIds.forEach(cloudinaryService::delete);
+            return transactionTemplate.execute(tx -> {
+                SalonService source = serviceRepository.findById(sourceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
+
+                SalonService copy = SalonService.builder()
+                    .name(source.getName() + " (Copy)")
+                    .subName(source.getSubName())
+                    .itemCatalog(source.getItemCatalog())
+                    .durationMinutes(source.getDurationMinutes())
+                    .price(source.getPrice())
+                    .description(source.getDescription())
+                    .status(CollectionStatus.INACTIVE) // never go live until an admin reviews it
+                    .info(source.getInfo() != null ? new ArrayList<>(source.getInfo()) : new ArrayList<>())
+                    .tags(source.getTags() != null ? new ArrayList<>(source.getTags()) : null)
+                    .badge(source.getBadge())
+                    .isHomeService(source.getIsHomeService())
+                    .isFeatured(false) // a featured original shouldn't silently produce a second featured item
+                    .stylists(new ArrayList<>(source.getStylists()))
+                    .reviewCount(0)
+                    .averageRating(BigDecimal.ZERO)
+                    .build();
+
+                SalonService saved = serviceRepository.save(copy);
+
+                List<MediaImage> copiedImages = new ArrayList<>();
+                for (int i = 0; i < sourceImages.size(); i++) {
+                    MediaImage image = sourceImages.get(i);
+                    CloudinaryService.CloudinaryUploadResult uploaded = uploads.get(i);
+                    copiedImages.add(MediaImage.builder()
+                        .entityType(ItemType.SALON_SERVICE)
+                        .entityId(saved.getId())
+                        .url(uploaded.url())
+                        .publicId(uploaded.publicId())
+                        .isPrimary(image.isPrimary())
+                        .sortOrder(image.getSortOrder())
+                        .build());
+                }
+                mediaImageRepository.saveAll(copiedImages);
+
+                User actor = resolveActor(actorId);
+                eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
+
+                return serviceMapper.toAdminDto(saved, copiedImages);
+            });
+        } catch (RuntimeException e) {
+            for (CloudinaryService.CloudinaryUploadResult uploaded : uploads) {
+                try {
+                    cloudinaryService.delete(uploaded.publicId()); // don't strand half-copied uploads
+                } catch (RuntimeException cleanupEx) {
+                    e.addSuppressed(cleanupEx);
                 }
             }
-        });
-
-        User actor = resolveActor(actorId);
-        eventPublisher.publishEvent(new SalonServiceCreatedEvent(saved, actor));
-
-        return serviceMapper.toAdminDto(saved, copiedImages);
+            throw e;
+        }
     }
 
     @Transactional
@@ -382,10 +398,14 @@ public class SalonServicesService {
         return dto;
     }
 
+    // M-24: returns AdminServiceDto, the type the schema promises for deleteServices. The entities it used
+    // to return have different property names (durationMinutes vs durationInMinutes, itemCatalog vs
+    // category), so non-null fields resolved to null and the client saw an error for a delete that had
+    // committed. DTOs are built before the delete, while the rows (and their lazy stylists) are still loaded.
     @Transactional
-    public List<SalonService> deleteServices(List<UUID> ids, UUID actorId) {
+    public List<AdminServiceDto> deleteServices(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("No service ids were provided.");
+            throw BusinessRuleException.invalid("No service ids were provided.");
         }
 
         List<SalonService> services = serviceRepository.findAllById(ids);
@@ -394,6 +414,12 @@ public class SalonServicesService {
         List<MediaImage> images = mediaImageRepository
             .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.SALON_SERVICE, serviceIds);
         List<String> publicIds = images.stream().map(MediaImage::getPublicId).toList();
+
+        Map<UUID, List<MediaImage>> imagesByService = images.stream()
+            .collect(Collectors.groupingBy(MediaImage::getEntityId));
+        List<AdminServiceDto> deleted = services.stream()
+            .map(service -> serviceMapper.toAdminDto(service, imagesByService.getOrDefault(service.getId(), List.of())))
+            .toList();
 
         mediaImageRepository.deleteByEntityTypeAndEntityIdIn(ItemType.SALON_SERVICE, serviceIds);
         serviceRepository.deleteAll(services);
@@ -405,7 +431,7 @@ public class SalonServicesService {
 
         CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
 
-        return services;
+        return deleted;
     }
 
     // ---------- Helpers ----------

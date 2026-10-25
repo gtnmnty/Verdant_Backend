@@ -13,7 +13,10 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "reviews")
+// M-32: one review per user per target, enforced by the database (index created in V10). ReviewService
+// also locks the target row, so this constraint is only hit by something that bypasses the service.
+@Table(name = "reviews", uniqueConstraints = @UniqueConstraint(
+    name = "uq_reviews_user_target", columnNames = {"user_id", "target_type", "target_id"}))
 public class Review {
 
     @Id

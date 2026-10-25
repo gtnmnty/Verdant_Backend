@@ -113,7 +113,10 @@ public class NotificationResolver {
             principal.getFullName()
         );
 
-        NotificationResponseDto created = notificationService.create(sanitized);
+        // M-31: createStaffMessage, not create: only staff-message types (reminder, appointment/order update,
+        // review reply), title <= 150 and message <= 1000 characters, no HIGH/CRITICAL priority. Receptionists
+        // keep access (they send appointment reminders); the allow-list is what stops fake system alerts.
+        NotificationResponseDto created = notificationService.createStaffMessage(sanitized);
         notificationPublisher.publish(sanitized.userId(), created);
         return created;
     }

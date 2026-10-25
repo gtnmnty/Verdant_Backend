@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.verdant.salon_ecomm.dtos.giftcards.*;
@@ -17,7 +19,6 @@ import com.verdant.salon_ecomm.models.enums.giftcards.GiftCardTransactionType;
 import com.verdant.salon_ecomm.repositories.GiftCardRepository;
 import com.verdant.salon_ecomm.repositories.GiftCardTransactionRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -78,13 +79,13 @@ public class GiftCardService {
         String recipientName = cleanText(input.recipientName(), MAX_NAME_LENGTH, "Recipient name");
         String recipientEmail = cleanEmail(input.recipientEmail());
         if (recipientEmail == null) {
-            throw new IllegalArgumentException("Recipient email is required");
+            throw BusinessRuleException.invalid("Recipient email is required");
         }
 
         String note = cleanText(input.note(), MAX_NOTE_LENGTH, "Note");
 
         User purchaser = userRepository.findById(purchaserId)
-            .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         String stripeCustomerId = paymentService.ensureStripeCustomer(purchaser);
 
         GiftCard created = transactionTemplate.execute(status -> giftCardRepository.save(
@@ -126,7 +127,10 @@ public class GiftCardService {
 
         // No GiftCardPurchasedEvent / PURCHASE ledger row yet - nothing has been paid.
         // Both are produced by markPaid() when the Stripe webhook confirms payment.
-        return new GiftCardPaymentDto(giftCardMapper.toDto(saved), intent.getClientSecret());
+        // M-18: masked code, same as getMySentGiftCards. The full code returned here let the buyer redeem
+        // the card into their own wallet before the recipient got it. Only the recipient receives the code,
+        // by email (GiftCardEmailListener, once payment is confirmed).
+        return new GiftCardPaymentDto(giftCardMapper.toMaskedDto(saved), intent.getClientSecret());
     }
 
     // ── Stripe webhook (routed from PaymentService via event) ────
@@ -156,9 +160,20 @@ public class GiftCardService {
                     giftCardRepository.save(card);
                 }
             }
-            // NOTE: charge.refunded also fires for PARTIAL refunds - treated as a full void here.
-            // If you issue partial refunds, compare charge.amount_refunded to the charge amount first.
-            case "charge.refunded", "charge.dispute.created" -> voidPaidCard(card, event.eventType());
+            // M-14: charge.refunded also fires for PARTIAL refunds. Only a full refund voids the card;
+            // a partial one takes the newly refunded part off the balance.
+            case "charge.refunded" -> {
+                if (Boolean.FALSE.equals(event.fullRefund()) && event.amountRefunded() != null) {
+                    applyPartialRefund(card, event.amountRefunded());
+                } else {
+                    voidPaidCard(card, event.eventType());
+                }
+            }
+            // M-13: this case never ran before - PaymentService couldn't read the PaymentIntent id off a
+            // Dispute, so chargebacks were dropped. The card is voided as soon as the dispute opens:
+            // its balance is spendable immediately, so waiting for the outcome would let it be drained.
+            // A dispute the salon later wins does not reinstate the card; staff reissue it by hand.
+            case "charge.dispute.created" -> voidPaidCard(card, event.eventType());
             default -> log.debug("Ignoring Stripe event {} for gift card {}", event.eventType(), card.getId());
         }
     }
@@ -167,7 +182,10 @@ public class GiftCardService {
         if (card.getPaymentStatus() == PaymentStatus.PAID) return; // already handled (duplicate delivery)
 
         // A voided/refunded card must never be revived by a late or repeated webhook.
-        if (card.getPaymentStatus() == PaymentStatus.REFUNDED) {
+        // PARTIALLY_REFUNDED counts too (M-14): it was paid already, and re-marking it PAID would write
+        // a second PURCHASE row and email the code again.
+        if (card.getPaymentStatus() == PaymentStatus.REFUNDED
+            || card.getPaymentStatus() == PaymentStatus.PARTIALLY_REFUNDED) {
             log.warn("Ignoring payment success for gift card {} - it was already refunded/voided", card.getId());
             return;
         }
@@ -191,7 +209,9 @@ public class GiftCardService {
     }
 
     private void voidPaidCard(GiftCard card, String reason) {
-        if (card.getPaymentStatus() != PaymentStatus.PAID) return;
+        // PARTIALLY_REFUNDED: a full refund (or chargeback) after an earlier partial one still voids it.
+        if (card.getPaymentStatus() != PaymentStatus.PAID
+            && card.getPaymentStatus() != PaymentStatus.PARTIALLY_REFUNDED) return;
         BigDecimal remaining = card.getBalance();
         if (remaining.signum() > 0) {
             writeTransaction(card, GiftCardTransactionType.REFUND, remaining.negate(),
@@ -205,12 +225,46 @@ public class GiftCardService {
             card.getId(), reason, remaining);
     }
 
+    // M-14 flow: delta = Stripe's refunded-so-far total minus what this card already had deducted
+    // (refundedAmount) -> take min(delta, balance) off the balance with a REFUND ledger row -> remember
+    // the new total -> mark PARTIALLY_REFUNDED. The card stays usable for what is left.
+    // Duplicate or out-of-order deliveries give delta <= 0 and change nothing.
+    // If the holder already spent more than is left, the shortfall can't be taken back here (same as a
+    // full void): it is logged for staff.
+    private void applyPartialRefund(GiftCard card, BigDecimal refundedSoFar) {
+        if (card.getPaymentStatus() != PaymentStatus.PAID
+            && card.getPaymentStatus() != PaymentStatus.PARTIALLY_REFUNDED) return;
+
+        BigDecimal alreadyDeducted = card.getRefundedAmount() != null ? card.getRefundedAmount() : BigDecimal.ZERO;
+        BigDecimal delta = refundedSoFar.subtract(alreadyDeducted);
+        if (delta.signum() <= 0) return;
+
+        BigDecimal deducted = delta.min(card.getBalance());
+        if (deducted.signum() > 0) {
+            writeTransaction(card, GiftCardTransactionType.REFUND, deducted.negate(),
+                "Partial refund of purchase " + card.maskedCode(), null);
+            card.setBalance(card.getBalance().subtract(deducted));
+            if (card.getBalance().signum() == 0) {
+                // Nothing left: an owned card is spent down; an unredeemed one has nothing to redeem.
+                card.setStatus(card.getOwner() != null ? GiftCardStatus.DEPLETED : GiftCardStatus.CANCELLED);
+            }
+        }
+        if (deducted.compareTo(delta) < 0) {
+            log.warn("Gift card {} partially refunded by {} but only {} was left on it - {} already spent is NOT recoverable here",
+                card.getId(), delta, deducted, delta.subtract(deducted));
+        }
+
+        card.setRefundedAmount(refundedSoFar);
+        card.setPaymentStatus(PaymentStatus.PARTIALLY_REFUNDED);
+        giftCardRepository.save(card);
+    }
+
     // ── Admin / manager manual issuance ──────────────────────────
 
     @Transactional
     public GiftCardDto adminIssueGiftCard(UUID actorId, AdminIssueGiftCardInput input) {
         User actor = userRepository.findById(actorId)
-            .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if(!ISSUER_ROLES.contains(actor.getRole())) {
             throw new AccessDeniedException("Only managers and admins can issue gift cards");
@@ -221,7 +275,7 @@ public class GiftCardService {
         String recipientEmail = cleanEmail(input.recipientEmail());
         String note = cleanText(input.note(), MAX_NOTE_LENGTH, "Note");
         if (input.expiresAt() != null && !input.expiresAt().isAfter(OffsetDateTime.now())) {
-            throw new IllegalArgumentException("Expiry date must be in the future");
+            throw BusinessRuleException.invalid("Expiry date must be in the future");
         }
 
         GiftCard giftCard = giftCardRepository.save(GiftCard.builder()
@@ -250,7 +304,7 @@ public class GiftCardService {
         redeemLimiter.checkAllowed(userId);
 
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         String code = rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
         GiftCard giftCard = code.isEmpty() ? null : giftCardRepository.findByCodeForUpdate(code).orElse(null);
@@ -258,7 +312,7 @@ public class GiftCardService {
         // One generic message for every failure reason, so codes can't be probed for state.
         if (giftCard == null || !isRedeemable(giftCard)) {
             redeemLimiter.recordFailure(userId);
-            throw new IllegalArgumentException(INVALID_CODE_MESSAGE);
+            throw BusinessRuleException.invalid(INVALID_CODE_MESSAGE);
         }
 
         giftCard.setOwner(user);
@@ -274,9 +328,11 @@ public class GiftCardService {
         return giftCardMapper.toDto(giftCard);
     }
 
+    // A partially refunded card can still be redeemed for what is left on it (M-14).
     private boolean isRedeemable(GiftCard card) {
         return card.getStatus() == GiftCardStatus.ACTIVE
-            && card.getPaymentStatus() == PaymentStatus.PAID
+            && (card.getPaymentStatus() == PaymentStatus.PAID
+                || card.getPaymentStatus() == PaymentStatus.PARTIALLY_REFUNDED)
             && card.getOwner() == null
             && (card.getExpiresAt() == null || card.getExpiresAt().isAfter(OffsetDateTime.now()));
     }
@@ -358,6 +414,12 @@ public class GiftCardService {
     }
 
     // Idempotent. Call from the admin-cancel path in OrderService too.
+    // M-12 flow, per ORDER_PAYMENT row of the order: lock the card -> voided? skip it and publish
+    // GiftCardRestoreBlockedEvent (audit entry for admin review) -> otherwise add the amount back,
+    // set the status, write a REFUND ledger row.
+    // Before, the status was set to REDEEMED/EXPIRED unconditionally, which revived voided cards: buy a
+    // card, spend it on an order, get the card purchase refunded (card voided), then cancel the order
+    // and the balance came back on a spendable card. The customer kept the refund AND the balance.
     @Transactional
     public void restoreWalletForOrder(Order order) {
         if (order.getWalletAmountApplied() == null || order.getWalletAmountApplied().signum() <= 0) return;
@@ -370,8 +432,18 @@ public class GiftCardService {
             GiftCard card = giftCardRepository.findByIdForUpdate(payment.getGiftCard().getId()).orElseThrow();
             BigDecimal restored = payment.getAmount().negate(); // ORDER_PAYMENT amounts are stored negative
 
+            if (!canReceiveRestoredBalance(card)) {
+                log.warn("Not restoring {} from order {} to voided gift card {} (status {}, payment {}) - flagged for review",
+                    restored, order.getOrderCode(), card.getId(), card.getStatus(), card.getPaymentStatus());
+                eventPublisher.publishEvent(new GiftCardRestoreBlockedEvent(card, order, restored));
+                continue;
+            }
+
             card.setBalance(card.getBalance().add(restored));
-            boolean expired = card.getExpiresAt() != null && card.getExpiresAt().isBefore(now);
+            // Only a card that was spendable (REDEEMED) or spent down (DEPLETED) goes back to REDEEMED.
+            // An EXPIRED card stays EXPIRED: the money is recorded on it but can't be spent.
+            boolean expired = card.getStatus() == GiftCardStatus.EXPIRED
+                || (card.getExpiresAt() != null && card.getExpiresAt().isBefore(now));
             card.setStatus(expired ? GiftCardStatus.EXPIRED : GiftCardStatus.REDEEMED);
             giftCardRepository.save(card);
 
@@ -379,6 +451,17 @@ public class GiftCardService {
                 "Restored from order " + order.getOrderCode(), order);
         }
         order.setWalletAmountApplied(BigDecimal.ZERO); // managed entity - flushed with the caller's transaction
+    }
+
+    // M-12: money may only flow back to a card that could legitimately have paid for the order.
+    // CANCELLED = voided (Stripe refund or chargeback, abandoned purchase, forfeited on account deletion);
+    // REFUNDED = its purchase money already went back to the buyer. ACTIVE (never redeemed) can't have
+    // paid for an order, so it is treated as suspicious too.
+    private boolean canReceiveRestoredBalance(GiftCard card) {
+        if (card.getPaymentStatus() == PaymentStatus.REFUNDED) return false;
+        return card.getStatus() == GiftCardStatus.REDEEMED
+            || card.getStatus() == GiftCardStatus.DEPLETED
+            || card.getStatus() == GiftCardStatus.EXPIRED;
     }
 
     // Call before hard-deleting orders so gift_card_transactions.order_id doesn't block the delete operation.
@@ -516,13 +599,13 @@ public class GiftCardService {
     }
 
     private BigDecimal validateAmount(BigDecimal amount, BigDecimal min, BigDecimal max) {
-        if (amount == null) throw new IllegalArgumentException("Amount is required");
+        if (amount == null) throw BusinessRuleException.invalid("Amount is required");
         if (amount.stripTrailingZeros().scale() > 2) {
-            throw new IllegalArgumentException("Amount can have at most 2 decimal places");
+            throw BusinessRuleException.invalid("Amount can have at most 2 decimal places");
         }
         BigDecimal normalized = amount.setScale(2, RoundingMode.UNNECESSARY);
         if (normalized.compareTo(min) < 0 || normalized.compareTo(max) > 0) {
-            throw new IllegalArgumentException("Amount must be between " + min + " and " + max);
+            throw BusinessRuleException.invalid("Amount must be between " + min + " and " + max);
         }
         return normalized;
     }
@@ -531,7 +614,7 @@ public class GiftCardService {
         if (value == null || value.isBlank()) return null;
         String trimmed = value.trim();
         if (trimmed.length() > maxLength) {
-            throw new IllegalArgumentException(label + " must be at most " + maxLength + " characters");
+            throw BusinessRuleException.invalid(label + " must be at most " + maxLength + " characters");
         }
         return trimmed;
     }
@@ -539,7 +622,7 @@ public class GiftCardService {
     private String cleanEmail(String value) {
         String trimmed = cleanText(value, 254, "Recipient email");
         if (trimmed != null && !InputValidators.isEmail(trimmed)) {
-            throw new IllegalArgumentException("Recipient email is not a valid email address");
+            throw BusinessRuleException.invalid("Recipient email is not a valid email address");
         }
         return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);
     }

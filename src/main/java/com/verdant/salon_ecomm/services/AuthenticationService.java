@@ -6,18 +6,16 @@ import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.exceptions.*;
-import com.verdant.salon_ecomm.models.entities.RefreshToken;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.response.AuthResult;
+import jakarta.annotation.PostConstruct;
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,24 +23,48 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
     private final JwtService jwtService;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
     private final ApplicationEventPublisher eventPublisher;
+    private final LoginThrottle loginThrottle;
 
+    // M-4: BCrypt hash of a random value, compared against when the email is unknown. Without it an
+    // unknown email answers in ~1 ms and a known one in ~100 ms (one BCrypt round), and that timing
+    // gap would reveal which emails have accounts even though both now return the same 401.
+    private String timingDummyHash;
+
+    @PostConstruct
+    void initTimingDummyHash() {
+        timingDummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
+    }
+
+    // M-10 flow: duplicate check -> build user + hashed code -> saveAndFlush (DB constraints checked)
+    // -> send the code -> commit. The email used to go out BEFORE save(), so input the DB rejected
+    // (e.g. a null name) still mailed a code and then failed with a 500.
+    // Why the email is sent inside the transaction and not after commit: if SMTP fails, the exception
+    // rolls the signup back and the 503 "couldn't send this email" is true, so the user can simply
+    // retry. After commit, the same failure would leave an account with no code plus an error for a
+    // signup that did succeed, and the retry would answer "email already exists".
+    // Remaining gap: the commit failing after the email went out (rare) leaves a code for no account.
+    @Transactional
     public User signUp(RegisterUserDto input) {
+        // First, so no code is generated or mailed for an address that is already taken.
+        if (userRepository.existsByEmail(input.getEmail())) {
+            throw new DuplicateEmailException("Account with this email already exists!");
+        }
 
         User user = new User();
-        user.setFullName(input.getFullName());
+        user.setFullName(input.getFullName().trim());
         user.setEmail(input.getEmail());
         user.setPhone(input.getPhoneNumber());
         user.setPasswordHash(passwordEncoder.encode(input.getPassword()));
@@ -50,17 +72,37 @@ public class AuthenticationService {
         String plainCode = issueVerificationCode(user, 5);
         user.setEnabled(false);
 
-        if(userRepository.existsByEmail(input.getEmail())) {
+        User saved;
+        try {
+            saved = userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            // Two signups for the same address at once: the unique index catches the second one.
             throw new DuplicateEmailException("Account with this email already exists!");
         }
 
-        sendVerificationEmail(user, plainCode);
-        return userRepository.save(user);
+        sendVerificationEmail(saved, plainCode);
+        return saved;
     }
 
+    // M-4 flow: throttle check -> password check (dummy hash for unknown emails) -> only then account
+    // status. Before, an unknown email returned 404 and an unverified account returned 403 without the
+    // password being checked, so anyone could learn which emails are registered and verified.
+    // Now every wrong email/password pair gets the same 401 "Invalid email or password." Status
+    // errors (403 not verified / suspended) are only shown to someone who knows the password.
+    // The password is checked here rather than through AuthenticationManager because
+    // DaoAuthenticationProvider runs its enabled/locked checks BEFORE the password check.
     public AuthResult authenticate(LogInUserDto input) throws InvalidCredentialsException {
-        User user = userRepository.findByEmail(input.getEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        loginThrottle.checkAllowed(input.getEmail());
+
+        User user = userRepository.findByEmail(input.getEmail()).orElse(null);
+        String hashToCheck = user != null ? user.getPasswordHash() : timingDummyHash;
+        boolean passwordMatches = passwordEncoder.matches(input.getPassword(), hashToCheck);
+
+        if (user == null || !passwordMatches) {
+            loginThrottle.recordFailure(input.getEmail());
+            throw new InvalidCredentialsException("Invalid credentials.");
+        }
+        loginThrottle.reset(input.getEmail());
 
         if (!user.isAccountNonLocked()) throw new ForbiddenException("Account is suspended.");
 
@@ -68,21 +110,11 @@ public class AuthenticationService {
             throw new AccountNotVerifiedException("Account is not verified. Please check your email.");
         }
 
-        try {
-            authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    input.getEmail(),
-                    input.getPassword()
-                )
-            );
-        } catch (BadCredentialsException e) {
-            throw new InvalidCredentialsException("Invalid credentials.");
-        }
-
         String accessToken = jwtService.generateToken(user);
 
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(input.getEmail());
-        String refreshTokenString = refreshToken.getToken();
+        // M-37: a new session for this device; the user's other sessions stay signed in. Only the raw value
+        // goes to the cookie; the database keeps its hash.
+        String refreshTokenString = refreshTokenService.createRefreshToken(input.getEmail());
 
         long expiresInMs = jwtService.getExpirationTime();
 
@@ -94,7 +126,7 @@ public class AuthenticationService {
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (user.isEmailVerified()) {
-            throw new IllegalStateException("Account is already verified.");
+            throw BusinessRuleException.conflict("Account is already verified.");
         }
 
         if (user.getVerificationCode() == null || user.getVerificationCode().isBlank()) {
@@ -221,9 +253,9 @@ public class AuthenticationService {
         return refreshTokenService.rotateRefreshToken(refreshToken);
     }
 
+    // M-37: ends only the session this cookie belongs to; the user's other devices stay signed in.
     public void logout(String refreshToken) {
-        RefreshToken token = refreshTokenService.findByToken(refreshToken);
-        refreshTokenService.deleteByUserId(token.getUser().getId());
+        refreshTokenService.revokeSession(refreshToken);
     }
 
     // Lifetime of a code mailed to a new address (staff change here, self-service change in UserService).
