@@ -9,6 +9,7 @@ import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.mappers.AuditLogMapper;
 import com.verdant.salon_ecomm.repositories.AuditLogRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
+import com.verdant.salon_ecomm.utils.TextLimits;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +26,12 @@ public class AuditLogService {
     private final AuditLogRepository auditLogRepository;
     private final AuditLogMapper auditLogMapper;
     private final UserRepository userRepository;
+
+    // M-33: an over-long title or detail used to fail the INSERT, and the listener swallowed the error, so
+    // the audit row was lost. Now the text is cut to fit (marked with "..."). title and actor_label are the
+    // default varchar(255); detail is text since V11, capped so one entry stays readable.
+    private static final int TITLE_MAX = 255;
+    private static final int DETAIL_MAX = 4000;
 
     // ---------- Queries ----------
 
@@ -55,10 +62,10 @@ public class AuditLogService {
             .entityType(entityType)
             .entityId(entityId.toString())
             .actionType(actionType)
-            .title(title)
-            .detail(detail)
+            .title(TextLimits.truncate(title, TITLE_MAX))
+            .detail(TextLimits.truncate(detail, DETAIL_MAX))
             .actor(actor)
-            .actorLabel(actor != null ? resolveActorLabel(actor) : "System")
+            .actorLabel(TextLimits.truncate(actor != null ? resolveActorLabel(actor) : "System", TITLE_MAX))
             .selfService(false)
             .build();
         auditLogRepository.save(log);
@@ -86,10 +93,10 @@ public class AuditLogService {
             .entityType(entityType)
             .entityId(entityId.toString())
             .actionType(actionType)
-            .title(title)
-            .detail(detail)
+            .title(TextLimits.truncate(title, TITLE_MAX))
+            .detail(TextLimits.truncate(detail, DETAIL_MAX))
             .actor(managedActor)
-            .actorLabel(managedActor != null ? resolveActorLabel(managedActor) : null)
+            .actorLabel(TextLimits.truncate(managedActor != null ? resolveActorLabel(managedActor) : null, TITLE_MAX))
             .selfService(true)
             .build();
         auditLogRepository.save(log);

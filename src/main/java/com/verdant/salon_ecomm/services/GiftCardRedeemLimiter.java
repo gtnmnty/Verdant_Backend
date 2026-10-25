@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.TooManyRequestsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -41,7 +42,8 @@ public class GiftCardRedeemLimiter {
             return;
         }
         if (failures != null && failures >= MAX_FAILURES) {
-            throw new IllegalStateException("Too many invalid attempts. Please try again later.");
+            // M-5: 429 like the other limits (was IllegalStateException -> "Something went wrong").
+            throw new TooManyRequestsException("Too many invalid attempts. Please try again later.");
         }
     }
 

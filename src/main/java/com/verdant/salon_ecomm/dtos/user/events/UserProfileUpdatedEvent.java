@@ -6,10 +6,15 @@ import java.util.List;
 
 public record UserProfileUpdatedEvent(User user, List<FieldChange> changes) {
 
-    public record FieldChange(String field, String oldValue, String newValue) {
+    // M-22: sensitive = personal data (email, phone, address). Its old and new values are left out of
+    // toString(), and so out of the audit entry built from changeSummary(), the same way the staff path
+    // (AccountUpdatedEvent) already did for email. The values stay on the record for code that needs them.
+    public record FieldChange(String field, String oldValue, String newValue, boolean sensitive) {
         @Override
         public String toString() {
-            return field + ": " + oldValue + " -> " + newValue;
+            return sensitive
+                ? field + ": updated"
+                : field + ": " + oldValue + " -> " + newValue;
         }
     }
 

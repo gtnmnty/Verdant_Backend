@@ -4,12 +4,11 @@ import com.verdant.salon_ecomm.dtos.appointment.events.*;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.models.entities.Appointment;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
-import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
+import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.retry.annotation.Backoff;
@@ -20,6 +19,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -27,12 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AppointmentNotificationListener {
 
-    private static final List<AccountRole> STAFF_ROLES = List.of(
-        AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
-    );
-
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final StaffNotifier staffNotifier;
 
     @Async
     @Retryable(
@@ -158,8 +154,8 @@ public class AppointmentNotificationListener {
         Appointment appointment = event.appointment();
         String fullSummary = event.changeSummary();
 
-        // 1. Create a safe summary for the customer
-        String safeSummary = buildCustomerSafeSummary(fullSummary);
+        // 1. Create a safe summary for the customer (M-34: built from the structured change list)
+        String safeSummary = buildCustomerSafeSummary(event.changes());
 
         // 2. Build the customer message (use a generic fallback if all changes were internal)
         String customerMessage = safeSummary.isEmpty()
@@ -276,42 +272,30 @@ public class AppointmentNotificationListener {
         notifyStaffBulk(type, title, message, appointment.getId(), actorId, actorName);
     }
 
+    // M-38: delegates to StaffNotifier (active staff only, one transaction, per-recipient fallback).
     private void notifyStaffBulk(
         NotificationType type, String title, String message,
         UUID referenceAppointmentId, UUID actorId, String actorName
     ) {
-        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
-        for (User staffMember : staff) {
-            try{
-                notificationService.create(new NotificationCreateDto(
-                    staffMember.getId(),
-                    type,
-                    title,
-                    message,
-                    ReferenceType.APPOINTMENT,
-                    referenceAppointmentId,
-                    NotificationPriority.INFO,
-                    actorId,
-                    actorName
-                ));
-            } catch (Exception e) {
-                log.error("Failed to notify staff member {}: {}", staffMember.getId(), e.getMessage(), e);
-            }
-        }
+        staffNotifier.notify(ReferenceType.APPOINTMENT, referenceAppointmentId, type, title, message, actorId, actorName);
     }
-    
-    private String buildCustomerSafeSummary(String fullSummary) {
-        if (fullSummary == null || fullSummary.isBlank()) {
+
+    // M-34: fields a customer may see in "your appointment was updated: ...". An allow-list, so a field added
+    // later (or an internal one like notes or customer) stays hidden until someone decides it is safe.
+    private static final Set<String> CUSTOMER_VISIBLE_FIELDS = Set.of(
+        "service", "stylist", "scheduledAt", "guests", "serviceType", "branch", "homeAddress"
+    );
+
+    // M-34: was built by splitting the joined summary on ";" and dropping parts that START with "notes".
+    // A note that itself contained ";" (e.g. "VIP; client owes $50") split into extra parts, and the text
+    // after the semicolon was sent to the customer. Filtering the structured list by field name can't leak it.
+    private String buildCustomerSafeSummary(List<AppointmentUpdatedEvent.FieldChange> changes) {
+        if (changes == null || changes.isEmpty()) {
             return "";
         }
-
-        // Split by semicolon, trim whitespace, and filter out sensitive fields
-        return java.util.Arrays.stream(fullSummary.split(";"))
-            .map(String::trim)
-            .filter(change -> {
-                String lowerChange = change.toLowerCase();
-                return !lowerChange.startsWith("customer") && !lowerChange.startsWith("notes");
-            })
+        return changes.stream()
+            .filter(change -> CUSTOMER_VISIBLE_FIELDS.contains(change.field()))
+            .map(AppointmentUpdatedEvent.FieldChange::toString)
             .collect(java.util.stream.Collectors.joining(", "));
     }
 

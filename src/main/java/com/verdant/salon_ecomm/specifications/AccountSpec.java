@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.specifications;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
+import com.verdant.salon_ecomm.utils.EmailNormalizer;
 import org.springframework.data.jpa.domain.Specification;
 
 public class AccountSpec {
@@ -42,6 +43,8 @@ public class AccountSpec {
             // Never match; keeps callers of `exists(...)` correct for empty input.
             return (root, query, cb) -> cb.disjunction();
         }
-        return (root, query, cb) -> cb.equal(cb.lower(root.get("email")), email.toLowerCase());
+        // M-36: same normalization as UserRepository (trim + lower-case, Locale.ROOT).
+        String normalized = EmailNormalizer.normalize(email);
+        return (root, query, cb) -> cb.equal(cb.lower(root.get("email")), normalized);
     }
 }

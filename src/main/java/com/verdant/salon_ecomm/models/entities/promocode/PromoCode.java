@@ -22,6 +22,11 @@ public class PromoCode {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // M-15: optimistic lock (column added in V9). Two admins editing the same code (or one editing while
+    // another changes its status) get a 409 on the second save instead of losing the first edit.
+    @Version
+    private Long version;
+
     @Column(nullable = false, unique = true, length = 30)
     private String code;
 

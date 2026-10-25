@@ -1,0 +1,15 @@
+# M-41: weekly dependency update PRs for the Maven build, plus security updates for known CVEs.
+# Major Spring Boot and stripe-java bumps are ignored here because each needs its own migration
+# (Spring Boot 4, a new pinned Stripe API version); patch and minor updates still come through.
+version: 2
+updates:
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "org.springframework.boot:spring-boot-starter-parent"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.stripe:stripe-java"
+        update-types: ["version-update:semver-major"]

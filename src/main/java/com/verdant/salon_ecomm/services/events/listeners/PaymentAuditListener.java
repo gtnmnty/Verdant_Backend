@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services.events.listeners;
 
+import com.verdant.salon_ecomm.dtos.payment.OrderPaymentDisputedEvent;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
@@ -28,7 +29,7 @@ public class PaymentAuditListener {
             action = switch (event.newStatus()) {
                 case PAID -> AuditActionType.PAYMENT_SUCCEEDED;
                 case FAILED -> AuditActionType.PAYMENT_FAILED;
-                case REFUNDED -> AuditActionType.PAYMENT_REFUNDED;
+                case REFUNDED, PARTIALLY_REFUNDED -> AuditActionType.PAYMENT_REFUNDED;
                 default -> AuditActionType.UPDATED;
             };
         }
@@ -43,5 +44,21 @@ public class PaymentAuditListener {
         } else {
             auditLogService.record(AuditEntityType.ORDER, event.orderId(), action, title, detail, null);
         }
+    }
+
+    // M-13: a chargeback opened on an order. The payment status is unchanged (the dispute may be won),
+    // so without this entry nobody in the admin would know. SECURITY so it stands out in the audit log.
+    // Staff respond with evidence in the Stripe Dashboard; a lost dispute later marks the order REFUNDED.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async
+    public void onOrderPaymentDisputed(OrderPaymentDisputedEvent event) {
+        String amount = event.amount() != null ? event.amount().toPlainString() : "unknown amount";
+        auditLogService.record(
+            AuditEntityType.ORDER, event.orderId(), AuditActionType.SECURITY,
+            "Payment disputed (chargeback) on " + event.orderCode(),
+            "Stripe dispute opened for " + amount + " (status " + event.disputeStatus()
+                + "). Respond in the Stripe Dashboard before the deadline.",
+            null
+        );
     }
 }

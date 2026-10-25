@@ -43,15 +43,17 @@ public class UserAuditListener {
         );
     }
 
+    // M-35: now actually fires (the event is published inside the deletion's transaction). Identified by
+    // account id only; the name was already "Deleted User" by the time this ran, and is erased anyway (M-39).
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onUserDeleted(UserDeletedEvent event) {
         auditLogService.recordSelfService(
             AuditEntityType.ACCOUNT,
-            event.user().getId(),
+            event.userId(),
             AuditActionType.DELETED,
             "Account deleted",
-            event.user().getFullName() + " deleted their own account",
-            event.user()
+            "Account " + event.userId() + " was deleted by its owner; personal data was anonymized",
+            event.userId()
         );
     }
 }

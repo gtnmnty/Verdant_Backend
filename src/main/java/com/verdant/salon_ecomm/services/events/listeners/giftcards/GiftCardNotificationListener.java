@@ -3,30 +3,26 @@ package com.verdant.salon_ecomm.services.events.listeners.giftcards;
 import com.verdant.salon_ecomm.dtos.giftcards.events.*;
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.models.entities.giftcards.GiftCard;
-import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
+import com.verdant.salon_ecomm.utils.PiiMasking;
+import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.List;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class GiftCardNotificationListener {
 
-    private static final List<AccountRole> STAFF_ROLES = List.of(
-        AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
-    );
-
     private final NotificationService notificationService;
+    private final StaffNotifier staffNotifier;
     private final UserRepository userRepository;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -65,9 +61,10 @@ public class GiftCardNotificationListener {
             ))
         );
 
+        // M-22: recipient email masked. This goes to every staff member, receptionists included.
         notifyStaff(card, NotificationType.GIFT_CARD_ISSUED, "Gift card issued manually",
             card.maskedCode() + " issued by " + event.actor().getFullName()
-                + " to " + (card.getRecipientEmail() != null ? card.getRecipientEmail() : "no recipient email"),
+                + " to " + (card.getRecipientEmail() != null ? PiiMasking.maskEmail(card.getRecipientEmail()) : "no recipient email"),
             event.actor().getId(), event.actor().getFullName());
     }
 
@@ -127,16 +124,12 @@ public class GiftCardNotificationListener {
             message + " (user: " + event.owner().getFullName() + ")", null, null);
     }
 
+    // M-38: delegates to StaffNotifier. This copy had no per-recipient try/catch, so one failed row stopped
+    // every staff member after it from being notified.
     private void notifyStaff(
         GiftCard card, NotificationType type, String title, String message,
         UUID actorId, String actorName
     ) {
-        for (User staffMember : userRepository.findByRoleIn(STAFF_ROLES)) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(), type, title, message,
-                ReferenceType.GIFT_CARD, card.getId(),
-                NotificationPriority.INFO, actorId, actorName
-            ));
-        }
+        staffNotifier.notify(ReferenceType.GIFT_CARD, card.getId(), type, title, message, actorId, actorName);
     }
 }

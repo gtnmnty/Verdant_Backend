@@ -2,38 +2,30 @@ package com.verdant.salon_ecomm.services.events.listeners.order;
 
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.models.entities.Order;
-import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
-import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationPriority;
 import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
-import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.services.NotificationService;
+import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.List;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class OrderNotificationListener {
 
-    // Every non-customer role that should hear about new/changed orders,
-    // matching the "receptionist, admin, manager, owner" notification spec.
-    private static final List<AccountRole> STAFF_ROLES = List.of(
-        AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
-    );
-
+    // Staff recipients (receptionist, admin, manager, owner) come from StaffNotifier.STAFF_ROLES (M-38).
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final StaffNotifier staffNotifier;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPlaced(OrderPlacedEvent event) {
@@ -79,12 +71,12 @@ public class OrderNotificationListener {
                 case PENDING -> NotificationType.ORDER_PAYMENT_PENDING;
                 case REQUIRES_ACTION -> NotificationType.ORDER_PAYMENT_ACTION_REQUIRED;
                 case PROCESSED -> NotificationType.ORDER_PAYMENT_PROCESSING;
-                case REFUNDED -> NotificationType.ORDER_REFUNDED;
+                case REFUNDED, PARTIALLY_REFUNDED -> NotificationType.ORDER_REFUNDED; // M-14
                 case CANCELLED -> NotificationType.ORDER_PAYMENT_CANCELLED;
             };
 
             NotificationPriority priority = switch (status) {
-                case FAILED, REFUNDED, CANCELLED -> NotificationPriority.CRITICAL;
+                case FAILED, REFUNDED, PARTIALLY_REFUNDED, CANCELLED -> NotificationPriority.CRITICAL;
                 case PAID -> NotificationPriority.INFO;
                 case PENDING, REQUIRES_ACTION, PROCESSED -> NotificationPriority.WARNING;
             };
@@ -150,23 +142,11 @@ public class OrderNotificationListener {
 
     // ── Helpers ──────────────────────────────────────────
 
+    // M-38: delegates to StaffNotifier. This copy had no per-recipient try/catch and notified suspended staff.
     private void notifyStaff(
         Order order, NotificationType type, String title, String message,
         UUID actorId, String actorName
     ) {
-        List<User> staff = userRepository.findByRoleIn(STAFF_ROLES);
-        for (User staffMember : staff) {
-            notificationService.create(new NotificationCreateDto(
-                staffMember.getId(),
-                type,
-                title,
-                message,
-                ReferenceType.ORDER,
-                order.getId(),
-                NotificationPriority.INFO,
-                actorId,
-                actorName
-            ));
-        }
+        staffNotifier.notify(ReferenceType.ORDER, order.getId(), type, title, message, actorId, actorName);
     }
 }

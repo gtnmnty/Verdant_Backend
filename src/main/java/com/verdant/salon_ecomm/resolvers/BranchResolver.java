@@ -53,20 +53,22 @@ public class BranchResolver {
 
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public AdminBranchDto createBranch(@Argument("input") CreateBranchInput input) {
-        return branchService.createBranch(input);
+    // M-29: the caller is passed on as the actor of the audit entry and the staff notification.
+    public AdminBranchDto createBranch(@Argument("input") CreateBranchInput input, @AuthenticationPrincipal User principal) {
+        return branchService.createBranch(input, principal.getId());
     }
 
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public AdminBranchDto updateBranch(@Argument("input") UpdateBranchInput input) {
-        return branchService.updateBranch(input);
+    public AdminBranchDto updateBranch(@Argument("input") UpdateBranchInput input, @AuthenticationPrincipal User principal) {
+        return branchService.updateBranch(input, principal.getId());
     }
 
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
     @MutationMapping
-    public AdminBranchDto deleteBranch(@Argument UUID id) {
-        return branchService.deleteBranch(id);
+    // M-30: same checks as deleteBranches (see BranchService.deleteBranch).
+    public AdminBranchDto deleteBranch(@Argument UUID id, @AuthenticationPrincipal User principal) {
+        return branchService.deleteBranch(id, principal.getId());
     }
 
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")

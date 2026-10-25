@@ -1,6 +1,10 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.product.*;
+import com.verdant.salon_ecomm.dtos.product.events.ProductCreatedEvent;
+import com.verdant.salon_ecomm.dtos.product.events.ProductDeletedEvent;
+import com.verdant.salon_ecomm.dtos.product.events.ProductUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.ProductMapper;
@@ -18,7 +22,6 @@ import com.verdant.salon_ecomm.specifications.ProductSpec;
 import com.verdant.salon_ecomm.utils.CloudinaryCleanup;
 import com.verdant.salon_ecomm.utils.EnumUtils;
 import com.verdant.salon_ecomm.utils.PageRequests;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -71,10 +74,10 @@ public class ProductService {
 
     public Product getProductDetail(UUID id) {
         Product product = productRepository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (product.getStatus() != CollectionStatus.ACTIVE) {
-            throw new EntityNotFoundException("Product not found");
+            throw new ResourceNotFoundException("Product not found");
         }
 
         return product;
@@ -119,8 +122,11 @@ public class ProductService {
     }
 
     // ------ Mutations -----
+    // M-29: create, update and delete now publish ProductCreated/Updated/DeletedEvent with the actor from the
+    // resolver. The listeners (ProductAuditListener, ProductNotificationListener) existed, but nothing ever
+    // published these events, so the product audit trail was empty and stock alerts never fired.
     @Transactional
-    public AdminProductDto createProduct(CreateProductInput input) {
+    public AdminProductDto createProduct(CreateProductInput input, UUID actorId) {
         Product product = Product.builder()
             .name(input.name())
             .itemCatalog(EnumUtils.parseEnum(ItemCatalog.class, input.category(), "category"))
@@ -140,13 +146,24 @@ public class ProductService {
             .build();
 
         Product saved = productRepository.save(product);
+        eventPublisher.publishEvent(new ProductCreatedEvent(saved, resolveActor(actorId)));
         return productMapper.toAdminDTO(saved, imagesOf(saved));
     }
 
+    // M-15 flow: load (with its @Version) -> apply only the fields sent -> save. Product is @DynamicUpdate,
+    // so the UPDATE names only the changed columns: an edit that doesn't touch stock can't write back a
+    // stale stock_quantity. If a sale or restock (decrementStock / incrementStock, which bump the version)
+    // committed after the load, the UPDATE matches 0 rows and the admin gets a 409 "reload and try again".
+    // The admin form sends stockQuantity only when the admin changed it, so an unrelated edit made from a
+    // page opened minutes ago doesn't reset the stock to what the page showed.
+    // M-29: the stock and status before the change go into ProductUpdatedEvent, so the audit entry can say
+    // "12 -> 3" and the notification listener can tell when stock crossed the low / out-of-stock line.
     @Transactional
-    public AdminProductDto updateProduct(UpdateProductInput input) {
+    public AdminProductDto updateProduct(UpdateProductInput input, UUID actorId) {
         Product product = productRepository.findById(UUID.fromString(input.id()))
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+        int previousStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        CollectionStatus previousStatus = product.getStatus();
 
         if (input.name() != null) product.setName(input.name());
         if (input.category() != null)
@@ -164,11 +181,17 @@ public class ProductService {
         if (input.status() != null) product.setStatus(input.status());
 
         Product saved = productRepository.save(product);
+        int newStock = saved.getStockQuantity() != null ? saved.getStockQuantity() : 0;
+        eventPublisher.publishEvent(new ProductUpdatedEvent(
+            saved, resolveActor(actorId),
+            newStock != previousStock, previousStock,
+            saved.getStatus() != previousStatus, previousStatus
+        ));
         return productMapper.toAdminDTO(saved, imagesOf(saved));
     }
 
     @Transactional
-    public boolean deleteProduct(UUID id) {
+    public boolean deleteProduct(UUID id, UUID actorId) {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
@@ -184,13 +207,19 @@ public class ProductService {
         // product but lost its images for good.
         // Tradeoff: a crash right after commit leaves orphaned files in Cloudinary instead of broken images.
         CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
+        eventPublisher.publishEvent(new ProductDeletedEvent(product, resolveActor(actorId))); // M-29
         return true;
     }
 
+    // M-24: returns AdminProductDto, the type the schema promises for deleteProducts. It used to return
+    // the entities, whose property names differ from the DTO (itemCatalog vs category), so non-null
+    // fields resolved to null and the mutation reported an error although the delete had committed.
+    // The DTOs are built before the delete, from the rows and images loaded here, the same way
+    // StylistsService.deleteStylists does it.
     @Transactional
-    public List<Product> deleteProducts(List<UUID> ids, UUID actorId) {
+    public List<AdminProductDto> deleteProducts(List<UUID> ids, UUID actorId) {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("No product ids were provided.");
+            throw BusinessRuleException.invalid("No product ids were provided.");
         }
 
         List<Product> products = productRepository.findAllById(ids);
@@ -200,17 +229,22 @@ public class ProductService {
             .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.PRODUCT, productIds);
         List<String> publicIds = images.stream().map(MediaImage::getPublicId).toList();
 
+        Map<UUID, List<MediaImage>> imagesByProduct = images.stream()
+            .collect(Collectors.groupingBy(MediaImage::getEntityId));
+        List<AdminProductDto> deleted = products.stream()
+            .map(product -> productMapper.toAdminDTO(product, imagesByProduct.getOrDefault(product.getId(), List.of())))
+            .toList();
+
         mediaImageRepository.deleteByEntityTypeAndEntityIdIn(ItemType.PRODUCT, productIds);
         productRepository.deleteAll(products);
 
         if (!products.isEmpty()) {
-            User actor = actorId != null ? userRepository.findById(actorId).orElse(null) : null;
-            eventPublisher.publishEvent(new ProductsBulkDeletedEvent(products, actor));
+            eventPublisher.publishEvent(new ProductsBulkDeletedEvent(products, resolveActor(actorId)));
         }
 
         CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
 
-        return products;
+        return deleted;
     }
 
     public AdminProductDto getAdminProduct(UUID id) {
@@ -218,6 +252,10 @@ public class ProductService {
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         return productMapper.toAdminDTO(product, imagesOf(product));
+    }
+
+    private User resolveActor(UUID actorId) {
+        return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }
 
     private Sort toSort(CollectionSort sort) {

@@ -4,7 +4,6 @@ import com.verdant.salon_ecomm.dtos.newsletter.admin.AdminNewsletterCampaignDto;
 import com.verdant.salon_ecomm.dtos.newsletter.admin.AdminNewsletterCampaignPage;
 import com.verdant.salon_ecomm.dtos.newsletter.CreateNewsletterCampaignInput;
 import com.verdant.salon_ecomm.dtos.newsletter.UpdateNewsletterCampaignInput;
-import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.services.newsletter.NewsletterCampaignService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;

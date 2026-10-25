@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.giftcards.GiftCardBalanceApplicationResult;
 import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
@@ -11,11 +12,13 @@ import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
+import com.verdant.salon_ecomm.dtos.product.events.ProductStockChangedEvent;
 import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.exceptions.UnpaidOrderLimitException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.entities.*;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
@@ -27,7 +30,6 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
 import com.verdant.salon_ecomm.utils.PageRequests;
 import jakarta.validation.Valid;
-import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -153,19 +155,19 @@ public class OrderService {
     @Transactional
     public AdminOrderDto createAdminOrder(@Valid AdminCreateOrderInput input, User actor) {
         if (input.fullName() == null || input.fullName().isBlank()) {
-            throw new IllegalArgumentException("Customer full name is required for admin order creation");
+            throw BusinessRuleException.invalid("Customer full name is required for admin order creation");
         }
         if (input.phone() == null || input.phone().isBlank()) {
-            throw new IllegalArgumentException("Customer phone number is required for admin order creation");
+            throw BusinessRuleException.invalid("Customer phone number is required for admin order creation");
         }
         if (input.fullName().trim().length() > 100) {
-            throw new IllegalArgumentException("Customer full name must be at most 100 characters");
+            throw BusinessRuleException.invalid("Customer full name must be at most 100 characters");
         }
         if (input.phone().trim().length() > 20) {
-            throw new IllegalArgumentException("Customer phone number must be at most 20 characters");
+            throw BusinessRuleException.invalid("Customer phone number must be at most 20 characters");
         }
         if (input.items() == null || input.items().isEmpty()) {
-            throw new IllegalArgumentException("At least one item is required");
+            throw BusinessRuleException.invalid("At least one item is required");
         }
 
         // The name/phone typed here belong to this order only; the customer's saved profile is left alone.
@@ -179,7 +181,8 @@ public class OrderService {
 
         BigDecimal promoDiscount = BigDecimal.ZERO;
         if (input.promoCode() != null && !input.promoCode().isBlank()) {
-            promoDiscount = promoCodeService.validate(user.getId(), input.promoCode(), subtotal).discountAmount();
+            // M-11: locks the promo row until this order commits (per-customer limit can't be raced).
+            promoDiscount = promoCodeService.validateForOrder(user.getId(), input.promoCode(), subtotal).discountAmount();
         }
 
         List<DeliveryOption> deliveryOptions = pendingItems.stream().map(OrderItem::getDeliveryOption).toList();
@@ -217,13 +220,13 @@ public class OrderService {
         }
         if (input.fullName() != null && !input.fullName().isBlank()) {
             if (input.fullName().trim().length() > 100) {
-                throw new IllegalArgumentException("Customer full name must be at most 100 characters");
+                throw BusinessRuleException.invalid("Customer full name must be at most 100 characters");
             }
             order.setContactName(input.fullName().trim());
         }
         if (input.phone() != null && !input.phone().isBlank()) {
             if (input.phone().trim().length() > 20) {
-                throw new IllegalArgumentException("Customer phone number must be at most 20 characters");
+                throw BusinessRuleException.invalid("Customer phone number must be at most 20 characters");
             }
             order.setContactPhone(input.phone().trim());
         }
@@ -252,7 +255,10 @@ public class OrderService {
         }
         // Editing quantities of a cancelled order would move stock for goods that are not reserved.
         if (targetOrderStatus == OrderStatus.CANCELLED && input.items() != null) {
-            throw new IllegalArgumentException("Items of a cancelled order can't be edited. Re-open the order first.");
+            throw BusinessRuleException.invalid("Items of a cancelled order can't be edited. Re-open the order first.");
+        }
+        if (input.items() != null) {
+            requireItemsEditable(order, previousPaymentStatus);
         }
 
         List<OrderItem> items;
@@ -267,7 +273,8 @@ public class OrderService {
                 .collect(Collectors.toSet());
 
             if (!duplicateProductIds.isEmpty()) {
-                throw new ValidationException("Duplicate product IDs in order items: " + duplicateProductIds);
+                // M-9: was jakarta ValidationException, which no handler mapped (500 "Something went wrong").
+                throw BusinessRuleException.invalid("Each product can appear only once in an order. Merge the duplicate lines.");
             }
 
             List<OrderItem> existingItems = orderItemRepository.findByOrder_Id(id);
@@ -312,6 +319,7 @@ public class OrderService {
                         .orElseThrow(() -> new ResourceNotFoundException(
                             "Product not found: " + itemInput.productId())
                         );
+                    requireOrderable(product); // M-19: new lines only; existing lines keep their product
                     reserveStock(product.getId(), itemInput.quantity());
                     String productImage = resolveImageUrl(primaryImages, product.getId());
                     OrderItem newItem = orderMapper.toItemEntity(
@@ -338,9 +346,28 @@ public class OrderService {
                 .toList();
             BigDecimal updatedDeliveryFee = shippingService.calculateDeliveryFee(updatedDeliveryOptions);
 
+            // M-16: the promo discount was fixed when the order was placed. Removing items could leave it
+            // larger than the new subtotal and the total negative, so it is capped at the subtotal (and the
+            // stored amount lowered to match, so subtotal - discount + delivery still adds up).
+            // The promo itself is not re-validated (e.g. its minimum order amount): its redemption was
+            // recorded at checkout, and staff are allowed to adjust the order on the customer's behalf.
+            BigDecimal discount = order.getPromoDiscountAmount() != null ? order.getPromoDiscountAmount() : BigDecimal.ZERO;
+            BigDecimal cappedDiscount = discount.min(subtotal);
+            BigDecimal updatedTotal = subtotal.subtract(cappedDiscount).add(updatedDeliveryFee);
+
+            // M-16: gift card money already drawn for this order can't exceed what the order now costs;
+            // the surplus would be lost from the customer's wallet. Staff cancel and re-create instead.
+            BigDecimal walletApplied = order.getWalletAmountApplied() != null ? order.getWalletAmountApplied() : BigDecimal.ZERO;
+            if (walletApplied.compareTo(updatedTotal) > 0) {
+                throw BusinessRuleException.invalid("The gift card balance already applied to this order ("
+                    + walletApplied + ") is more than the new total (" + updatedTotal
+                    + "). Cancel the order and create a new one instead.");
+            }
+
             order.setSubtotal(subtotal);
             order.setDeliveryFee(updatedDeliveryFee);
-            order.setTotal(subtotal.subtract(order.getPromoDiscountAmount()).add(updatedDeliveryFee));
+            order.setPromoDiscountAmount(cappedDiscount);
+            order.setTotal(updatedTotal);
             items = orderItemRepository.saveAll(reconciledItems);
         }
         else { items = orderItemRepository.findByOrder_Id(id); }
@@ -394,7 +421,8 @@ public class OrderService {
 
         BigDecimal promoDiscount = BigDecimal.ZERO;
         if (input.promoCode() != null && !input.promoCode().isBlank()) {
-            promoDiscount = promoCodeService.validate(userId, input.promoCode(), subtotal).discountAmount();
+            // M-11: locks the promo row until this order commits (per-customer limit can't be raced).
+            promoDiscount = promoCodeService.validateForOrder(userId, input.promoCode(), subtotal).discountAmount();
         }
 
         List<DeliveryOption> deliveryOptions = pendingItems.stream().map(OrderItem::getDeliveryOption).toList();
@@ -413,6 +441,10 @@ public class OrderService {
             promoCodeService.recordRedemption(userId, input.promoCode(), promoDiscount, savedOrder);
         }
 
+        // M-21 flow: useWalletBalance (schema default false) -> lock the customer's spendable cards ->
+        // draw soonest-expiring first, up to the order total -> record walletAmountApplied; if the wallet
+        // covered everything the order is PAID now, otherwise Stripe is charged total - walletAmountApplied.
+        // This never ran before: the schema input had no useWalletBalance field, so the value was always null.
         if (Boolean.TRUE.equals(input.useWalletBalance())) {
             GiftCardBalanceApplicationResult result =
                 giftCardService.applyBalanceToOrder(userId, savedOrder.getTotal(), savedOrder);
@@ -433,7 +465,7 @@ public class OrderService {
     @Transactional
     public List<Order> adminDeleteOrders(List<UUID> orderIds, User actor) {
         if (orderIds == null || orderIds.isEmpty()) {
-            throw new IllegalArgumentException("No order ids were provided.");
+            throw BusinessRuleException.invalid("No order ids were provided.");
         }
 
         List<Order> orders = orderRepository.findAllById(orderIds);
@@ -566,6 +598,7 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                     "Product not found: " + itemInput.productId())
                 );
+            requireOrderable(product); // M-19
 
             reserveStock(product.getId(), itemInput.quantity());
 
@@ -598,7 +631,16 @@ public class OrderService {
             return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found for email: " + email));
         }
-        throw new IllegalArgumentException("userId or email is required to identify an existing customer");
+        throw BusinessRuleException.invalid("userId or email is required to identify an existing customer");
+    }
+
+    // M-19: the catalog hides INACTIVE products, but checkout and the admin order forms looked them up by id
+    // with findById only, so an unpublished product could still be bought by anyone who knew its id.
+    // Checked before reserveStock, so nothing is reserved for a product that can't be sold.
+    private void requireOrderable(Product product) {
+        if (product.getStatus() != CollectionStatus.ACTIVE) {
+            throw BusinessRuleException.invalid("\"" + product.getName() + "\" is no longer available.");
+        }
     }
 
     private void reserveStock(UUID productId, int quantity) {
@@ -608,12 +650,27 @@ public class OrderService {
                 "Not enough stock for product " + productId + " (requested " + quantity + ")"
             );
         }
+        publishStockChange(productId, quantity); // M-29
     }
 
     private void restoreStock(UUID productId, int quantity) {
         if (quantity > 0) {
             productRepository.incrementStock(productId, quantity);
+            publishStockChange(productId, -quantity); // M-29
         }
+    }
+
+    // M-29 flow: atomic stock UPDATE -> read the new stock back (same transaction, so it includes the update)
+    // -> previous = new + quantity taken -> ProductStockChangedEvent -> after commit,
+    // ProductNotificationListener alerts staff if the stock crossed the low / out-of-stock line.
+    // Sales used to move stock only through these atomic queries, which published nothing, so the stock
+    // alerts never fired. A rolled-back order publishes nothing (the listener runs AFTER_COMMIT).
+    private void publishStockChange(UUID productId, int quantityTaken) {
+        productRepository.findStockLevel(productId).ifPresent(level -> {
+            int newStock = level.stockQuantity() != null ? level.stockQuantity() : 0;
+            eventPublisher.publishEvent(new ProductStockChangedEvent(
+                level.id(), level.name(), newStock + quantityTaken, newStock, level.lowStockThreshold(), null));
+        });
     }
 
     // An order that was never paid and never left the shop still holds the stock reserved at checkout
@@ -665,6 +722,30 @@ public class OrderService {
         order.setStockReleased(false);
     }
 
+    // M-16: payment states in which money was (or is being) collected or returned for the current total.
+    // Changing the items there would make the order disagree with what the customer paid, with no refund or
+    // extra charge behind it.
+    private static final Set<PaymentStatus> ITEM_EDIT_LOCKED_PAYMENT_STATUSES = EnumSet.of(
+        PaymentStatus.PROCESSED, PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED);
+
+    // M-16: called before any item or stock is touched. Checks both the status the order had and the one
+    // this same request sets, so "mark PAID and change items" in one call is refused too.
+    // An existing Stripe intent also blocks: its amount was fixed when it was created, and createPaymentIntent
+    // hands the same intent back, so the customer would pay the old total. Updating the intent amount at
+    // Stripe would mean a network call inside this transaction (see M-26), so staff cancel and re-create.
+    private void requireItemsEditable(Order order, PaymentStatus previousPaymentStatus) {
+        if (ITEM_EDIT_LOCKED_PAYMENT_STATUSES.contains(previousPaymentStatus)
+            || ITEM_EDIT_LOCKED_PAYMENT_STATUSES.contains(order.getPaymentStatus())) {
+            throw BusinessRuleException.conflict(
+                "Items can't be changed after payment. Refund the order in Stripe and create a new one instead.");
+        }
+        if (order.getStripePaymentIntentId() != null) {
+            throw BusinessRuleException.conflict(
+                "The customer has already started paying for this order, so its items can't be changed. "
+                    + "Cancel it and create a new order instead.");
+        }
+    }
+
     private boolean isNotShipped(OrderStatus status) {
         return status == null || status == OrderStatus.PLACED || status == OrderStatus.PROCESSING;
     }
@@ -682,6 +763,8 @@ public class OrderService {
         Product product = cartItem.getProduct();
         int quantity = cartItem.getQuantity();
 
+        // M-19: the item may have been unpublished after it went into the cart.
+        requireOrderable(product);
         reserveStock(product.getId(), quantity);
 
         String productImage = resolveImageUrl(primaryImages, product.getId());

@@ -2,9 +2,12 @@ package com.verdant.salon_ecomm.controllers;
 
 import com.verdant.salon_ecomm.dtos.user.*;
 import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.security.RefreshTokenCookies;
+import com.verdant.salon_ecomm.services.RefreshTokenService;
 import com.verdant.salon_ecomm.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +20,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserRESTController {
 
     private final UserService userService;
+    private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenCookies refreshTokenCookies;
 
     @PutMapping("/update-profile")
     @PreAuthorize("isAuthenticated()")
@@ -44,8 +49,14 @@ public class UserRESTController {
         @AuthenticationPrincipal User principal,
         @Valid @RequestBody ChangePasswordRequest request
     ){
+        // M-2 flow: updateUserPassword() changes the hash and deletes ALL refresh tokens (commits),
+        // then this device gets a new refresh cookie. Every other session dies at its next refresh;
+        // the user who changed the password is not bounced to the login page.
         userService.updateUserPassword(principal.getId(), request);
-        return ResponseEntity.noContent().build();
+        String refreshToken = refreshTokenService.createRefreshToken(principal.getEmail());
+        return ResponseEntity.noContent()
+            .header(HttpHeaders.SET_COOKIE, refreshTokenCookies.issue(refreshToken).toString())
+            .build();
     }
 
     @DeleteMapping

@@ -5,6 +5,7 @@ import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -20,11 +21,22 @@ import java.util.UUID;
 @Builder
 @Entity
 @Table(name = "products")
+// M-15: UPDATE only the columns that actually changed. Without it, saving a product edit wrote back every
+// column it had loaded, including stock_quantity, review_count and average_rating, so a sale
+// (decrementStock) or a review recount committed in between was silently undone.
+@DynamicUpdate
 public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    // M-15: optimistic lock (column added in V9). Hibernate adds "AND version = ?" to every entity UPDATE
+    // and bumps it; the atomic stock queries in ProductRepository bump it too. So an admin edit that loaded
+    // the row before a sale committed fails with a 409 (reload and retry) instead of overwriting the stock.
+    // Null only on a new, unsaved product (Spring Data treats that as "new" and inserts it).
+    @Version
+    private Long version;
 
     @Column(nullable = false, length = 200)
     private String name;

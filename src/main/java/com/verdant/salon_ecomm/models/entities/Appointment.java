@@ -32,6 +32,12 @@ public class Appointment {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // M-15: optimistic lock (column added in V9). Two staff members (or a customer and staff) acting on the
+    // same appointment at once, e.g. approve and cancel, no longer overwrite each other silently: the
+    // second save fails with a 409 and the user reloads.
+    @Version
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

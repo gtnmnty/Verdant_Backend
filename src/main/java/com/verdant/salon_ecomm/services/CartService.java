@@ -1,8 +1,10 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.entities.CartItem;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.exceptions.CartItemNotFoundException;
 import com.verdant.salon_ecomm.exceptions.InvalidQuantityException;
 import com.verdant.salon_ecomm.dtos.cart.CartDto;
@@ -10,10 +12,12 @@ import com.verdant.salon_ecomm.dtos.cart.CartInputs.AddToCartInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.UpdateDeliveryOptionInput;
 import com.verdant.salon_ecomm.dtos.cart.CartInputs.UpdateQuantityInput;
 import com.verdant.salon_ecomm.mappers.CartMapper;
+import com.verdant.salon_ecomm.models.entities.Favorite;
+import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.CartItemRepository;
+import com.verdant.salon_ecomm.repositories.FavoriteRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.specifications.CartItemSpec;
-import jakarta.persistence.EntityNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,15 +35,35 @@ public class CartService {
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
     private final CartMapper cartMapper;
+    private final FavoriteRepository favoriteRepository;
 
     public CartDto getCart(UUID userId) {
         List<CartItem> items = cartItemRepository.findByUser_IdOrderByAddedAtDesc(userId);
-        return cartMapper.toCartDto(items, userId);
+        return cartMapper.toCartDto(items, favoritedProductIds(items, userId));
     }
 
     public CartDto getSelectedCart(UUID userId, List<UUID> cartItemIds) {
         List<CartItem> items = fetchOwnedOrThrow(userId, cartItemIds);
-        return cartMapper.toCartDto(items, userId);
+        return cartMapper.toCartDto(items, favoritedProductIds(items, userId));
+    }
+
+    // L-17: the favorites lookup used to run inside CartMapper, so a mapper was talking to the database.
+    // It lives in the service now, and the mapper only maps. One query per cart (not per item).
+    private Set<UUID> favoritedProductIds(List<CartItem> items, UUID userId) {
+        if (userId == null) return Set.of();
+
+        List<UUID> productIds = items.stream()
+            .map(CartItem::getProduct)
+            .filter(java.util.Objects::nonNull)
+            .map(Product::getId)
+            .toList();
+        if (productIds.isEmpty()) return Set.of();
+
+        return favoriteRepository
+            .findByUserIdAndTargetIdInAndTargetType(userId, productIds, ItemType.PRODUCT)
+            .stream()
+            .map(Favorite::getTargetId)
+            .collect(Collectors.toSet());
     }
 
     @Transactional
@@ -49,8 +73,12 @@ public class CartService {
             throw new InvalidQuantityException("Quantity must be at least 1.");
         }
 
+        // M-19: an INACTIVE (unpublished) product is hidden from the catalog, so it must not be addable by id
+        // either. Same "not found" answer as the product page gives, so the id's existence isn't revealed.
+        // placeOrder checks again, for products unpublished after they went into a cart.
         Product product = productRepository.findById(input.getProductId())
-            .orElseThrow(() -> new EntityNotFoundException("Product not found: " + input.getProductId()));
+            .filter(p -> p.getStatus() == CollectionStatus.ACTIVE)
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + input.getProductId()));
 
         // Merge with existing line (same product + same delivery option) instead of duplicating
         CartItem cartItem = cartItemRepository

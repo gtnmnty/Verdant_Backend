@@ -9,6 +9,7 @@ import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
+import com.verdant.salon_ecomm.utils.PiiMasking;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -59,7 +60,8 @@ public class AccountAuditListener {
             AuditEntityType.ACCOUNT,
             event.accountId(),
             AuditActionType.SECURITY,
-            "Password reset requested for " + event.email(),
+            // M-22: masked. The entry is already linked to the account by id; the full address isn't needed.
+            "Password reset requested for " + PiiMasking.maskEmail(event.email()),
             event.newAccount() ? "Set-password link issued for new account" : "Reset link issued by staff",
             event.actor()
         );

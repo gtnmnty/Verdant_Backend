@@ -3,16 +3,14 @@ package com.verdant.salon_ecomm.resolvers;
 import com.verdant.salon_ecomm.dtos.support.AddSupportTicketMessageInput;
 import com.verdant.salon_ecomm.dtos.support.CreateSupportTicketInput;
 import com.verdant.salon_ecomm.dtos.support.SupportTicketDetailDto;
-import com.verdant.salon_ecomm.dtos.support.SupportTicketSummaryDto;
+import com.verdant.salon_ecomm.dtos.support.SupportTicketPage;
 import com.verdant.salon_ecomm.dtos.support.admin.AdminAddSupportTicketMessageInput;
 import com.verdant.salon_ecomm.dtos.support.admin.AdminSupportTicketPage;
 import com.verdant.salon_ecomm.dtos.support.admin.AdminUpdateSupportTicketInput;
-import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.support.AdminSupportTicketSort;
 import com.verdant.salon_ecomm.models.enums.support.SupportTicketCategory;
 import com.verdant.salon_ecomm.models.enums.support.SupportTicketPriority;
 import com.verdant.salon_ecomm.models.enums.support.SupportTicketStatus;
-import com.verdant.salon_ecomm.services.SupportTicketService;   // NEXT STEP: not written yet
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -20,7 +18,6 @@ import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 
-import java.util.List;
 import java.util.UUID;
 import com.verdant.salon_ecomm.security.SecurityHelper;
 
@@ -35,8 +32,11 @@ public class SupportTicketResolver {
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
-    public List<SupportTicketSummaryDto> mySupportTickets(@Argument SupportTicketStatus status) {
-        return supportTicketService.getMyTickets(securityHelper.currentUserId(), status);
+    // M-42: paginated (page is 1-based; defaults page 1, 10 per page, at most 50).
+    public SupportTicketPage mySupportTickets(
+        @Argument SupportTicketStatus status, @Argument int page, @Argument int pageSize
+    ) {
+        return supportTicketService.getMyTickets(securityHelper.currentUserId(), status, page, pageSize);
     }
 
     @QueryMapping

@@ -2,9 +2,14 @@ package com.verdant.salon_ecomm.exceptions;
 
 import com.verdant.salon_ecomm.dtos.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import graphql.GraphQLError;
@@ -19,9 +24,15 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+@Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String CONCURRENT_UPDATE_MESSAGE =
+        "Someone else changed this record while you were editing it. Reload and try again.";
 
     // =========================================================================
     // GraphQL exception handlers (@GraphQlExceptionHandler)
@@ -30,10 +41,62 @@ public class GlobalExceptionHandler {
     // client, since underlying exceptions can carry internal details
     // (field paths, SQL fragments, stack info). Extensions.code stays
     // machine-readable for the frontend to branch on.
+    // Exceptions to that rule (M-9): BusinessRuleException, TooManyRequestsException and bean
+    // validation messages are written by us for the user, so their text is passed through.
+    // Anything unexpected is logged here, so a real failure leaves a trace in the logs.
     // =========================================================================
 
+    // A rule written for the user (M-9). Message shown as is; status/code come from the exception.
+    @GraphQlExceptionHandler
+    public GraphQLError handleBusinessRule(BusinessRuleException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", ex.getCode(), "status", ex.getStatus().value()))
+            .build();
+    }
+
+    // M-5: rate limit hit (PublicFormRateLimiter, GiftCardRedeemLimiter).
+    @GraphQlExceptionHandler
+    public GraphQLError handleTooManyRequests(TooManyRequestsException ex, DataFetchingEnvironment env) {
+        return GraphqlErrorBuilder.newError(env)
+            .message(ex.getMessage())
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "TOO_MANY_REQUESTS", "status", 429))
+            .build();
+    }
+
+    // A DB constraint (unique, foreign key, not-null) rejected the write. The driver message names
+    // tables and columns, so it is logged, not returned.
+    @GraphQlExceptionHandler
+    public GraphQLError handleDataIntegrity(DataIntegrityViolationException ex, DataFetchingEnvironment env) {
+        log.warn("Data integrity violation in {}: {}", env.getField().getName(), ex.getMostSpecificCause().getMessage());
+        return GraphqlErrorBuilder.newError(env)
+            .message("This change conflicts with existing data.")
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "CONFLICT", "status", 409))
+            .build();
+    }
+
+    // M-15: someone else saved the same row (product, order, appointment, gift card, promo code) after this
+    // request loaded it, so its @Version no longer matched and nothing was written. Not a bug: the user
+    // reloads and repeats the change on fresh data.
+    @GraphQlExceptionHandler
+    public GraphQLError handleOptimisticLock(ObjectOptimisticLockingFailureException ex, DataFetchingEnvironment env) {
+        log.info("Concurrent update rejected in {}: {}", env.getField().getName(), ex.getMessage());
+        return GraphqlErrorBuilder.newError(env)
+            .message(CONCURRENT_UPDATE_MESSAGE)
+            .errorType(ErrorType.BAD_REQUEST)
+            .extensions(Map.of("code", "CONCURRENT_MODIFICATION", "status", 409))
+            .build();
+    }
+
+    // Our own user-facing checks throw BusinessRuleException now, so an IllegalArgumentException
+    // here usually comes from a library (UUID.fromString, Enum.valueOf). Its message stays out of the
+    // response but goes to the log, so "Invalid request." can still be traced.
     @GraphQlExceptionHandler
     public GraphQLError handleIllegalArgument(IllegalArgumentException ex, DataFetchingEnvironment env) {
+        log.warn("Invalid argument in {}: {}", env.getField().getName(), ex.getMessage());
         return GraphqlErrorBuilder.newError(env)
             .message("Invalid request.")
             .errorType(ErrorType.BAD_REQUEST)
@@ -41,10 +104,12 @@ public class GlobalExceptionHandler {
             .build();
     }
 
+    // @Valid on @Argument (M-10) lands here. Messages come from our constraint annotations, so the
+    // user sees which field is wrong ("Validation failed: price: Price can never be lower than 0").
     @GraphQlExceptionHandler
     public GraphQLError handleConstraintViolation(ConstraintViolationException ex, DataFetchingEnvironment env) {
         return GraphqlErrorBuilder.newError(env)
-            .message("Validation failed.")
+            .message(describeViolations(ex))
             .errorType(ErrorType.BAD_REQUEST)
             .extensions(Map.of("code", "VALIDATION_ERROR", "status", 400))
             .build();
@@ -188,9 +253,12 @@ public class GlobalExceptionHandler {
             .build();
     }
 
-    // Catch-all fallback: keep this last among the GraphQL handlers
+    // Catch-all fallback: keep this last among the GraphQL handlers.
+    // Logged with the stack trace (M-9): the client only sees "Something went wrong", so the log is
+    // the only place a real 500 can be investigated from.
     @GraphQlExceptionHandler
     public GraphQLError catchAllException(Exception ex, DataFetchingEnvironment env) {
+        log.error("Unhandled exception in GraphQL field {}", env.getField().getName(), ex);
         return GraphqlErrorBuilder.newError(env)
             .message("Something went wrong")
             .errorType(ErrorType.INTERNAL_ERROR)
@@ -203,6 +271,60 @@ public class GlobalExceptionHandler {
     // Ordered most-specific first; handleGeneric is the fallback.
     // Messages are static/controlled — see note above.
     // =========================================================================
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRuleRest(BusinessRuleException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getStatus())
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                ex.getStatus().value(),
+                ex.getStatus().getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
+
+    // M-5: 429 instead of the old 409, so clients can tell "slow down" from a real conflict.
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequestsRest(TooManyRequestsException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                429,
+                "Too Many Requests",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
+
+    // M-15: same as the GraphQL handler. For the Stripe webhook, a 409 means Stripe retries the event,
+    // which then runs on the fresh row (the webhook's idempotency row was rolled back with it).
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockRest(ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+        log.info("Concurrent update rejected on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                409,
+                "Conflict",
+                CONCURRENT_UPDATE_MESSAGE,
+                request.getRequestURI()
+            ));
+    }
+
+    // Login of a suspended account and the password change of a locked one throw this. It had no
+    // REST handler, so it fell through to the catch-all as a 500.
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbiddenRest(ForbiddenException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorResponse(
+                OffsetDateTime.now(),
+                403,
+                "Forbidden",
+                ex.getMessage(),
+                request.getRequestURI()
+            ));
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
@@ -236,6 +358,21 @@ public class GlobalExceptionHandler {
                 403,
                 "Forbidden",
                 "This account has not been verified yet.",
+                request.getRequestURI()
+            ));
+    }
+
+    // A DB constraint (unique, foreign key, not-null) rejected the write and no service translated it.
+    // Same as the GraphQL handler: 409, the driver message (table and column names) is logged, not returned.
+    // Before, REST had no handler, so this fell through to the catch-all as a 500.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityRest(DataIntegrityViolationException ex, HttpServletRequest request) {
+        log.warn("Data integrity violation on {}: {}", request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse(OffsetDateTime.now(),
+                409,
+                "Conflict",
+                "This change conflicts with existing data.",
                 request.getRequestURI()
             ));
     }
@@ -325,16 +462,23 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(OffsetDateTime.now(),
                 400,
                 "Bad Request",
-                "Validation failed.",
+                describeViolations(ex),
                 request.getRequestURI()));
     }
 
     // @Valid @RequestBody failures (as opposed to @Validated method-param
-    // failures, which throw ConstraintViolationException above)
+    // failures, which throw ConstraintViolationException above).
+    // Field names and our annotation messages are listed, e.g. "Validation failed: email: Email is required".
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        String details = Stream.concat(
+                ex.getBindingResult().getFieldErrors().stream().map(e -> e.getField() + ": " + e.getDefaultMessage()),
+                ex.getBindingResult().getGlobalErrors().stream().map(e -> e.getDefaultMessage()))
+            .sorted()
+            .collect(Collectors.joining("; "));
+        String message = details.isEmpty() ? "Validation failed." : "Validation failed: " + details;
         return ResponseEntity.badRequest()
-            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", "Validation failed.", request.getRequestURI()));
+            .body(new ErrorResponse(OffsetDateTime.now(), 400, "Bad Request", message, request.getRequestURI()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -346,8 +490,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error);
     }
 
+    // User-facing state rules throw BusinessRuleException now, so this is logged: it is likely a bug.
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
+        log.warn("IllegalStateException on {}: {}", request.getRequestURI(), ex.getMessage());
         ErrorResponse error = new ErrorResponse(
             OffsetDateTime.now(), 409, "Conflict",
             "The request could not be completed due to a conflict.", request.getRequestURI()
@@ -403,9 +549,10 @@ public class GlobalExceptionHandler {
             ));
     }
 
-    // Catch-all fallback: keep this last among the REST handlers
+    // Catch-all fallback: keep this last among the REST handlers. Logged with the stack trace (M-9).
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+        log.error("Unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(new ErrorResponse(OffsetDateTime.now(),
                 500,
@@ -413,5 +560,24 @@ public class GlobalExceptionHandler {
                 "Something went wrong",
                 request.getRequestURI()
             ));
+    }
+
+    // "Validation failed: price: Price can never be lower than 0; name: Service name is required".
+    // Only the last path segment is shown: GraphQL argument paths look like "createService.input.price",
+    // and the method/argument prefix means nothing to the user.
+    private static String describeViolations(ConstraintViolationException ex) {
+        String details = ex.getConstraintViolations().stream()
+            .map(v -> fieldName(v) + ": " + v.getMessage())
+            .sorted()
+            .collect(Collectors.joining("; "));
+        return details.isEmpty() ? "Validation failed." : "Validation failed: " + details;
+    }
+
+    private static String fieldName(ConstraintViolation<?> violation) {
+        String name = null;
+        for (Path.Node node : violation.getPropertyPath()) {
+            if (node.getName() != null) name = node.getName();
+        }
+        return name != null ? name : "value";
     }
 }

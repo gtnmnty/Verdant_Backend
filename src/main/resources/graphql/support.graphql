@@ -87,6 +87,15 @@ type SupportTicketDetail {
     resolvedAt: DateTime
 }
 
+# M-42: one page of the customer's own tickets (mySupportTickets).
+type SupportTicketPage {
+    items: [SupportTicketSummary!]!
+    page: Int!
+    pageSize: Int!
+    totalItems: Int!
+    totalPages: Int!
+}
+
 type AdminSupportTicketPage {
     items: [AdminSupportTicketSummary!]!
     page: Int!
@@ -120,7 +129,8 @@ input AdminUpdateSupportTicketInput {
 }
 
 extend type Query {
-    mySupportTickets(status: SupportTicketStatus): [SupportTicketSummary!]!
+    # M-42: paginated (was an unbounded list that grew with every resolved ticket). Newest activity first.
+    mySupportTickets(status: SupportTicketStatus, page: Int = 1, pageSize: Int = 10): SupportTicketPage!
     mySupportTicket(id: ID!): SupportTicketDetail
 
     adminSupportTickets(

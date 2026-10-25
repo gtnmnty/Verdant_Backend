@@ -1,12 +1,9 @@
 package com.verdant.salon_ecomm.services;
 
-import com.verdant.salon_ecomm.dtos.user.events.UserDeletedEvent;
 import com.verdant.salon_ecomm.models.entities.PendingCleanUpJob;
 import com.verdant.salon_ecomm.repositories.CleanUpJobRepository;
-import com.verdant.salon_ecomm.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -16,12 +13,13 @@ import java.util.UUID;
 // UnpaidOrderExpiryJob. UserService only depended on PaymentService for this job.
 //
 // Flow:
-//   1. UserService.deleteUserById anonymizes the user and saves a PendingCleanUpJob row in the
-//      same transaction, so the external cleanup is recorded only if the deletion commits.
+//   1. UserService.deleteUserById (or AccountService.deleteAccounts) saves a PendingCleanUpJob row in
+//      the same transaction, so the external cleanup is recorded only if the deletion commits.
 //   2. Every 60s this job claims a batch of unprocessed rows (claim token + lease, see
 //      CleanUpJobTransactions). Another instance, or an overlapping run, can't claim the same rows.
-//   3. For each row: delete the Cloudinary avatar and the Stripe customer, mark the row processed,
-//      then publish UserDeletedEvent (audit + notifications).
+//   3. For each row: delete the Cloudinary avatar and the Stripe customer, mark the row processed.
+//      M-35: it no longer publishes UserDeletedEvent. Published from here (no transaction), the
+//      @TransactionalEventListener never ran; deleteUserById publishes it inside its transaction now.
 //   4. A failure bumps retryCount. The lease expires and the row is retried on a later run, up to
 //      CLEANUP_MAX_RETRIES, then left for manual cleanup.
 @Slf4j
@@ -42,10 +40,8 @@ public class DeletedUserCleanupJob {
 
     private final CleanUpJobRepository cleanUpJobRepository;
     private final CleanUpJobTransactions cleanUpJobTransactions;
-    private final UserRepository userRepository;
     private final CloudinaryService cloudinaryService;
     private final PaymentService paymentService;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Scheduled(fixedDelay = 60_000)
     public void processPendingCleanupJobs() {
@@ -65,9 +61,6 @@ public class DeletedUserCleanupJob {
                     paymentService.deleteStripeCustomer(job.getStripeCustomerId());
                 }
                 cleanUpJobTransactions.markProcessed(job.getId(), claimToken);
-
-                userRepository.findById(job.getUserId())
-                    .ifPresent(user -> eventPublisher.publishEvent(new UserDeletedEvent(user)));
             } catch (Exception e) {
                 cleanUpJobTransactions.incrementRetryCount(job.getId(), claimToken);
                 int attempts = job.getRetryCount() + 1;

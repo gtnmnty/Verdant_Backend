@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.resolvers.salonservice;
 
+import jakarta.validation.Valid;
+import com.verdant.salon_ecomm.exceptions.BusinessRuleException;
 import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
 import com.verdant.salon_ecomm.dtos.service.*;
 import com.verdant.salon_ecomm.models.entities.SalonService;
@@ -41,7 +43,7 @@ public class SalonServiceResolver {
         } else if (serviceObj instanceof SalonService entity) {
             return entity.getDurationMinutes();
         }
-        throw new IllegalArgumentException(
+        throw BusinessRuleException.invalid(
             "Unsupported SalonService object type: " +
                 (serviceObj != null ? serviceObj.getClass().getName() : "null")
         );
@@ -54,7 +56,7 @@ public class SalonServiceResolver {
         } else if (serviceObj instanceof SalonService entity) {
             return entity.getItemCatalog();
         }
-        throw new IllegalArgumentException(
+        throw BusinessRuleException.invalid(
             "Unsupported SalonService object type: " +
                 (serviceObj != null ? serviceObj.getClass().getName() : "null")
         );
@@ -74,15 +76,18 @@ public class SalonServiceResolver {
         return salonService.getFavoriteServices(principal.getId(), first, after);
     }
 
+    // M-10: @Valid makes Spring GraphQL run the input's bean constraints before this method;
+    // a violation becomes a 400 listing the bad fields (GlobalExceptionHandler.handleConstraintViolation).
+    // Before, @PositiveOrZero price / @Positive duration on the input were never checked.
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto createService(@Argument CreateServiceInput input, @AuthenticationPrincipal User principal){
+    public AdminServiceDto createService(@Argument @Valid CreateServiceInput input, @AuthenticationPrincipal User principal){
         return salonService.createServiceInput(input, principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public AdminServiceDto updateService(@Argument UpdateServiceInput input, @AuthenticationPrincipal User principal){
+    public AdminServiceDto updateService(@Argument @Valid UpdateServiceInput input, @AuthenticationPrincipal User principal){
         return salonService.updateServiceInput(input, principal.getId());
     }
 
@@ -94,7 +99,8 @@ public class SalonServiceResolver {
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public List<SalonService> deleteServices(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+    // M-24: AdminServiceDto, matching the schema's [AdminServiceDto!]! (see SalonServicesService.deleteServices).
+    public List<AdminServiceDto> deleteServices(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
         return salonService.deleteServices(ids, principal.getId());
     }
 

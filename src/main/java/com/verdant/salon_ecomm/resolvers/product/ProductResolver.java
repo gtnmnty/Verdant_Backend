@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.resolvers.product;
 
+import jakarta.validation.Valid;
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
@@ -67,27 +68,31 @@ public class ProductResolver {
         return productService.getAdminProduct(UUID.fromString(id));
     }
 
+    // M-10: @Valid makes Spring GraphQL run the input's bean constraints before this method;
+    // a violation becomes a 400 listing the bad fields (GlobalExceptionHandler.handleConstraintViolation).
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public AdminProductDto createProduct(@Argument CreateProductInput input) {
-        return productService.createProduct(input);
+    // M-29: the caller is passed on as the actor of the product events (audit trail + staff notifications).
+    public AdminProductDto createProduct(@Argument @Valid CreateProductInput input, @AuthenticationPrincipal User principal) {
+        return productService.createProduct(input, principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public AdminProductDto updateProduct(@Argument UpdateProductInput input) {
-        return productService.updateProduct(input);
+    public AdminProductDto updateProduct(@Argument @Valid UpdateProductInput input, @AuthenticationPrincipal User principal) {
+        return productService.updateProduct(input, principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public boolean deleteProduct(@Argument String id) {
-        return productService.deleteProduct(UUID.fromString(id));
+    public boolean deleteProduct(@Argument String id, @AuthenticationPrincipal User principal) {
+        return productService.deleteProduct(UUID.fromString(id), principal.getId());
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
-    public List<Product> deleteProducts(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
+    // M-24: AdminProductDto, matching the schema's [AdminProductDto!]! (see ProductService.deleteProducts).
+    public List<AdminProductDto> deleteProducts(@Argument List<UUID> ids, @AuthenticationPrincipal User principal) {
         return productService.deleteProducts(ids, principal.getId());
     }
 }

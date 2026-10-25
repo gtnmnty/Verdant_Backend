@@ -41,6 +41,9 @@ input PlaceOrderInput {
     shippingAddress: AddressInput!
     paymentMethod: String!
     promoCode: String
+    # M-21: pay as much as possible from the customer's redeemed gift card balance; Stripe charges the rest.
+    # Was missing from the schema, so PlaceOrderInput.useWalletBalance was always null and the wallet unusable.
+    useWalletBalance: Boolean = false
 }
 
 input AdminCreateOrderInput {
@@ -83,6 +86,8 @@ enum PaymentStatus {
     PROCESSED
     PAID
     FAILED
+    # M-14: part of a paid charge was refunded.
+    PARTIALLY_REFUNDED
     REFUNDED
     CANCELLED
 }

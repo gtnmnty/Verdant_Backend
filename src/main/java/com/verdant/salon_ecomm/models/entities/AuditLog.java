@@ -40,6 +40,9 @@ public class AuditLog {
     @Column(nullable = false)
     private String title;
 
+    // M-33: text since V11 (was the default varchar 255, which stylist bio diffs and review text overflowed).
+    // AuditLogService caps it at 4000 characters.
+    @Column(columnDefinition = "text")
     private String detail;
 
     @ManyToOne(fetch = FetchType.LAZY)

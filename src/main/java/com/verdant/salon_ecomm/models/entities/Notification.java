@@ -38,7 +38,9 @@ public class Notification {
     @Column(nullable = false, length = 150)
     private String title;
 
-    @Column(nullable = false, length = 255)
+    // M-33: text since V11 (was varchar 255, which long notes or review text overflowed). NotificationService
+    // still caps it at 1000 characters.
+    @Column(nullable = false, columnDefinition = "text")
     private String message;
 
     @Column(name = "reference_type", length = 50)
