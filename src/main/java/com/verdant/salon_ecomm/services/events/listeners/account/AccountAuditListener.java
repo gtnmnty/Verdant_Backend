@@ -60,7 +60,7 @@ public class AccountAuditListener {
             event.accountId(),
             AuditActionType.SECURITY,
             "Password reset requested for " + event.email(),
-            "Reset link issued by staff",
+            event.newAccount() ? "Set-password link issued for new account" : "Reset link issued by staff",
             event.actor()
         );
     }

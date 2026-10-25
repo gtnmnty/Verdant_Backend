@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.models.entities;
 
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
+import com.verdant.salon_ecomm.models.enums.accounts.ResetLinkStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -87,6 +88,14 @@ public class User implements UserDetails {
 
     @Column(name = "verificationCode_expiration")
     private OffsetDateTime verificationCodeExpiration;
+
+    // H-9: delivery state of the last staff-issued reset link, shown to admins on the account page.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reset_link_status", length = 20)
+    private ResetLinkStatus resetLinkStatus;
+
+    @Column(name = "reset_link_status_at")
+    private OffsetDateTime resetLinkStatusAt;
 
     @Column(name = "reset_password_code")
     private String resetPasswordCode;

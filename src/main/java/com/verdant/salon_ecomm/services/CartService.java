@@ -83,6 +83,11 @@ public class CartService {
         CartItem cartItem = cartItemRepository.findByIdAndUser_Id(input.getCartItemId(), userId)
             .orElseThrow(() -> new CartItemNotFoundException("Cart item not found: " + input.getCartItemId()));
 
+        // This line was missing, so the mutation validated, saved an unchanged row and reported success.
+        // An absolute value, not a delta: sending the same request twice gives the same result.
+        // Tradeoff: no cap at available stock here, same as addItem. Stock can change between now and
+        // checkout, so placeOrder is the one place that checks and reserves it (INSUFFICIENT_STOCK).
+        cartItem.setQuantity(input.getQuantity());
         cartItemRepository.save(cartItem);
         return getCart(userId);
     }

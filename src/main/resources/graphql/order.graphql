@@ -151,9 +151,20 @@ type Order {
     promoDiscountAmount: BigDecimal
 }
 
+# Slim product reference for order lines (H-12). Deliberately not the full Product type: the order
+# line is backed by OrderItemProductDto, not a Product entity, so Product's own field resolvers
+# (images, isFavorited...) could not bind to it. Only the primary image is exposed.
+type OrderItemProduct {
+    id: ID!
+    name: String!
+    catalog: ItemCatalog!
+    price: BigDecimal!
+    primaryImage: MediaImageDto
+}
+
 type OrderItem {
     id: ID!
-    product: Product
+    product: OrderItemProduct
     productName: String!
     productImage: String
     quantity: Int!
@@ -185,7 +196,7 @@ type AdminOrder {
 
 type AdminOrderItem {
     id: ID!
-    product: Product
+    product: OrderItemProduct
     productName: String!
     productImage: String
     quantity: Int!

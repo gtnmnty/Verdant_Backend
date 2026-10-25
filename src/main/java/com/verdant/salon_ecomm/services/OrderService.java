@@ -2,7 +2,7 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.MediaImageDto;
 import com.verdant.salon_ecomm.dtos.giftcards.GiftCardBalanceApplicationResult;
-import com.verdant.salon_ecomm.dtos.order.OrderDto;
+import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
 import com.verdant.salon_ecomm.dtos.order.OrderPage;
 import com.verdant.salon_ecomm.dtos.order.PlaceOrderInput;
 import com.verdant.salon_ecomm.dtos.order.admin.*;
@@ -10,11 +10,10 @@ import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
-import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
-import com.verdant.salon_ecomm.exceptions.UnpaidOrderLimitException;
 import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.exceptions.UnpaidOrderLimitException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
@@ -26,6 +25,7 @@ import com.verdant.salon_ecomm.repositories.OrderRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
+import com.verdant.salon_ecomm.utils.PageRequests;
 import jakarta.validation.Valid;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +45,6 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @Validated
@@ -66,12 +65,12 @@ public class OrderService {
     private final ShippingService shippingService;
     private final ApplicationEventPublisher eventPublisher;
 
-    // H-5: unpaid states in which an order still holds reserved stock and can still be abandoned.
+    // Unpaid states in which an order still holds reserved stock and can still be abandoned.
     // PROCESSED is left out: an async payment (e.g. bank debit) in that state may still succeed.
     static final Set<PaymentStatus> UNPAID_RESERVING_STATUSES =
         EnumSet.of(PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION, PaymentStatus.FAILED);
 
-    // H-5: how many unpaid orders one customer may keep open at once. Soft limit (two parallel
+    // How many unpaid orders one customer may keep open at once. Soft limit (two parallel
     // checkouts can both pass the count); its job is to stop one account draining all stock.
     private static final int MAX_OPEN_UNPAID_ORDERS = 3;
 
@@ -96,14 +95,10 @@ public class OrderService {
 
         Page<Order> result = orderRepository.findAll(spec, pageable);
 
-        Map<UUID, List<OrderItem>> itemsByOrder = fetchItemsByOrder(result.getContent());
-
-        List<OrderDto> items = result.getContent().stream()
-            .map(order -> orderMapper.toDto(order, itemsByOrder.getOrDefault(order.getId(), List.of())))
-            .toList();
-
+        // H-12: entities go straight out. Items are loaded by OrderResolver's @BatchMapping, once for
+        // the whole page and only if the client asked for them, so they aren't pre-fetched here.
         return new OrderPage(
-            items,
+            result.getContent(),
             normalizedPage,
             normalizedPageSize,
             (int) result.getTotalElements(),

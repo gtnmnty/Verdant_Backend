@@ -28,7 +28,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PasswordResetTokenService {
 
-    private static final Duration TOKEN_TTL = Duration.ofHours(1);
+    // Public so the reset-link email can state the real expiry.
+    // 1 hour for a reset on an existing account: short, since the user is expected to act right away.
+    public static final Duration TOKEN_TTL = Duration.ofHours(1);
+    // 24 hours for a brand-new staff account: the person may not read the invite until the next
+    // morning. Tradeoff: a longer window in which a leaked invite email works; the link is still one-time.
+    public static final Duration NEW_ACCOUNT_TOKEN_TTL = Duration.ofHours(24);
     private static final int TOKEN_BYTES = 32; // 256 bits of entropy
 
     private final PasswordResetTokenRepository tokenRepository;
@@ -38,8 +43,18 @@ public class PasswordResetTokenService {
     private final SecureRandom secureRandom = new SecureRandom();
     private final RefreshTokenService refreshTokenService;
 
+    // Which lifetime applies to a link: new account invite vs a reset on an existing account.
+    public static Duration ttlFor(boolean newAccount) {
+        return newAccount ? NEW_ACCOUNT_TOKEN_TTL : TOKEN_TTL;
+    }
+
     @Transactional
     public String issueToken(User user) {
+        return issueToken(user, TOKEN_TTL);
+    }
+
+    @Transactional
+    public String issueToken(User user, Duration ttl) {
         OffsetDateTime now = OffsetDateTime.now();
 
         // Close out any older still-active tokens first — only one live reset
@@ -53,7 +68,7 @@ public class PasswordResetTokenService {
         PasswordResetToken token = PasswordResetToken.builder()
             .user(user)
             .tokenHash(hash(rawToken))
-            .expiresAt(now.plus(TOKEN_TTL))
+            .expiresAt(now.plus(ttl))
             .createdAt(now)
             .build();
 
@@ -96,6 +111,15 @@ public class PasswordResetTokenService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        // The token was only ever sent to user.getEmail(), so redeeming it proves the user
+        // controls that mailbox. Without this, a staff-created account (emailVerified = false)
+        // would set a password and still be rejected at login.
+        // Safe after a staff email change: updateAccount burns every outstanding token, so a
+        // link mailed to the old address can't verify the new one.
+        if (!user.isEmailVerified()) {
+            user.setEmailVerified(true);
+            user.setEmailVerifiedAt(claimTime);
+        }
         userRepository.save(user);
         refreshTokenService.deleteByUserId(user.getId());
 

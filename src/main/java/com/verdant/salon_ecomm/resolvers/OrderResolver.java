@@ -16,6 +16,7 @@ import com.verdant.salon_ecomm.repositories.OrderItemRepository;
 import com.verdant.salon_ecomm.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
+import org.springframework.graphql.data.method.annotation.BatchMapping;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
@@ -23,8 +24,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
@@ -110,11 +114,32 @@ public class OrderResolver {
 
     // ---------- Field resolvers ----------
 
-    @SchemaMapping(typeName = "Order", field = "items")
-    public List<OrderItemDto> items(Order order) {
-        return orderItemRepository.findByOrder_Id(order.getId()).stream()
-            .map(orderMapper::toOrderItemDto)
-            .toList();
+    // H-12: every query/mutation that returns the GraphQL type "Order" (myOrders, order, placeOrder,
+    // adminDeleteOrders) now hands back the Order ENTITY, so these field resolvers always get the
+    // source type they declare. Before, myOrders returned OrderDto, which couldn't bind to an Order
+    // parameter, so items/address failed on every row of the customer's order history.
+    //
+    // @BatchMapping instead of @SchemaMapping: graphql-java collects every Order in the response
+    // first, then calls this once with all of them. A page of 10 orders costs one item query, not 10.
+    // Tradeoff: GraphQL serializes entity getters directly for this type (as order(id) already did).
+    // The schema decides what's exposed, so internal fields like stripePaymentIntentId stay hidden,
+    // but renaming an entity field now renames what the schema resolves unless a mapping is added.
+    @BatchMapping(typeName = "Order", field = "items")
+    public Map<Order, List<OrderItemDto>> items(List<Order> orders) {
+        List<UUID> orderIds = orders.stream().map(Order::getId).toList();
+
+        Map<UUID, List<OrderItemDto>> itemsByOrderId = orderItemRepository.findByOrder_IdIn(orderIds).stream()
+            .collect(Collectors.groupingBy(
+                item -> item.getOrder().getId(),
+                Collectors.mapping(orderMapper::toOrderItemDto, Collectors.toList())
+            ));
+
+        // Every order gets an entry (empty list if it has no items): the field is non-null.
+        Map<Order, List<OrderItemDto>> result = new LinkedHashMap<>();
+        for (Order order : orders) {
+            result.put(order, itemsByOrderId.getOrDefault(order.getId(), List.of()));
+        }
+        return result;
     }
 
     @SchemaMapping(typeName = "Order", field = "address")

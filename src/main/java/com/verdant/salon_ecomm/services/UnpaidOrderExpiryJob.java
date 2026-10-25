@@ -10,14 +10,13 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-// H-5: placeOrder reserves stock before payment. Orders left unpaid past the TTL are cancelled
-// and their stock (and any wallet money) returned, so abandoned checkouts can't drain inventory.
-// NOTE: like every other @Scheduled job here, this only runs once @EnableScheduling is added (audit H-8).
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class UnpaidOrderExpiryJob {
-
+    // PlaceOrder reserves stock before payment. Orders left unpaid past the TTL are canceled
+    // and their stock (and any wallet money) returned, so abandoned checkouts can't drain inventory.
+    // Scheduling is switched on in config/SchedulingConfig (H-8).
     private static final int BATCH_SIZE = 50;
 
     private final OrderService orderService;

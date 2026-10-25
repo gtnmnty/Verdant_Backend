@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -40,6 +41,12 @@ public class EmailService {
     //Link placed in every newsletter. The frontend page at this path must call unsubscribeFromNewsletter(token).
     public String unsubscribeUrl(String token) {
         return frontendUrl + "/newsletter/unsubscribe" + (token == null ? "" : "?token=" + token);
+    }
+
+    // Link in staff-issued reset emails (H-9). The frontend page at this path must read ?token= and
+    // call redeemPasswordReset(token, newPassword). The token is Base64-URL, so it needs no escaping.
+    public String passwordResetUrl(String token) {
+        return frontendUrl + "/reset-password?token=" + token;
     }
 
     public void sendNewsletterWelcomeEmail(String to, String unsubscribeUrl) throws MessagingException {
@@ -89,6 +96,21 @@ public class EmailService {
         sendEmail(to, "Your Password Reset Code", htmlBody);
     }
 
+    // Staff-issued reset link (H-9). newAccount switches the wording: a staff-created account has never
+    // had a password, so it reads "set your password" instead of "reset". Different from
+    // sendPasswordResetCodeEmail, which is the 6-digit code from the public forgot-password form.
+    public void sendPasswordResetLinkEmail(String to, String resetUrl, Duration ttl, boolean newAccount)
+            throws MessagingException {
+        Context context = new Context();
+        context.setVariable("brandName", BRAND_NAME);
+        context.setVariable("resetUrl", resetUrl);
+        context.setVariable("expiresText", describe(ttl));
+        context.setVariable("newAccount", newAccount);
+
+        String htmlBody = templateEngine.process("emails/password-reset-link", context);
+        sendEmail(to, newAccount ? "Set up your " + BRAND_NAME + " account" : "Reset your password", htmlBody);
+    }
+
     // Gift card delivery. All values are rendered with th:text, so user-supplied name/note are HTML-escaped.
     public void sendGiftCardEmail(
         String to, String recipientName, String senderName, String amountText,
@@ -114,6 +136,14 @@ public class EmailService {
 
         String htmlBody = templateEngine.process("emails/gift-card-refund", context);
         sendEmail(to, "Your Verdant Salon gift card balance", htmlBody);
+    }
+
+    // "24 hours", "1 hour", "45 minutes": the link lifetime differs for new accounts, so the email can't hardcode it.
+    private static String describe(Duration ttl) {
+        long hours = ttl.toHours();
+        if (hours >= 1 && ttl.equals(Duration.ofHours(hours))) return hours + (hours == 1 ? " hour" : " hours");
+        long minutes = ttl.toMinutes();
+        return minutes + (minutes == 1 ? " minute" : " minutes");
     }
 
     private void sendEmail(String to, String subject, String htmlBody) throws MessagingException {

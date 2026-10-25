@@ -2,37 +2,37 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
+import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
+import com.verdant.salon_ecomm.mappers.ProductMapper;
 import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
-import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
-import com.verdant.salon_ecomm.mappers.ProductMapper;
 import com.verdant.salon_ecomm.models.enums.CollectionSort;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
+import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.models.enums.ItemType;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.ProductSpec;
-import com.verdant.salon_ecomm.utils.EnumUtils;
-import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.utils.CloudinaryCleanup;
+import com.verdant.salon_ecomm.utils.EnumUtils;
+import com.verdant.salon_ecomm.utils.PageRequests;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -173,13 +173,17 @@ public class ProductService {
             .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         List<MediaImage> images = mediaImageRepository.findByEntityTypeAndEntityId(ItemType.PRODUCT, id);
-
-        for (MediaImage image : images) {
-            cloudinaryService.delete(image.getPublicId());
-        }
+        List<String> publicIds = images.stream().map(MediaImage::getPublicId).toList();
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.PRODUCT, id);
         productRepository.delete(product);
+
+        // Cloudinary files are removed only after the transaction commits, same as deleteProducts.
+        // The DB delete is only flushed at commit, so an FK failure (cart or order items still pointing
+        // at the product) surfaces there. Deleting files first meant a rolled-back delete kept the
+        // product but lost its images for good.
+        // Tradeoff: a crash right after commit leaves orphaned files in Cloudinary instead of broken images.
+        CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
         return true;
     }
 

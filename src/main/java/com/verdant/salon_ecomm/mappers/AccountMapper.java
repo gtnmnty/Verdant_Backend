@@ -37,7 +37,9 @@ public class AccountMapper {
             user.getAvatarUrl(),
             user.getRole(),
             user.getStatus(),
-            user.getCreatedAt()
+            user.getCreatedAt(),
+            user.getResetLinkStatus(),
+            user.getResetLinkStatusAt()
         );
     }
 
