@@ -16,6 +16,7 @@ import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.repositories.StylistRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.StylistsSpec;
+import com.verdant.salon_ecomm.utils.PageRequests;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -97,12 +97,15 @@ public class StylistsService {
             .avatarUrl(input.avatarUrl())
             .bio(input.bio())
             .branch(branch)
-            .services(services)
+            .services(new ArrayList<>())
             .workingHours(Optional.ofNullable(toWorkingHours(input.workingHours())).orElseGet(ArrayList::new))
             .status(StylistAccountStatus.ACTIVE)
             .build();
 
         Stylist saved = stylistRepository.save(stylist);
+        // Link through the owning side (SalonService.stylists) so the join rows are written
+        // after save(), so the stylist is managed and has an id for the join table.
+        replaceServiceAssignments(saved, services);
 
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new StylistCreatedEvent(saved, actor));
@@ -204,7 +207,8 @@ public class StylistsService {
         int previousServiceCount = stylist.getServices() != null ? stylist.getServices().size() : 0;
 
         List<SalonService> services = salonServiceRepository.findAllById(serviceIds);
-        stylist.setServices(services);
+        // H-13: was stylist.setServices(services), which only touches the inverse side and saves nothing.
+        replaceServiceAssignments(stylist, services);
         Stylist saved = stylistRepository.save(stylist);
 
         User actor = resolveActor(actorId);
@@ -251,7 +255,45 @@ public class StylistsService {
     }
 
     // ---------- Helpers ----------
-    
+
+    // H-13: the stylist_services join table is owned by SalonService.stylists (Stylist.services is
+    // mappedBy = "stylists"). Hibernate only writes join rows from the owning side, so assigning has to
+    // go through each SalonService. Flow:
+    //   1. Services the stylist no longer belongs to: remove the stylist from service.stylists.
+    //   2. Newly picked services: add the stylist to service.stylists (skips ones already linked).
+    //   3. Mirror the result on stylist.services, so the returned entity and the event are correct
+    //      without reloading.
+    // The services are managed entities, so dirty checking writes the changes on commit; no save() needed.
+    // Matching is by identity: inside one transaction Hibernate returns one instance per row, and
+    // neither entity overrides equals().
+    // Tradeoffs:
+    //   - SalonService.stylists is a List (a Hibernate "bag"). Removing one element makes Hibernate
+    //     delete all of that service's join rows and re-insert the rest. Fine at salon scale; changing
+    //     it to a Set would make it a single-row DELETE but changes the entity's API.
+    //   - Making Stylist the owning side instead would mean moving @JoinTable and checking every
+    //     service-side write, which is a bigger change than fixing the writes here.
+    //   - Unknown service ids are silently dropped by findAllById, as before.
+    private void replaceServiceAssignments(Stylist stylist, List<SalonService> newServices) {
+        List<SalonService> current = stylist.getServices() != null ? stylist.getServices() : List.of();
+
+        for (SalonService service : current) {
+            if (!newServices.contains(service) && service.getStylists() != null) {
+                service.getStylists().remove(stylist);
+            }
+        }
+
+        for (SalonService service : newServices) {
+            if (service.getStylists() == null) {
+                service.setStylists(new ArrayList<>());
+            }
+            if (!service.getStylists().contains(stylist)) {
+                service.getStylists().add(stylist);
+            }
+        }
+
+        stylist.setServices(new ArrayList<>(newServices));
+    }
+
     private User resolveActor(UUID actorId) {
         return actorId != null ? userRepository.findById(actorId).orElse(null) : null;
     }

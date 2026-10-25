@@ -8,8 +8,10 @@ import com.verdant.salon_ecomm.mappers.AccountMapper;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
+import com.verdant.salon_ecomm.models.enums.accounts.ResetLinkStatus;
 import com.verdant.salon_ecomm.repositories.*;
 import com.verdant.salon_ecomm.specifications.AccountSpec;
+import com.verdant.salon_ecomm.utils.PageRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,9 +24,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.verdant.salon_ecomm.utils.PageRequests;
 
 @Service
 @RequiredArgsConstructor
@@ -103,6 +105,15 @@ public class AccountService {
             throw new DataIntegrityViolationException("An account with this email already exists");
         }
 
+        // Flow for a staff-created account:
+        //   1. Save the account with a random password nobody knows, and emailVerified = false.
+        //   2. Issue a one-time reset token and publish the event below.
+        //   3. After commit, AccountPasswordResetEmailListener mails "<frontend>/reset-password?token=...".
+        //   4. The user opens it and the page calls redeemPasswordReset(token, newPassword). Redeeming
+        //      sets the password AND marks the email verified (they proved they own the mailbox),
+        //      so the login check on emailVerified now passes.
+        // Tradeoff: we don't mark the email verified up front. Staff could mistype the address, and
+        // a verified-but-wrong address would let whoever owns it use forgot-password later.
         String temporaryPassword = UUID.randomUUID().toString();
         User user = accountMapper.toEntity(input, passwordEncoder.encode(temporaryPassword));
 
@@ -110,9 +121,11 @@ public class AccountService {
 
         eventPublisher.publishEvent(new AccountCreatedEvent(saved, actor));
 
-        String resetToken = passwordResetTokenService.issueToken(saved);
+        // New accounts get the longer 24h link (see PasswordResetTokenService.NEW_ACCOUNT_TOKEN_TTL).
+        String resetToken = passwordResetTokenService.issueToken(saved, PasswordResetTokenService.ttlFor(true));
+        markResetLinkPending(saved);
         eventPublisher.publishEvent(
-            new AccountPasswordResetRequestedEvent(saved.getId(), saved.getEmail(), resetToken, actor)
+            new AccountPasswordResetRequestedEvent(saved.getId(), saved.getEmail(), resetToken, true, actor)
         );
 
         return accountMapper.toDetailResponse(saved);
@@ -190,7 +203,7 @@ public class AccountService {
             user.setPendingEmailCodeExpiration(null);
         }
 
-        // H-1: suspending/banning/deactivating here must end sessions, same as suspendAccounts().
+        // Suspending/banning/deactivating here must end sessions, same as suspendAccounts().
         // The JWT filter and token rotation already reject a locked account; deleting the refresh
         // tokens as well means nothing usable is left behind if the account is later re-activated.
         if (input.status() != null && isLockedOutStatus(input.status()) && !isLockedOutStatus(previousStatus)) {
@@ -238,9 +251,13 @@ public class AccountService {
         User user = findAccountOrThrow(id);
         requireCanManage(actor, user);
 
-        String resetToken = passwordResetTokenService.issueToken(user);
+        // Issuing a token burns any older link. The email goes out after commit (H-9), so this
+        // returns true once the link is issued, not once it's delivered: SMTP runs @Async. The outcome
+        // is recorded on the account (resetLinkStatus), so a failure is visible and staff can press again.
+        String resetToken = passwordResetTokenService.issueToken(user, PasswordResetTokenService.ttlFor(false));
+        markResetLinkPending(user);
         eventPublisher.publishEvent(
-            new AccountPasswordResetRequestedEvent(user.getId(), user.getEmail(), resetToken, actor)
+            new AccountPasswordResetRequestedEvent(user.getId(), user.getEmail(), resetToken, false, actor)
         );
         return true;
     }
@@ -347,6 +364,14 @@ public class AccountService {
     }
 
     // ---------- Helpers ----------
+
+    // H-9: the link is issued but not yet sent. AccountPasswordResetEmailListener flips this to SENT or
+    // FAILED. Setting it here, inside the issuing transaction, means a stale SENT from an earlier link
+    // is never shown against the new one.
+    private void markResetLinkPending(User user) {
+        user.setResetLinkStatus(ResetLinkStatus.PENDING);
+        user.setResetLinkStatusAt(OffsetDateTime.now());
+    }
 
     private User findAccountOrThrow(UUID id) {
         return accountRepository.findById(id)

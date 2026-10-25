@@ -421,7 +421,7 @@ public class GiftCardService {
         }
     }
 
-    // ── Scheduled sweeps - call both from your existing cleanup job ──
+    // ── Scheduled sweeps - run hourly by GiftCardSweepJob ──
 
     // Expires ACTIVE and REDEEMED cards past expiry:
     // zeroes the balance and writes an EXPIRY ledger row.

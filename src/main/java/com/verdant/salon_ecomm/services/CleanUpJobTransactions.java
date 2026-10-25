@@ -8,12 +8,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-// Split out from UserService so each step commits in its own short transaction
-// through Spring's proxy (calling these as this.xyz() from inside UserService
+// Split out from DeletedUserCleanupJob so each step commits in its own short transaction
+// through Spring's proxy (calling these as this.xyz() from inside the job
 // would bypass the @Transactional interceptor entirely — self-invocation isn't
 // proxied). Keeping the claim, mark-processed, and retry-increment steps here
 // also means none of them share a transaction with the external Cloudinary/Stripe
-// calls in UserService#processPendingCleanupJobs, so we're never holding a DB
+// calls in DeletedUserCleanupJob#processPendingCleanupJobs, so we're never holding a DB
 // connection open for the duration of an HTTP call.
 @Service
 @RequiredArgsConstructor

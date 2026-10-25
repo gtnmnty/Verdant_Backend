@@ -1,7 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.dtos.user.*;
-import com.verdant.salon_ecomm.dtos.user.events.UserDeletedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserEmailChangeRequestedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserEmailChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
@@ -23,7 +22,6 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -39,16 +37,6 @@ import java.util.*;
 @RequiredArgsConstructor
 public class UserService {
 
-    // Stable per-JVM identity used to claim cleanup jobs, so only this
-    // instance processes the batch it claimed. Doesn't need to survive
-    // restarts — an unfinished claim just expires and gets picked up by
-    // whichever instance runs the next scheduled pass.
-    private final String instanceId = UUID.randomUUID().toString();
-    private static final int CLEANUP_BATCH_SIZE = 50;
-    private static final long CLEANUP_LEASE_MINUTES = 5;
-    // A job that keeps failing (e.g. bad credentials, a permanently broken asset) stops being
-    // claimed after this many attempts instead of being retried every minute forever.
-    private static final int CLEANUP_MAX_RETRIES = 10;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
@@ -61,12 +49,10 @@ public class UserService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final CleanUpJobRepository cleanUpJobRepository;
-    private final CleanUpJobTransactions cleanUpJobTransactions;
     private final PublicFormRateLimiter rateLimiter;
     private final Validator validator;
 
     private final CloudinaryService cloudinaryService;
-    private final PaymentService paymentService;
     private final GiftCardService giftCardService;
 
     public UserDto.Profile getUserById(UUID id) {
@@ -268,47 +254,13 @@ public class UserService {
         // Record what still needs cleaning up externally. This commits atomically
         // with the user deletion — if this transaction commits, we're guaranteed
         // to eventually process (and retry) the external cleanup, even if the
-        // app crashes right after this method returns.
+        // app crashes right after this method returns. DeletedUserCleanupJob picks it up.
         cleanUpJobRepository.save(PendingCleanUpJob.builder()
             .userId(id)
             .avatarPublicId(avatarPublicId)
             .stripeCustomerId(stripeCustomerId)
             .build());
 
-    }
-
-    @Scheduled(fixedDelay = 60_000)
-    public void processPendingCleanupJobs() {
-        // Unique per invocation (not the fixed per-JVM instanceId) so two overlapping
-        // runs of this method never share a claim token and can't collide on the same batch.
-        String claimToken = instanceId + ":" + UUID.randomUUID();
-        cleanUpJobTransactions.claimBatch(claimToken, CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE, CLEANUP_MAX_RETRIES);
-
-        for (PendingCleanUpJob job : cleanUpJobRepository.findByClaimedByAndProcessedFalse(claimToken)) {
-            try {
-                // External calls run outside any DB transaction — no point holding
-                // a DB connection/transaction open for the duration of an HTTP call.
-                if (job.getAvatarPublicId() != null) {
-                    cloudinaryService.delete(job.getAvatarPublicId());
-                }
-                if (job.getStripeCustomerId() != null) {
-                    paymentService.deleteStripeCustomer(job.getStripeCustomerId());
-                }
-                cleanUpJobTransactions.markProcessed(job.getId(), claimToken);
-
-                userRepository.findById(job.getUserId())
-                    .ifPresent(user -> eventPublisher.publishEvent(new UserDeletedEvent(user)));
-            } catch (Exception e) {
-                cleanUpJobTransactions.incrementRetryCount(job.getId(), claimToken);
-                int attempts = job.getRetryCount() + 1;
-                log.error("Cleanup job {} failed for user {} (attempt {} of {})",
-                    job.getId(), job.getUserId(), attempts, CLEANUP_MAX_RETRIES, e);
-                if (attempts >= CLEANUP_MAX_RETRIES) {
-                    log.error("Cleanup job {} for user {} reached the retry limit and will not run again; "
-                        + "clean up manually", job.getId(), job.getUserId());
-                }
-            }
-        }
     }
 
     // Uploads the new avatar first, then swaps it in and deletes the old one

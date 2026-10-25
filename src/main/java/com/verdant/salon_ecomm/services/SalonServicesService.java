@@ -364,16 +364,20 @@ public class SalonServicesService {
         List<MediaImage> images = mediaImageRepository
             .findByEntityTypeAndEntityIdOrderBySortOrderAsc(ItemType.SALON_SERVICE, id);
         AdminServiceDto dto = serviceMapper.toAdminDto(service, images);
-
-        for (MediaImage image : images) {
-            cloudinaryService.delete(image.getPublicId());
-        }
+        List<String> publicIds = images.stream().map(MediaImage::getPublicId).toList();
 
         mediaImageRepository.deleteByEntityTypeAndEntityId(ItemType.SALON_SERVICE, id);
         serviceRepository.deleteById(id);
 
         User actor = resolveActor(actorId);
         eventPublisher.publishEvent(new SalonServiceDeletedEvent(service, actor));
+
+        // H-14: files go only after the DB delete commits, same as deleteServices. Before, they were
+        // deleted first, so an FK failure (e.g. appointments still pointing at the service) rolled the
+        // rows back but left them pointing at images that no longer existed.
+        // Tradeoff: if the app dies between commit and the Cloudinary call, the files are orphaned
+        // (costs storage, nobody sees it). That is the cheaper failure: the old order broke live pages.
+        CloudinaryCleanup.scheduleCloudinaryDeletion(publicIds, cloudinaryService::delete);
 
         return dto;
     }

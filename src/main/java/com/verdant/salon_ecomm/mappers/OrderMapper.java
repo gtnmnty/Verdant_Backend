@@ -35,27 +35,8 @@ public class OrderMapper {
 
     // ---------- Entity -> DTO ----------
 
-    public OrderDto toDto(Order order, List<OrderItem> items) {
-        List<OrderItemDto> itemDtos = items.stream()
-            .map(this::toOrderItemDto)
-            .toList();
-
-        return new OrderDto(
-            order.getId(),
-            order.getOrderCode(),
-            order.getOrderStatus(),
-            order.getPaymentStatus(),
-            order.getPaymentMethod(),
-            order.getSubtotal(),
-            order.getDeliveryFee(),
-            order.getTotal(),
-            itemDtos,
-            order.getCreatedAt(),
-            order.getUpdatedAt(),
-            order.getPromoDiscountAmount(),
-            order.getWalletAmountApplied()
-        );
-    }
+    // The customer-facing "Order" type has no DTO: resolvers return the entity and OrderResolver fills
+    // items/address (H-12). A second shape for the same GraphQL type is what broke myOrders.
 
     public AdminOrderDto toAdminDto(Order order, List<OrderItem> items) {
         List<AdminOrderItemDto> itemDtos = items.stream()
@@ -245,7 +226,7 @@ public class OrderMapper {
         return new OrderItemProductDto(
             product.getId(),
             product.getName(),
-            product.getItemCatalog(),
+            product.getItemCatalog(), // exposed as "catalog"
             product.getPrice()
         );
     }

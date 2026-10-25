@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import com.verdant.salon_ecomm.utils.CloudinaryCleanup;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -123,8 +125,10 @@ public class MediaImageService {
             )
         );
 
-        cloudinaryService.delete(image.getPublicId());
         mediaImageRepository.deleteById(imageId);
+        // H-14: delete the file after commit, not before the row. If the transaction rolled back, the
+        // media_images row would survive and point at a file that's already gone.
+        CloudinaryCleanup.scheduleCloudinaryDeletion(List.of(image.getPublicId()), cloudinaryService::delete);
 
         return true;
     }

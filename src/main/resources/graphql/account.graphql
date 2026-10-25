@@ -51,6 +51,16 @@ type AccountDetail {
     role: AccountRole!
     status: AccountStatus!
     createdAt: DateTime!
+    # Delivery of the last staff-issued reset / set-password link. null = none issued yet.
+    resetLinkStatus: ResetLinkStatus
+    resetLinkStatusAt: DateTime
+}
+
+# Must match the Java ResetLinkStatus enum (EnumSchemaParityTest).
+enum ResetLinkStatus {
+    PENDING
+    SENT
+    FAILED
 }
 
 type AccountPage {

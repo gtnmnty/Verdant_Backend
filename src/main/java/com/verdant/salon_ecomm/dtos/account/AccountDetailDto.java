@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.dtos.account;
 import com.verdant.salon_ecomm.models.entities.Address;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
+import com.verdant.salon_ecomm.models.enums.accounts.ResetLinkStatus;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -16,5 +17,7 @@ public record AccountDetailDto(
     String avatarUrl,
     AccountRole role,
     AccountStatus status,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    ResetLinkStatus resetLinkStatus,
+    OffsetDateTime resetLinkStatusAt
 ) {}

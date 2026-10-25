@@ -74,6 +74,10 @@ public class AccountNotificationListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountPasswordResetRequested(AccountPasswordResetRequestedEvent event) {
+        // A just-created account gets its set-password email (AccountPasswordResetEmailListener);
+        // a "reset requested, contact support" warning would only alarm a user who hasn't signed in yet.
+        if (event.newAccount()) return;
+
         notificationService.create(new NotificationCreateDto(
             event.accountId(),
             NotificationType.PASSWORD_RESET_REQUESTED,

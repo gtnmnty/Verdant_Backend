@@ -26,6 +26,8 @@ public record AdminOrderDto(
     List<OrderMilestoneDto> activity,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
-    BigDecimal promoDiscount,
+    // Must match the schema field name (AdminOrder.promoDiscountAmount): Spring GraphQL resolves record
+    // components by name, so the old "promoDiscount" was always returned as null (H-12).
+    BigDecimal promoDiscountAmount,
     BigDecimal walletAmountApplied
 ) {}
