@@ -21,6 +21,7 @@ import com.verdant.salon_ecomm.exceptions.PaymentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.PaymentMapper;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
+import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.repositories.OrderRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.repositories.WebhookEventRepository;
@@ -47,8 +48,11 @@ import java.util.UUID;
 @Slf4j
 public class PaymentService {
 
+    // H-3: FAILED is deliberately NOT terminal. payment_intent.payment_failed puts the intent back to
+    // requires_payment_method and the customer can retry the same intent (createPaymentIntent hands
+    // it back), so a later requires_action / processing / succeeded must still be applied.
     private static final Set<PaymentStatus> TERMINAL_STATUSES = EnumSet.of(
-        PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
+        PaymentStatus.PAID, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
     );
 
     private final OrderRepository orderRepository;
@@ -73,6 +77,10 @@ public class PaymentService {
 
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
             throw new PaymentException("Order " + order.getId() + " is already fully paid — no payment intent needed");
+        }
+        // H-5: a cancelled or expired order has handed its stock back, so it must not be payable.
+        if (order.getOrderStatus() == OrderStatus.CANCELLED || order.isStockReleased()) {
+            throw new PaymentException("Order " + order.getId() + " was cancelled and can no longer be paid");
         }
 
         if (order.getStripePaymentIntentId() != null) {
@@ -102,6 +110,30 @@ public class PaymentService {
         }
 
         return paymentMapper.toDto(intent);
+    }
+
+    // Statuses Stripe allows us to cancel. "processing" is left out on purpose: the money may already
+    // be moving, and that order should be left to finish rather than expired.
+    private static final Set<String> CANCELABLE_INTENT_STATUSES = Set.of(
+        "requires_payment_method", "requires_confirmation", "requires_action", "requires_capture"
+    );
+
+    // H-5: used by UnpaidOrderExpiryJob before it returns an abandoned order's stock. Cancelling at
+    // Stripe first is what makes the expiry safe: after this the customer can't pay that intent.
+    // Returns true if the intent is now canceled (or already was), false if it can't be (e.g. it
+    // succeeded or is processing), in which case the order must NOT be expired.
+    public boolean cancelPaymentIntentForExpiry(String paymentIntentId) {
+        try {
+            PaymentIntent intent = stripeClient.paymentIntents().retrieve(paymentIntentId);
+            if ("canceled".equals(intent.getStatus())) return true;
+            if (!CANCELABLE_INTENT_STATUSES.contains(intent.getStatus())) return false;
+            stripeClient.paymentIntents().cancel(paymentIntentId);
+            return true;
+        } catch (StripeException ex) {
+            // e.g. payment_intent_unexpected_state: it changed between retrieve and cancel. Keep the order.
+            log.warn("Could not cancel PaymentIntent {} for expiry: {}", paymentIntentId, ex.getMessage());
+            return false;
+        }
     }
 
     public void deleteStripeCustomer(String stripeCustomerId) {
@@ -269,8 +301,10 @@ public class PaymentService {
         order.setPaymentStatus(next);
         orderRepository.save(order);
 
-        // The card payment is dead - hand back any gift-card wallet money that was applied to this order.
-        if (next == PaymentStatus.FAILED || next == PaymentStatus.CANCELLED) {
+        // Only a canceled intent is really dead. A failed one can still be retried and paid, so
+        // refunding the wallet on FAILED would let the customer keep both the refund and the goods.
+        // Listeners: GiftCardService restores the wallet, OrderService cancels the order and returns its stock (H-5).
+        if (next == PaymentStatus.CANCELLED) {
             eventPublisher.publishEvent(new OrderPaymentVoidedEvent(order));
         }
 

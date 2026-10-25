@@ -75,7 +75,11 @@ enum OrderStatus {
     CANCELLED
 }
 
+# Must list every value of the Java PaymentStatus enum (H-6): every new order starts PENDING,
+# and serializing a value missing here fails the whole non-null field. EnumSchemaParityTest checks it.
 enum PaymentStatus {
+    PENDING
+    REQUIRES_ACTION
     PROCESSED
     PAID
     FAILED

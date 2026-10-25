@@ -190,7 +190,8 @@ public class OrderMapper {
     public OrderItem toItemEntity(
         Order order, Product product, String productImage, int quantity, DeliveryOption deliveryOption
     ) {
-        BigDecimal unitPrice = product.getPrice();
+        // H-4: charge what the shop displays. Snapshotted on the line, so a later price change doesn't touch it.
+        BigDecimal unitPrice = product.effectivePrice();
         BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
 
         return OrderItem.builder()

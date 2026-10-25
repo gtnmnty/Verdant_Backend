@@ -349,7 +349,7 @@ public class GiftCardService {
         return new GiftCardBalanceApplicationResult(totalApplied, txs.stream().map(giftCardMapper::toDto).toList());
     }
 
-    // ── Give wallet money back when an order's payment fails / is canceled ──
+    // ── Give wallet money back when an order's payment is canceled (not on FAILED: retryable, H-3) ──
 
     @EventListener
     @Transactional

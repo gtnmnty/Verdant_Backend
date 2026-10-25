@@ -1,6 +1,8 @@
 scalar Date
 scalar UUID
 
+# Must list every value of the Java NotificationType enum (H-7): one unknown value inside the
+# non-null notification lists errors out a user's whole feed. EnumSchemaParityTest checks it.
 enum NotificationType {
     APPOINTMENT_CREATED
     APPOINTMENT_UPDATED
@@ -10,6 +12,8 @@ enum NotificationType {
     APPOINTMENT_REJECTED
     APPOINTMENT_REMINDER
     APPOINTMENT_NO_SHOW
+    APPOINTMENT_COMPLETED
+    APPOINTMENT_DELETED
     STYLIST_ASSIGNED
 
     ORDER_CREATED
@@ -21,6 +25,10 @@ enum NotificationType {
     ORDER_PAYMENT_FAILED
     ORDER_REFUND_REQUESTED
     ORDER_REFUNDED
+    ORDER_PAYMENT_PENDING
+    ORDER_PAYMENT_ACTION_REQUIRED
+    ORDER_PAYMENT_PROCESSING
+    ORDER_PAYMENT_CANCELLED
 
     PRODUCT_ADDED
     PRODUCT_UPDATED
@@ -57,10 +65,13 @@ enum NotificationType {
     PHONE_NUMBER_CHANGED
     EMAIL_CHANGED
     PASSWORD_CHANGED
+    PASSWORD_RESET_REQUESTED
+    ACCOUNT_DELETED
     NEW_LOGIN_DETECTED
 
     REVIEW_RECEIVED
     REVIEW_REPLIED
+    FAVORITE_ADDED
 
     PROMO_CODE_ISSUED
     LOYALTY_POINTS_EARNED

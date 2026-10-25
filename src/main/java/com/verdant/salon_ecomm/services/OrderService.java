@@ -10,6 +10,9 @@ import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrdersDeletedEvent;
+import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
+import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
+import com.verdant.salon_ecomm.exceptions.UnpaidOrderLimitException;
 import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
@@ -27,6 +30,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -61,6 +65,15 @@ public class OrderService {
     private final PromoCodeService promoCodeService;
     private final ShippingService shippingService;
     private final ApplicationEventPublisher eventPublisher;
+
+    // H-5: unpaid states in which an order still holds reserved stock and can still be abandoned.
+    // PROCESSED is left out: an async payment (e.g. bank debit) in that state may still succeed.
+    static final Set<PaymentStatus> UNPAID_RESERVING_STATUSES =
+        EnumSet.of(PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION, PaymentStatus.FAILED);
+
+    // H-5: how many unpaid orders one customer may keep open at once. Soft limit (two parallel
+    // checkouts can both pass the count); its job is to stop one account draining all stock.
+    private static final int MAX_OPEN_UNPAID_ORDERS = 3;
 
     // ---------- Queries ----------
 
@@ -223,15 +236,28 @@ public class OrderService {
         if (input.orderStatus() != null) { order.setOrderStatus(input.orderStatus()); }
         if (input.paymentStatus() != null) { order.setPaymentStatus(input.paymentStatus()); }
 
-        // Cancelling an order or marking its payment failed/canceled must hand back any gift-card wallet
+        // Cancelling an order or marking its payment canceled must hand back any gift-card wallet
         // money used on it (idempotent - safe if the Stripe webhook already did it).
+        // FAILED no longer counts (H-3): the customer can still retry the card and pay, and a refunded
+        // wallet plus a successful retry would pay out twice. Use CANCELLED to give the money back.
         boolean orderJustCancelled = input.orderStatus() == OrderStatus.CANCELLED
             && previousOrderStatus != OrderStatus.CANCELLED;
         boolean paymentJustVoided = input.paymentStatus() != null
             && input.paymentStatus() != previousPaymentStatus
-            && (input.paymentStatus() == PaymentStatus.FAILED || input.paymentStatus() == PaymentStatus.CANCELLED);
+            && input.paymentStatus() == PaymentStatus.CANCELLED;
         if (orderJustCancelled || paymentJustVoided) {
             giftCardService.restoreWalletForOrder(order);
+        }
+
+        // H-5: undoing a cancel takes the stock again first (fails with INSUFFICIENT_STOCK if it is
+        // gone), so the item reconciliation below works on an order that really holds its stock.
+        OrderStatus targetOrderStatus = order.getOrderStatus();
+        if (order.isStockReleased() && targetOrderStatus != OrderStatus.CANCELLED) {
+            reReserveStock(order);
+        }
+        // Editing quantities of a cancelled order would move stock for goods that are not reserved.
+        if (targetOrderStatus == OrderStatus.CANCELLED && input.items() != null) {
+            throw new IllegalArgumentException("Items of a cancelled order can't be edited. Re-open the order first.");
         }
 
         List<OrderItem> items;
@@ -324,6 +350,12 @@ public class OrderService {
         }
         else { items = orderItemRepository.findByOrder_Id(id); }
 
+        // H-5: a cancel before shipping puts the goods back on the shelf, paid or not
+        // (refunding a paid order is a separate step). Shipped-then-cancelled orders keep their stock out.
+        if (orderJustCancelled && isNotShipped(previousOrderStatus)) {
+            releaseStock(order);
+        }
+
         Order savedOrder = orderRepository.save(order);
 
         eventPublisher.publishEvent(
@@ -337,6 +369,14 @@ public class OrderService {
 
     @Transactional
     public Order placeOrder(UUID userId, @Valid PlaceOrderInput input) {
+        // H-5: placing orders reserves stock before payment, so cap how many unpaid ones a
+        // customer can hold. Abandoned ones are expired by UnpaidOrderExpiryJob.
+        long openUnpaid = orderRepository.countOpenUnpaid(userId, OrderStatus.PLACED, UNPAID_RESERVING_STATUSES);
+        if (openUnpaid >= MAX_OPEN_UNPAID_ORDERS) {
+            throw new UnpaidOrderLimitException(
+                "You have " + openUnpaid + " unpaid orders. Complete or wait for them to expire before placing another.");
+        }
+
         List<CartItem> cartItems = cartService.getOwnedItems(userId, input.cartItemIds());
 
         User user = userRepository.findById(userId)
@@ -431,6 +471,55 @@ public class OrderService {
         eventPublisher.publishEvent(new OrdersDeletedEvent(orders, actor));
 
         return orders;
+    }
+
+    // H-5: Stripe canceled the PaymentIntent (the expiry job did it, or someone in the dashboard).
+    // That intent can never be paid, so an order that hasn't shipped is cancelled and its stock returned.
+    // Plain @EventListener: runs inside the webhook's transaction, next to GiftCardService's wallet refund.
+    @EventListener
+    @Transactional
+    public void onOrderPaymentVoided(OrderPaymentVoidedEvent event) {
+        Order order = event.order();
+        OrderStatus status = order.getOrderStatus();
+        // An already CANCELLED order was handled by the admin path; shipped orders keep their stock out.
+        if (status != OrderStatus.PLACED && status != OrderStatus.PROCESSING) return;
+
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        releaseStock(order);
+        orderRepository.save(order);
+    }
+
+    // H-5: oldest unpaid orders past the cutoff, for UnpaidOrderExpiryJob.
+    public List<Order> findExpiredUnpaidOrders(OffsetDateTime cutoff, int limit) {
+        return orderRepository.findExpiredUnpaid(
+            OrderStatus.PLACED, UNPAID_RESERVING_STATUSES, cutoff, PageRequest.of(0, limit));
+    }
+
+    // H-5: called by UnpaidOrderExpiryJob only after the order's Stripe intent (if any) was
+    // canceled, so the customer can no longer pay for goods that are being put back.
+    // Re-checks under a row lock: a payment or an admin may have changed the order since it was listed.
+    @Transactional
+    public boolean expireUnpaidOrder(UUID orderId) {
+        Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
+        if (order == null
+            || order.getOrderStatus() != OrderStatus.PLACED
+            || !UNPAID_RESERVING_STATUSES.contains(order.getPaymentStatus())) {
+            return false;
+        }
+
+        PaymentStatus previousPayment = order.getPaymentStatus();
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        order.setPaymentStatus(PaymentStatus.CANCELLED);
+        giftCardService.restoreWalletForOrder(order); // idempotent
+        releaseStock(order);
+        orderRepository.save(order);
+
+        // OrderUpdatedEvent needs a staff actor, so the system-side change goes out as a payment
+        // status change (same event the Stripe webhooks publish; owner notified and audited).
+        UUID ownerId = order.getUser() != null ? order.getUser().getId() : null;
+        eventPublisher.publishEvent(new PaymentStatusChangedEvent(
+            order.getId(), ownerId, previousPayment, PaymentStatus.CANCELLED, "order.unpaid_expired"));
+        return true;
     }
 
     // ---------- Helpers ----------
@@ -534,8 +623,7 @@ public class OrderService {
 
     // An order that was never paid and never left the shop still holds the stock reserved at checkout
     // and any wallet money drawn for it. PROCESSED is excluded because that payment may still succeed.
-    // Nothing else returns stock for cancelled or failed orders yet; if that changes, this must skip
-    // orders whose stock was already released.
+    // Cancel/expiry may already have returned the stock: releaseStock() skips those via the flag.
     private boolean holdsUnpaidReservations(Order order) {
         PaymentStatus payment = order.getPaymentStatus();
         boolean unpaid = payment == null
@@ -553,11 +641,37 @@ public class OrderService {
 
     private void releaseUnpaidReservations(Order order) {
         giftCardService.restoreWalletForOrder(order); // idempotent
+        releaseStock(order);
+    }
+
+    // H-5: the single place stock goes back for a dead order. claimStockRelease is an atomic
+    // UPDATE ... WHERE stock_released = false, so a second caller (webhook, job, admin, delete)
+    // gets 0 and does nothing. The entity flag is set too, or saving this managed order later
+    // would write the stale false back over the claim.
+    private void releaseStock(Order order) {
+        if (orderRepository.claimStockRelease(order.getId()) == 0) return;
+        order.setStockReleased(true);
         for (OrderItem item : orderItemRepository.findByOrder_Id(order.getId())) {
             if (item.getProduct() != null && item.getQuantity() != null) {
                 restoreStock(item.getProduct().getId(), item.getQuantity());
             }
         }
+    }
+
+    // Undo of releaseStock when an admin re-opens a cancelled order. reserveStock throws
+    // InsufficientStockException (rolling the whole edit back) if the goods were sold meanwhile.
+    private void reReserveStock(Order order) {
+        for (OrderItem item : orderItemRepository.findByOrder_Id(order.getId())) {
+            if (item.getProduct() != null && item.getQuantity() != null) {
+                reserveStock(item.getProduct().getId(), item.getQuantity());
+            }
+        }
+        orderRepository.unclaimStockRelease(order.getId());
+        order.setStockReleased(false);
+    }
+
+    private boolean isNotShipped(OrderStatus status) {
+        return status == null || status == OrderStatus.PLACED || status == OrderStatus.PROCESSING;
     }
 
     private void reconcileStockForQuantityChange(UUID productId, int oldQuantity, int newQuantity) {

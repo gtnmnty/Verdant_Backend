@@ -43,10 +43,12 @@ enum StylistSort{
     Z_TO_A
 }
 
+# Must match the Java StylistAccountStatus enum value for value (EnumSchemaParityTest).
 enum StylistAccountStatus {
     ACTIVE
     INACTIVE
     SUSPENDED
+    ARCHIVED
     PENDING
 }
 

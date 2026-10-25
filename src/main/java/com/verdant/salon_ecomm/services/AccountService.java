@@ -48,7 +48,8 @@ public class AccountService {
 
     // Lower rank = more privileged. Used to stop an actor from creating or
     // promoting an account to a role senior to their own (privilege escalation).
-    private static final Map<AccountRole, Integer> ROLE_RANK = Map.of(
+    // Package-private so RoleRankHierarchySyncTest can check it against SecurityConfig.roleHierarchy().
+    static final Map<AccountRole, Integer> ROLE_RANK = Map.of(
         AccountRole.OWNER, 0,
         AccountRole.MANAGER, 1,
         AccountRole.ADMIN, 2,
@@ -187,6 +188,13 @@ public class AccountService {
             user.setPendingEmail(null);
             user.setPendingEmailCode(null);
             user.setPendingEmailCodeExpiration(null);
+        }
+
+        // H-1: suspending/banning/deactivating here must end sessions, same as suspendAccounts().
+        // The JWT filter and token rotation already reject a locked account; deleting the refresh
+        // tokens as well means nothing usable is left behind if the account is later re-activated.
+        if (input.status() != null && isLockedOutStatus(input.status()) && !isLockedOutStatus(previousStatus)) {
+            refreshTokenService.deleteByUserId(user.getId());
         }
 
         User saved = accountRepository.save(user);

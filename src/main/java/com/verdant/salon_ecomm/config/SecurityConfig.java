@@ -100,8 +100,9 @@ public class SecurityConfig {
         return source;
     }
 
+    // Public so RoleRankHierarchySyncTest can compare it with AccountService.ROLE_RANK.
     @Bean
-    static RoleHierarchy roleHierarchy() {
+    public static RoleHierarchy roleHierarchy() {
         return RoleHierarchyImpl.withDefaultRolePrefix()
             .role("OWNER").implies("MANAGER")
             .role("MANAGER").implies("ADMIN")
