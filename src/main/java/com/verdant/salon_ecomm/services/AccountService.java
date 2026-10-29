@@ -476,7 +476,7 @@ public class AccountService {
 
     // Blocks privilege escalation: an actor may only create/assign a role that is
     // no more senior than their own (e.g. an ADMIN can never grant MANAGER/OWNER).
-    // Equal rank is allowed here, so an ADMIN may create another ADMIN but can't manage it afterwards.
+    // Equal rank is allowed here, so an ADMIN may create another ADMIN but can't manage it afterward.
     private void requireCanAssignRole(User actor, AccountRole targetRole) {
         if (actor == null || targetRole == null) {
             throw new ForbiddenException("Actor and role are required.");

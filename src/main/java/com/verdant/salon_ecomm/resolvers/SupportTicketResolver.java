@@ -11,6 +11,8 @@ import com.verdant.salon_ecomm.models.enums.support.AdminSupportTicketSort;
 import com.verdant.salon_ecomm.models.enums.support.SupportTicketCategory;
 import com.verdant.salon_ecomm.models.enums.support.SupportTicketPriority;
 import com.verdant.salon_ecomm.models.enums.support.SupportTicketStatus;
+import com.verdant.salon_ecomm.security.SecurityHelper;
+import com.verdant.salon_ecomm.services.SupportTicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -19,7 +21,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 
 import java.util.UUID;
-import com.verdant.salon_ecomm.security.SecurityHelper;
 
 @Controller
 @RequiredArgsConstructor
@@ -32,7 +33,6 @@ public class SupportTicketResolver {
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
-    // M-42: paginated (page is 1-based; defaults page 1, 10 per page, at most 50).
     public SupportTicketPage mySupportTickets(
         @Argument SupportTicketStatus status, @Argument int page, @Argument int pageSize
     ) {
