@@ -33,7 +33,7 @@ public class GiftCardTransaction {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
