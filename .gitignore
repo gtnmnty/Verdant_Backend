@@ -13,6 +13,7 @@ target/
 *.p12
 *.jks
 *.keystore
+*.dump
 secrets*.yml
 secrets*.yaml
 application-local.properties
@@ -49,3 +50,4 @@ build/
 ### Supabase CLI ###
 # Local link state (project ref, pooler URL); machine-specific, not source.
 supabase/.temp/
+.env.local

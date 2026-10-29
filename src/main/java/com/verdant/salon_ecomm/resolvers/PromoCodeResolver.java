@@ -37,7 +37,7 @@ public class PromoCodeResolver {
         return promoCodeService.getAll();
     }
 
-    // M-10: @Valid makes Spring GraphQL run the input's bean constraints before this method;
+    // @Valid makes Spring GraphQL run the input's bean constraints before this method;
     // a violation becomes a 400 listing the bad fields (GlobalExceptionHandler.handleConstraintViolation).
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
