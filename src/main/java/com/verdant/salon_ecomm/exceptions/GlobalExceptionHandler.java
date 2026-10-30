@@ -8,6 +8,7 @@ import jakarta.validation.Path;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -59,10 +60,13 @@ public class GlobalExceptionHandler {
     // M-5: rate limit hit (PublicFormRateLimiter, GiftCardRedeemLimiter).
     @GraphQlExceptionHandler
     public GraphQLError handleTooManyRequests(TooManyRequestsException ex, DataFetchingEnvironment env) {
+        Map<String, Object> extensions = ex.getRetryAfterSeconds() == null
+            ? Map.of("code", "TOO_MANY_REQUESTS", "status", 429)
+            : Map.of("code", "TOO_MANY_REQUESTS", "status", 429, "retryAfter", ex.getRetryAfterSeconds());
         return GraphqlErrorBuilder.newError(env)
             .message(ex.getMessage())
             .errorType(ErrorType.BAD_REQUEST)
-            .extensions(Map.of("code", "TOO_MANY_REQUESTS", "status", 429))
+            .extensions(extensions)
             .build();
     }
 
@@ -287,7 +291,11 @@ public class GlobalExceptionHandler {
     // M-5: 429 instead of the old 409, so clients can tell "slow down" from a real conflict.
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponse> handleTooManyRequestsRest(TooManyRequestsException ex, HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS);
+        if (ex.getRetryAfterSeconds() != null) {
+            response.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()));
+        }
+        return response
             .body(new ErrorResponse(
                 OffsetDateTime.now(),
                 429,

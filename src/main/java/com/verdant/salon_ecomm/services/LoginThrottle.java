@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.Locale;
 
 // M-5: per-account brute-force protection for /auth/login, replacing the hard "3 tries per email per
@@ -43,15 +44,17 @@ public class LoginThrottle {
     }
 
     public void checkAllowed(String email) {
-        boolean blocked;
+        Long secondsLeft;
         try {
-            blocked = Boolean.TRUE.equals(redis.hasKey(BLOCK_PREFIX + key(email)));
+            // TTL of the block key: -2 = no block, -1 = no expiry (never set that way), else seconds left.
+            secondsLeft = redis.getExpire(BLOCK_PREFIX + key(email), TimeUnit.SECONDS);
         } catch (DataAccessException e) {
             log.warn("Login throttle unavailable, failing open: {}", e.getMessage());
             return;
         }
-        if (blocked) {
-            throw new TooManyRequestsException("Too many failed sign-in attempts. Wait a moment and try again.");
+        if (secondsLeft != null && secondsLeft != -2) {
+            throw new TooManyRequestsException("Too many failed sign-in attempts. Wait a moment and try again.",
+                secondsLeft > 0 ? secondsLeft : 1L);
         }
     }
 

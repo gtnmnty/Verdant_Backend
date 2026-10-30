@@ -6,6 +6,7 @@ import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -94,8 +95,13 @@ public class Product {
     @Builder.Default
     private int lowStockThreshold = 10;
 
+    // The converter hands Postgres a varchar, which it refuses for a jsonb column ("column tags is of type
+    // jsonb but expression is of type character varying"), so every product insert failed. The write cast
+    // fixes that. Not @JdbcTypeCode(SqlTypes.JSON): Hibernate would then reuse JSON for SalonService's
+    // List<String> text[] columns too.
     @Column(columnDefinition = "jsonb")
     @Convert(converter = StringListConverter.class)
+    @ColumnTransformer(write = "?::jsonb")
     private List<String> tags;
 
     @Column(name = "is_featured")

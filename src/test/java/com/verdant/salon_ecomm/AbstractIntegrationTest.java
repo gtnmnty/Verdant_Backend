@@ -3,11 +3,13 @@ package com.verdant.salon_ecomm;
 import com.cloudinary.Cloudinary;
 import com.stripe.Stripe;
 import com.stripe.StripeClient;
+import com.verdant.salon_ecomm.support.TestData;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Answers;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -36,12 +38,13 @@ import static org.mockito.Mockito.when;
 // - Tests that share a context share the database. Use unique data (emails, SKUs) or clean up after yourself.
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestData.class)
 public abstract class AbstractIntegrationTest {
 
     // Port 9 (discard) is closed on any normal machine: a real Stripe call fails fast instead of going out.
     static final String DEAD_STRIPE_API_BASE = "http://localhost:9";
 
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+    protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
         .withDatabaseName("verdant_test")
         .withUsername("test")
         .withPassword("test");

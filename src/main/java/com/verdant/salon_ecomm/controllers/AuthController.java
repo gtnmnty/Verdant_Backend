@@ -116,6 +116,21 @@ public class AuthController {
         return ResponseEntity.ok("If an account with that email exists, a reset code has been sent.");
     }
 
+    // "Forgot password" step 1.5 — check the code before showing the new-password form.
+    // Doesn't consume the code; /reset-password still re-checks it. Same per-address cap as /verify,
+    // so this can't be used to brute-force a 6-digit code faster than /reset-password already allows.
+    @PostMapping("/verify-reset-code")
+    public ResponseEntity<?> verifyResetCode(
+        @Valid @RequestBody VerifyResetCodeDto verify,
+        HttpServletRequest request
+    ) {
+        rateLimiter.check("verify-reset:ip:" + request.getRemoteAddr(), 10, WINDOW);
+        rateLimiter.check("verify-reset:email:" + normalize(verify.getEmail()), 3, WINDOW);
+
+        authenticationService.verifyResetCode(verify);
+        return ResponseEntity.ok("Code verified.");
+    }
+
     // "Forgot password" step 2 — submit the code + new password together.
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(
