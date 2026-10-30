@@ -47,9 +47,9 @@ public class GiftCardStripeGateway {
             .setCustomer(stripeCustomerId)
             .putMetadata("type", "gift_card")
             .putMetadata("gift_card_id", giftCard.getId().toString())
-            .setAutomaticPaymentMethods(
-                PaymentIntentCreateParams.AutomaticPaymentMethods.builder().setEnabled(true).build()
-            )
+            // Card only: automatic payment methods offered every method enabled on the Stripe account
+            // (Bank, Cash App, Amazon Pay, Klarna...), which don't suit a gift card purchase.
+            .addPaymentMethodType("card")
             .build();
 
         RequestOptions options = RequestOptions.builder()

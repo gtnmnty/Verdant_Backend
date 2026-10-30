@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.resolvers.product;
 
 import jakarta.validation.Valid;
+import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
 import com.verdant.salon_ecomm.dtos.product.*;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
@@ -47,6 +48,18 @@ public class ProductResolver {
     @QueryMapping
     public Product product(@Argument String id) {
         return productService.getProductDetail(UUID.fromString(id));
+    }
+
+    // Was declared in product.graphql with no resolver: the null non-null field wiped out the whole
+    // favourites query, so the account Favourites tab showed nothing (services included).
+    @QueryMapping
+    @PreAuthorize("isAuthenticated()")
+    public CatalogItemConnection productFavorites(
+        @Argument Integer first,
+        @Argument String after,
+        @AuthenticationPrincipal User principal
+    ) {
+        return productService.getFavoriteProducts(principal.getId(), first, after);
     }
 
     @QueryMapping

@@ -476,11 +476,9 @@ public class PaymentService {
             .setCurrency(currency)
             .setCustomer(stripeCustomerId)
             .putMetadata("order_id", order.getId().toString())
-            .setAutomaticPaymentMethods(
-                PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                    .setEnabled(true)
-                    .build()
-            )
+            // Card only, same as gift cards (GiftCardStripeGateway): automatic payment methods also offered
+            // Bank, Klarna, Cash App... from the Stripe account settings.
+            .addPaymentMethodType("card")
             .build();
 
         RequestOptions options = RequestOptions.builder()

@@ -8,6 +8,9 @@ import com.verdant.salon_ecomm.dtos.product.events.ProductUpdatedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductsBulkDeletedEvent;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.ProductMapper;
+import com.verdant.salon_ecomm.dtos.CatalogItemConnection;
+import com.verdant.salon_ecomm.dtos.PageInfo;
+import com.verdant.salon_ecomm.models.entities.Favorite;
 import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
@@ -15,6 +18,7 @@ import com.verdant.salon_ecomm.models.enums.CollectionSort;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.ItemCatalog;
 import com.verdant.salon_ecomm.models.enums.ItemType;
+import com.verdant.salon_ecomm.repositories.FavoriteRepository;
 import com.verdant.salon_ecomm.repositories.MediaImageRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
@@ -32,6 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,7 +53,46 @@ public class ProductService {
     private final MediaImageRepository mediaImageRepository;
     private final CloudinaryService cloudinaryService;
     private final UserRepository userRepository;
+    private final FavoriteRepository favoriteRepository;
     private final ApplicationEventPublisher eventPublisher;
+
+    // Same cursor scheme as SalonServicesService.getFavoriteServices: ids sorted, cursor = base64(last id).
+    public CatalogItemConnection getFavoriteProducts(UUID userId, int first, String after) {
+        if (first < 0) {
+            throw BusinessRuleException.invalid("first must be non-negative");
+        }
+        UUID cursorId = (after != null && !after.isBlank())
+            ? UUID.fromString(new String(Base64.getDecoder().decode(after)))
+            : null;
+
+        List<UUID> favoriteTargetIds = favoriteRepository
+            .findByUserIdAndTargetType(userId, ItemType.PRODUCT).stream()
+            .map(Favorite::getTargetId)
+            .toList();
+
+        Map<UUID, Product> productById = favoriteTargetIds.isEmpty()
+            ? Map.of()
+            : productRepository.findAllById(favoriteTargetIds).stream()
+            .filter(product -> product.getStatus() == CollectionStatus.ACTIVE)
+            .collect(Collectors.toMap(Product::getId, product -> product));
+
+        List<UUID> productIds = productById.keySet().stream()
+            .sorted()
+            .filter(id -> cursorId == null || id.compareTo(cursorId) > 0)
+            .toList();
+
+        List<UUID> pageIds = productIds.stream().limit(first).toList();
+        boolean hasNextPage = productIds.size() > pageIds.size();
+
+        String endCursor = pageIds.isEmpty()
+            ? null
+            : Base64.getEncoder().encodeToString(pageIds.getLast().toString().getBytes());
+
+        return new CatalogItemConnection(
+            new ArrayList<>(pageIds.stream().map(productById::get).toList()),
+            new PageInfo(hasNextPage, endCursor)
+        );
+    }
 
     public ProductPage getProducts(
         String category, String search,

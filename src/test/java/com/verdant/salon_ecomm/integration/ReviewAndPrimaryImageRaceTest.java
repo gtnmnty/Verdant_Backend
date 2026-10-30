@@ -59,7 +59,8 @@ class ReviewAndPrimaryImageRaceTest extends AbstractIntegrationTest {
         List<Outcome<ReviewDto>> outcomes = Concurrently.run(6, i -> () ->
             reviewService.upsertReview(user.getId(), ItemType.PRODUCT, product.getId(), (short) (i % 5 + 1), "r" + i));
 
-        // The row lock makes later ones updates of the first; a unique-index hit would be a 409, never a 500.
+        // The row lock serializes them: later ones see the first review and get a 409 (one review per user);
+        // a unique-index hit would also be a 409, never a 500.
         assertThat(outcomes).filteredOn(o -> !o.succeeded())
             .allSatisfy(o -> assertThat(o.error()).isInstanceOf(BusinessRuleException.class));
         assertThat(reviewRows(user.getId(), product.getId())).isEqualTo(1);
