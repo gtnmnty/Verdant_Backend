@@ -5,7 +5,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -26,16 +25,17 @@ public class ShippingService {
         deliveryFees.put(DeliveryOption.SAME_DAY, sameDayFee);
     }
 
-     // One fee per order, not per item: takes the highest fee among the delivery
-     // options present in the order's items (so an order where every item shares one
-     // option is trivially "counted as one"). There is no free-shipping threshold.
+     // One fee per distinct delivery option: items sharing an option ship together and pay it once, and each
+     // different option is a separate shipment that adds its own fee (express + same-day = 5 + 10).
+     // Was the highest fee only. There is no free-shipping threshold. Mirrored by the frontend's
+     // deliveryFeeFor() (cart/_components/data.ts) — keep the two in sync.
      public BigDecimal calculateDeliveryFee(List<DeliveryOption> deliveryOptionsInOrder) {
          if (deliveryOptionsInOrder == null || deliveryOptionsInOrder.isEmpty()) {
              return BigDecimal.ZERO;
          }
          return deliveryOptionsInOrder.stream()
+             .distinct()
              .map(option -> deliveryFees.getOrDefault(option, BigDecimal.ZERO))
-             .max(Comparator.naturalOrder())
-             .orElse(BigDecimal.ZERO);
+             .reduce(BigDecimal.ZERO, BigDecimal::add);
      }
 }

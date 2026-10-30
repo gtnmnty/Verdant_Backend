@@ -31,7 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import com.verdant.salon_ecomm.utils.PageRequests;
 
@@ -99,15 +98,19 @@ public class ReviewService {
 
         String targetName = lockTargetAndGetName(targetType, targetId);
 
-        Optional<Review> existing = reviewRepository
-            .findByUser_IdAndTargetTypeAndTargetId(userId, targetType, targetId);
-        boolean isNewReview = existing.isEmpty();
+        // One review per customer per item. A second submission used to silently overwrite the first;
+        // there is no customer edit UI, so it now gets a clear conflict the review form shows as a toast.
+        if (reviewRepository.findByUser_IdAndTargetTypeAndTargetId(userId, targetType, targetId).isPresent()) {
+            throw BusinessRuleException.conflict("You've already submitted a review for this "
+                + (targetType == ItemType.PRODUCT ? "product." : "service."));
+        }
+        boolean isNewReview = true;
 
-        Review review = existing.orElseGet(() -> Review.builder()
+        Review review = Review.builder()
             .user(userRepository.getReferenceById(userId))
             .targetType(targetType)
             .targetId(targetId)
-            .build());
+            .build();
 
         review.setStars(stars);
         review.setText(cleanText);
@@ -117,7 +120,8 @@ public class ReviewService {
             // surfaces inside this try instead of at commit.
             saved = reviewRepository.saveAndFlush(review);
         } catch (DataIntegrityViolationException e) {
-            throw BusinessRuleException.conflict("You have already reviewed this. Refresh the page and edit your review.");
+            throw BusinessRuleException.conflict("You've already submitted a review for this "
+                + (targetType == ItemType.PRODUCT ? "product." : "service."));
         }
 
         updateAggregatesFor(targetType, targetId);
