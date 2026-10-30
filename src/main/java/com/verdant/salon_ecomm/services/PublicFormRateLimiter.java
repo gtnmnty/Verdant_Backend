@@ -22,10 +22,18 @@ public class PublicFormRateLimiter {
     private static final String PREFIX = "rl:";
 
     // Atomic sliding window: purge old hits, reject if full, otherwise record this hit.
+    // Returns 1 when allowed; when rejected, minus the milliseconds until the oldest hit leaves the window
+    // (at most -1), which becomes the Retry-After.
     private static final String LUA = """
         local key, now, window, max = KEYS[1], tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3])
         redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
-        if redis.call('ZCARD', key) >= max then return 0 end
+        if redis.call('ZCARD', key) >= max then
+            local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+            local wait = window
+            if oldest[2] then wait = tonumber(oldest[2]) + window - now end
+            if wait < 1 then wait = 1 end
+            return -wait
+        end
         redis.call('ZADD', key, now, ARGV[4])
         redis.call('PEXPIRE', key, window)
         return 1
@@ -49,6 +57,7 @@ public class PublicFormRateLimiter {
     public void check(String key, int maxAttempts, Duration window) {
         long now = System.currentTimeMillis();
         boolean allowed;
+        long retryAfterMs;
         try {
             Long result = redis.execute(
                 SCRIPT,
@@ -59,12 +68,16 @@ public class PublicFormRateLimiter {
                 now + "-" + UUID.randomUUID()   // unique member so same-millisecond hits aren't merged
             );
             allowed = result != null && result == 1L;
+            retryAfterMs = result != null && result < 0 ? -result : window.toMillis();
         } catch (DataAccessException e) {
             log.warn("Rate limiter: Redis unavailable, using the in-memory fallback: {}", e.getMessage());
-            allowed = fallback.tryAcquire(key, maxAttempts, window.toMillis(), now);
+            long waitMs = fallback.tryAcquire(key, maxAttempts, window.toMillis(), now);
+            allowed = waitMs == 0;
+            retryAfterMs = waitMs;
         }
         if (!allowed) {
-            throw new TooManyRequestsException("Too many requests. Please try again later.");
+            throw new TooManyRequestsException("Too many requests. Please try again later.",
+                TooManyRequestsException.secondsFromMillis(retryAfterMs));
         }
     }
 
@@ -78,18 +91,19 @@ public class PublicFormRateLimiter {
         private final Map<String, Deque<Long>> hits = new ConcurrentHashMap<>();
         private final Map<String, Long> windows = new ConcurrentHashMap<>();
 
-        boolean tryAcquire(String key, int maxAttempts, long windowMs, long now) {
+        // 0 = allowed (and recorded); otherwise the milliseconds until an attempt would be allowed.
+        long tryAcquire(String key, int maxAttempts, long windowMs, long now) {
             if (!hits.containsKey(key) && hits.size() >= MAX_KEYS) {
                 evictExpired(now);
-                if (hits.size() >= MAX_KEYS) return false;
+                if (hits.size() >= MAX_KEYS) return windowMs;
             }
             windows.put(key, windowMs);
             Deque<Long> deque = hits.computeIfAbsent(key, k -> new ArrayDeque<>());
             synchronized (deque) {
                 while (!deque.isEmpty() && deque.peekFirst() <= now - windowMs) deque.pollFirst();
-                if (deque.size() >= maxAttempts) return false;
+                if (deque.size() >= maxAttempts) return Math.max(1, deque.peekFirst() + windowMs - now);
                 deque.addLast(now);
-                return true;
+                return 0;
             }
         }
 

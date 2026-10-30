@@ -4,9 +4,11 @@ import com.verdant.salon_ecomm.exceptions.TooManyRequestsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -33,9 +35,18 @@ public class GiftCardRedeemLimiter {
         String key = PREFIX + userId;
         long now = System.currentTimeMillis();
         Long failures;
+        Long retryAfter = null;
         try {
             redis.opsForZSet().removeRangeByScore(key, 0, now - WINDOW.toMillis());
             failures = redis.opsForZSet().zCard(key);
+            if (failures != null && failures >= MAX_FAILURES) {
+                // A slot frees up when the oldest counted failure falls out of the window.
+                Set<ZSetOperations.TypedTuple<String>> oldest = redis.opsForZSet().rangeWithScores(key, 0, 0);
+                if (oldest != null && !oldest.isEmpty() && oldest.iterator().next().getScore() != null) {
+                    long oldestMs = oldest.iterator().next().getScore().longValue();
+                    retryAfter = TooManyRequestsException.secondsFromMillis(oldestMs + WINDOW.toMillis() - now);
+                }
+            }
         } catch (DataAccessException e) {
             // Same policy as PublicFormRateLimiter: an outage must not block redemptions.
             log.error("Gift card redeem limiter unavailable, failing open", e);
@@ -43,7 +54,7 @@ public class GiftCardRedeemLimiter {
         }
         if (failures != null && failures >= MAX_FAILURES) {
             // M-5: 429 like the other limits (was IllegalStateException -> "Something went wrong").
-            throw new TooManyRequestsException("Too many invalid attempts. Please try again later.");
+            throw new TooManyRequestsException("Too many invalid attempts. Please try again later.", retryAfter);
         }
     }
 

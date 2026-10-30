@@ -3,8 +3,10 @@ package com.verdant.salon_ecomm.services;
 import com.verdant.salon_ecomm.dtos.user.LogInUserDto;
 import com.verdant.salon_ecomm.dtos.user.RegisterUserDto;
 import com.verdant.salon_ecomm.dtos.user.ResetPasswordDto;
+import com.verdant.salon_ecomm.dtos.user.VerifyResetCodeDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
+import com.verdant.salon_ecomm.dtos.user.events.UserPasswordResetCodeRequestedEvent;
 import com.verdant.salon_ecomm.exceptions.*;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
@@ -174,6 +176,9 @@ public class AuthenticationService {
     // NOT throw when the email isn't found — returning the same response
     // either way stops an attacker from using this endpoint to discover
     // which emails have accounts.
+    // @Transactional so the mail listener (AFTER_COMMIT, @Async) fires once the code is saved; the
+    // response no longer waits on SMTP.
+    @Transactional
     public void forgotPassword(String email) {
         userRepository.findByEmail(email)
             .filter(User::isEmailVerified)
@@ -185,8 +190,22 @@ public class AuthenticationService {
             user.setResetPasswordCode(passwordEncoder.encode(plainCode));
             user.setResetPasswordCodeExpiration(OffsetDateTime.now().plusMinutes(10));
             userRepository.save(user);
-            sendPasswordResetEmail(user, plainCode);
+            eventPublisher.publishEvent(
+                new UserPasswordResetCodeRequestedEvent(user.getId(), user.getEmail(), plainCode));
         });
+    }
+
+    // Optional check between steps 1 and 2: lets the UI confirm the emailed code
+    // before asking for a new password. Read-only — the code stays valid so
+    // resetPassword() can redeem it; same message as resetPassword() on failure.
+    public void verifyResetCode(VerifyResetCodeDto input) {
+        boolean codeValid = userRepository.findByEmail(input.getEmail())
+            .map(user -> isResetCodeValid(user, input.getCode()))
+            .orElse(false);
+
+        if (!codeValid) {
+            throw new InvalidVerificationCodeException("Invalid or expired code.");
+        }
     }
 
     // Step 2 of forgot-password: verify the code and set the new password in
@@ -200,12 +219,7 @@ public class AuthenticationService {
         // NOTE: same error/message on "email not found" as on "wrong code" —
         // matches forgotPassword()'s no-account-enumeration behavior.
 
-        boolean codeValid = user.getResetPasswordCode() != null
-            && user.getResetPasswordCodeExpiration() != null
-            && user.getResetPasswordCodeExpiration().isAfter(OffsetDateTime.now())
-            && passwordEncoder.matches(input.getCode(), user.getResetPasswordCode());
-
-        if (!codeValid) {
+        if (!isResetCodeValid(user, input.getCode())) {
             throw new InvalidVerificationCodeException("Invalid or expired code.");
         }
 
@@ -219,12 +233,11 @@ public class AuthenticationService {
         eventPublisher.publishEvent(new UserPasswordChangedEvent(user));
     }
 
-    private void sendPasswordResetEmail(User user, String plainCode) {
-        try {
-            emailService.sendPasswordResetCodeEmail(user.getEmail(), plainCode);
-        } catch (MessagingException e) {
-            throw new EmailDeliveryException("Failed to send password reset email to: " + user.getEmail(), e);
-        }
+    private boolean isResetCodeValid(User user, String code) {
+        return user.getResetPasswordCode() != null
+            && user.getResetPasswordCodeExpiration() != null
+            && user.getResetPasswordCodeExpiration().isAfter(OffsetDateTime.now())
+            && passwordEncoder.matches(code, user.getResetPasswordCode());
     }
 
     private void sendVerificationEmail(User user, String plainCode) {
