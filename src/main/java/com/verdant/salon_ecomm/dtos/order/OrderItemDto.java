@@ -3,6 +3,7 @@ package com.verdant.salon_ecomm.dtos.order;
 import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record OrderItemDto(
@@ -14,5 +15,7 @@ public record OrderItemDto(
     BigDecimal unitPrice,
     BigDecimal subtotal,
     DeliveryOption deliveryOption,
-    String quantityLabel
+    String quantityLabel,
+    OffsetDateTime estimatedDeliveryMin,
+    OffsetDateTime estimatedDeliveryMax
 ) {}

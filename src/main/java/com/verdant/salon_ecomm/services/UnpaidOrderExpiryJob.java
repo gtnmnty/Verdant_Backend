@@ -22,8 +22,9 @@ public class UnpaidOrderExpiryJob {
     private final OrderService orderService;
     private final PaymentService paymentService;
 
-    // How long an unpaid order may hold its stock. Long enough for 3-D Secure and a slow customer.
-    @Value("${app.orders.unpaid-ttl-minutes:60}")
+    // How long an unpaid order may hold its stock. Long enough for 3-D Secure and a slow customer, short
+    // because these leftovers are hidden from the customer's order list (see OrderSpec.paymentAttempted).
+    @Value("${app.orders.unpaid-ttl-minutes:20}")
     private long unpaidTtlMinutes;
 
     @Scheduled(fixedDelayString = "${app.orders.unpaid-expiry-interval-ms:300000}") // default: every 5 min

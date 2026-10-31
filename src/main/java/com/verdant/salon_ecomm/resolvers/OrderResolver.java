@@ -24,6 +24,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,11 +128,19 @@ public class OrderResolver {
     @BatchMapping(typeName = "Order", field = "items")
     public Map<Order, List<OrderItemDto>> items(List<Order> orders) {
         List<UUID> orderIds = orders.stream().map(Order::getId).toList();
+        // The delivery estimate counts from when the order was placed; taken from the orders already in
+        // hand so the lazy item.getOrder() proxy isn't loaded just for a date.
+        Map<UUID, OffsetDateTime> placedAtByOrderId = orders.stream()
+            .filter(order -> order.getCreatedAt() != null)
+            .collect(Collectors.toMap(Order::getId, Order::getCreatedAt, (a, b) -> a));
 
         Map<UUID, List<OrderItemDto>> itemsByOrderId = orderItemRepository.findByOrder_IdIn(orderIds).stream()
             .collect(Collectors.groupingBy(
                 item -> item.getOrder().getId(),
-                Collectors.mapping(orderMapper::toOrderItemDto, Collectors.toList())
+                Collectors.mapping(
+                    item -> orderMapper.toOrderItemDto(item, placedAtByOrderId.get(item.getOrder().getId())),
+                    Collectors.toList()
+                )
             ));
 
         // Every order gets an entry (empty list if it has no items): the field is non-null.
