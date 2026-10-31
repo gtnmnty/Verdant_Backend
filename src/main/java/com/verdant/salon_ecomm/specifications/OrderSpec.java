@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.specifications;
 
 import com.verdant.salon_ecomm.models.entities.Order;
+import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.orders.OrderClientFilter;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,6 +28,7 @@ public final class OrderSpec {
     ) {
         return Specification.allOf(
             belongsToUser(userId),
+            paymentAttempted(),
             hasClientFilter(clientFilter),
             matchesSearch(search),
             archived ? outsideWindow(windowStart, windowEnd) : withinWindow(windowStart, windowEnd)
@@ -42,6 +44,14 @@ public final class OrderSpec {
         if (search == null || search.isBlank()) return null;
         String pattern = LikePatterns.contains(search);
         return (root, query, cb) -> cb.like(cb.lower(root.get("orderCode")), pattern, LikePatterns.ESCAPE);
+    }
+
+    // The customer's order list only shows orders whose payment form was actually submitted (or that were paid
+    // another way, e.g. fully by wallet). PENDING means no payment was ever attempted, and CANCELLED payment
+    // means that abandoned order expired: both are checkout leftovers, not orders. Stripe's webhooks move an
+    // order off PENDING once the card is submitted (processing / requires action / failed / succeeded).
+    public static Specification<Order> paymentAttempted() {
+        return (root, query, cb) -> cb.not(root.get("paymentStatus").in(PaymentStatus.PENDING, PaymentStatus.CANCELLED));
     }
 
     public static Specification<Order> belongsToUser(UUID userId) {

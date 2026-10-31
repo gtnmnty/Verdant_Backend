@@ -177,6 +177,10 @@ type OrderItem {
     subtotal: BigDecimal!
     deliveryOption: DeliveryOption!
     quantityLabel: String!
+    # Expected arrival window for this line's delivery option, counted from when the order was placed
+    # (shipping.days.* in application.properties).
+    estimatedDeliveryMin: DateTime
+    estimatedDeliveryMax: DateTime
 }
 
 type AdminOrder {

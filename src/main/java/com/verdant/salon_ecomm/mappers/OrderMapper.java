@@ -14,9 +14,11 @@ import com.verdant.salon_ecomm.models.enums.DeliveryOption;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.config.StripeConfig;
+import com.verdant.salon_ecomm.services.ShippingService;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Currency;
 import java.util.List;
@@ -28,7 +30,10 @@ public class OrderMapper {
     // Symbol of the store currency (stripe.currency), e.g. "$" for usd, used in item labels.
     private final String currencySymbol;
 
-    public OrderMapper(StripeConfig stripeConfig) {
+    private final ShippingService shippingService;
+
+    public OrderMapper(StripeConfig stripeConfig, ShippingService shippingService) {
+        this.shippingService = shippingService;
         this.currencySymbol = Currency.getInstance(stripeConfig.getCurrency().toUpperCase(Locale.ROOT))
             .getSymbol(Locale.US);
     }
@@ -76,10 +81,15 @@ public class OrderMapper {
         );
     }
 
-    public OrderItemDto toOrderItemDto(OrderItem item) {
+    public OrderItemDto toOrderItemDto(OrderItem item, OffsetDateTime orderPlacedAt) {
         String label = "Quantity: " + item.getQuantity()
             + " · " + formatPriceFixed(item.getUnitPrice())
             + " · " + formatDeliveryOption(item.getDeliveryOption());
+
+        // Counted from when the order was placed, so the date doesn't move when the order is edited later.
+        ShippingService.DeliveryEstimate estimate = shippingService.estimateDelivery(
+            item.getDeliveryOption(), orderPlacedAt
+        );
 
         return new OrderItemDto(
             item.getId(),
@@ -90,7 +100,9 @@ public class OrderMapper {
             item.getUnitPrice(),
             item.getSubtotal(),
             item.getDeliveryOption(),
-            label
+            label,
+            estimate != null ? estimate.min() : null,
+            estimate != null ? estimate.max() : null
         );
     }
 
