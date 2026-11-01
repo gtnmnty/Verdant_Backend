@@ -725,6 +725,12 @@ public class OrderService {
             OrderStatus.PLACED, UNPAID_RESERVING_STATUSES, cutoff, PageRequest.of(0, limit));
     }
 
+    // Deletes legacy unpaid orders that were cancelled before the retention cutoff (see OrderRepository). Returns how many.
+    @Transactional
+    public int purgeSettledUnpaidOrders(OffsetDateTime cutoff, int limit) {
+        return orderRepository.purgeSettledUnpaidOrders(cutoff, limit);
+    }
+
     // H-5: called by UnpaidOrderExpiryJob only after the order's Stripe intent (if any) was
     // canceled, so the customer can no longer pay for goods that are being put back.
     // Re-checks under a row lock: a payment or an admin may have changed the order since it was listed.
@@ -1045,12 +1051,14 @@ public class OrderService {
         order.setCancelledBy(by);
         order.setCancelledAt(OffsetDateTime.now());
         order.setCancelReason(reason);
+        promoCodeService.releaseRedemptions(order.getId()); // every cancel path (customer, staff, system) comes through here
     }
 
     private void clearCancellation(Order order) {
         order.setCancelledBy(null);
         order.setCancelledAt(null);
         order.setCancelReason(null);
+        promoCodeService.reacquireRedemptions(order.getId());
     }
 
     // ---------- Customer cancellation ----------

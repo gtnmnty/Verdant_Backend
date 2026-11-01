@@ -40,6 +40,10 @@ public class PromoCodeRedemption {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
+    // Set when the order was cancelled: the redemption no longer counts toward the customer's usage limit.
+    @Column(name = "released_at")
+    private OffsetDateTime releasedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = OffsetDateTime.now();
