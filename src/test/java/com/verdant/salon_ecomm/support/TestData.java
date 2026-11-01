@@ -101,7 +101,8 @@ public class TestData {
             .isPrimary(primary).sortOrder(sortOrder).build());
     }
 
-    // An unpaid order that already has a Stripe PaymentIntent, as createPaymentIntent leaves it.
+    // An unpaid order that already has a Stripe PaymentIntent. New orders are only written once paid, so this
+    // stands in for a legacy row (or any order whose payment status the webhook has yet to move).
     public Order orderAwaitingPayment(User user, String paymentIntentId) {
         return orderRepository.saveAndFlush(Order.builder()
             .user(user)

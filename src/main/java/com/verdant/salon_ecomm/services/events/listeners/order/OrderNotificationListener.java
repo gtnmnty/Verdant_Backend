@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.services.events.listeners.order;
 
 import com.verdant.salon_ecomm.dtos.notification.NotificationCreateDto;
 import com.verdant.salon_ecomm.models.entities.Order;
+import com.verdant.salon_ecomm.dtos.order.events.OrderCancelledByCustomerEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
@@ -112,6 +113,30 @@ public class OrderNotificationListener {
                 "Order " + order.getOrderCode() + " status changed to " + order.getOrderStatus(),
                 event.actor().getId(), event.actor().getFullName());
         }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderCancelledByCustomer(OrderCancelledByCustomerEvent event) {
+        Order order = event.order();
+        boolean refunded = event.refundAmount().signum() > 0;
+
+        notificationService.create(new NotificationCreateDto(
+            event.customer().getId(),
+            NotificationType.ORDER_CANCELLED,
+            "Order cancelled",
+            order.getOrderCode() + " was cancelled."
+                + (refunded ? " " + event.refundAmount().toPlainString() + " is being refunded to your card." : ""),
+            ReferenceType.ORDER,
+            order.getId(),
+            NotificationPriority.INFO,
+            null,
+            null
+        ));
+
+        notifyStaff(order, NotificationType.ORDER_CANCELLED, "Order cancelled by customer",
+            "Order " + order.getOrderCode() + " was cancelled by " + event.customer().getFullName()
+                + " (" + order.getCancelReason() + ")" + (refunded ? "; card refund issued." : "."),
+            null, null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

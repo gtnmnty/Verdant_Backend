@@ -65,18 +65,25 @@ public class OrderMapper {
             order.getCreatedAt(),
             order.getUpdatedAt(),
             order.getPromoDiscountAmount(),
-            order.getWalletAmountApplied()
+            order.getWalletAmountApplied(),
+            order.getTrackingNumber(),
+            order.getContactName(),
+            order.getContactPhone(),
+            order.getContactEmail(),
+            order.getPaidAt(),
+            order.getCancelReason(),
+            order.getCancelledAt()
         );
     }
 
-    // Contact details entered for a staff-placed order win over the account's saved ones.
+    // Contact details saved on the order win over the account's saved ones.
     private AdminOrderUserDto toAdminOrderUserDto(Order order) {
         User user = order.getUser();
         if (user == null) return null;
         return new AdminOrderUserDto(
             user.getId(),
             order.getContactName() != null ? order.getContactName() : user.getFullName(),
-            user.getEmail(),
+            order.getContactEmail() != null ? order.getContactEmail() : user.getEmail(),
             order.getContactPhone() != null ? order.getContactPhone() : user.getPhone()
         );
     }

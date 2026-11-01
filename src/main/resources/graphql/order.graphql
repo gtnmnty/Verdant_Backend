@@ -26,7 +26,15 @@ extend type Query {
 extend type Mutation {
     adminCreateOrder(input: AdminCreateOrderInput!): AdminOrder!
     adminUpdateOrder(id: ID!, input: AdminUpdateOrderInput!): AdminOrder!
-    placeOrder(input: PlaceOrderInput!): Order!
+    # Card checkout creates no order: it returns a checkout session for the Stripe form, and the order is created
+    # once Stripe confirms the payment. Only when the gift-card wallet covers everything is an order returned.
+    placeOrder(input: PlaceOrderInput!): PlaceOrderResult!
+    # Call after Stripe confirms the card; verifies the payment with Stripe and returns the order.
+    finalizeCheckout(paymentIntentId: String!): Order!
+    # Staff paying by card or bank for a customer (paymentMethod "card" or "bank"). Cash goes through adminCreateOrder.
+    adminStartOrderPayment(input: AdminCreateOrderInput!): CheckoutSession!
+    # Owner only, while the order is PLACED or PROCESSING and paid. The card is refunded automatically.
+    cancelMyOrder(id: ID!, reason: OrderCancelReason!, note: String): Order!
     adminDeleteOrders(ids: [ID!]!): [Order!]!
 }
 
@@ -36,8 +44,34 @@ input AdminOrderItemInput {
     deliveryOption: DeliveryOption!
 }
 
+type CheckoutSession {
+    draftId: ID!
+    paymentIntentId: String!
+    clientSecret: String!
+    amount: BigDecimal!
+    currency: String!
+}
+
+# Exactly one is set: order (paid from the wallet, created now) or checkout (a card payment is still needed).
+type PlaceOrderResult {
+    order: Order
+    checkout: CheckoutSession
+}
+
+enum OrderCancelReason {
+    CHANGED_MIND
+    WRONG_ADDRESS_OR_ITEM
+    FOUND_BETTER_PRICE
+    DELIVERY_TOO_SLOW
+    OTHER
+}
+
 input PlaceOrderInput {
     cartItemIds: [ID!]!
+    # Contact details for this order (all required); saved on the order, not on the customer's profile.
+    fullName: String!
+    phone: String!
+    email: String!
     shippingAddress: AddressInput!
     paymentMethod: String!
     promoCode: String
@@ -52,6 +86,7 @@ input AdminCreateOrderInput {
     phone: String
     email: String
     shippingAddress: AddressInput!
+    # "card", "bank" or "cash". Card and bank pay through adminStartOrderPayment; cash is placed directly.
     paymentMethod: String!
     items: [AdminOrderItemInput!]!
     promoCode: String
@@ -62,7 +97,7 @@ input AdminUpdateOrderInput {
     # Contact details for this order only; the customer's saved profile is not changed.
     fullName: String
     phone: String
-    email: String @deprecated(reason: "Ignored: the email belongs to the customer's account, not the order.")
+    email: String
     shippingAddress: AddressInput
     paymentMethod: String
     orderStatus: OrderStatus
@@ -154,6 +189,16 @@ type Order {
     updatedAt: DateTime!
     walletAmountApplied: BigDecimal
     promoDiscountAmount: BigDecimal
+    trackingNumber: String
+    contactName: String
+    contactPhone: String
+    contactEmail: String
+    # When the payment settled; the delivery estimate counts from here. Null while unpaid.
+    paidAt: DateTime
+    cancelReason: String
+    cancelledAt: DateTime
+    # Server-computed: the viewer owns the order, it is paid, and it hasn't shipped.
+    cancellable: Boolean!
 }
 
 # Slim product reference for order lines (H-12). Deliberately not the full Product type: the order
@@ -177,7 +222,7 @@ type OrderItem {
     subtotal: BigDecimal!
     deliveryOption: DeliveryOption!
     quantityLabel: String!
-    # Expected arrival window for this line's delivery option, counted from when the order was placed
+    # Expected arrival window for this line's delivery option, counted from when the order was paid
     # (shipping.days.* in application.properties).
     estimatedDeliveryMin: DateTime
     estimatedDeliveryMax: DateTime
@@ -201,6 +246,13 @@ type AdminOrder {
     updatedAt: DateTime!
     walletAmountApplied: BigDecimal
     promoDiscountAmount: BigDecimal
+    trackingNumber: String
+    contactName: String
+    contactPhone: String
+    contactEmail: String
+    paidAt: DateTime
+    cancelReason: String
+    cancelledAt: DateTime
 }
 
 type AdminOrderItem {

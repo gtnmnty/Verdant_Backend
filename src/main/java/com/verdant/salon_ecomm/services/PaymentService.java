@@ -7,14 +7,16 @@ import com.stripe.net.RequestOptions;
 import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.RefundCreateParams;
 import com.verdant.salon_ecomm.config.StripeConfig;
 import com.verdant.salon_ecomm.dtos.giftcards.events.GiftCardStripeWebhookEvent;
 import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
-import com.verdant.salon_ecomm.dtos.payment.CreatePaymentInput;
+import com.verdant.salon_ecomm.dtos.payment.DraftPaymentSucceededEvent;
 import com.verdant.salon_ecomm.dtos.payment.OrderPaymentDisputedEvent;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
 import com.verdant.salon_ecomm.models.entities.Order;
+import com.verdant.salon_ecomm.models.entities.PendingCheckout;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.entities.stripe.WebhookEvent;
 import com.verdant.salon_ecomm.exceptions.InvalidWebhookSignatureException;
@@ -38,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.OffsetDateTime;
 import java.util.Currency;
 import java.util.EnumSet;
 import java.util.Locale;
@@ -79,49 +82,6 @@ public class PaymentService {
 
     // ---------- Mutations ----------
 
-    public PaymentIntentDto createPaymentIntent(CreatePaymentInput input, UUID currentUserId, boolean isAdmin) {
-        Order order = self.loadAndAuthorizeOrder(input.orderId(), currentUserId, isAdmin);
-
-        // M-17 flow: check payable -> (existing intent? hand it back) -> create the intent at Stripe ->
-        // persistPaymentIntentId re-checks under the row lock -> if the order died in between, cancel the
-        // new intent and refuse. The re-check closes the window between this check and the Stripe call.
-        requirePayable(order);
-
-        if (order.getStripePaymentIntentId() != null) {
-            return paymentMapper.toDto(retrieveExistingIntent(order.getStripePaymentIntentId()));
-        }
-
-        User user = order.getUser();
-        if (user == null) {
-            throw new PaymentException(
-                "Order " + order.getId() + " has no associated user; cannot create a Stripe customer"
-            );
-        }
-
-        String stripeCustomerId = self.ensureStripeCustomer(user);
-
-        PaymentIntent intent;
-        try {
-            intent = self.createStripePaymentIntent(order, stripeCustomerId);
-        } catch (StripeException ex) {
-            throw new PaymentException("Failed to create PaymentIntent for order " + order.getId(), ex);
-        }
-
-        Order updated = self.persistPaymentIntentId(order.getId(), order.getUser().getId(), intent.getId());
-        // M-17: cancelled, expired or refunded while the intent was being created. The intent was not
-        // saved on the order; cancel it at Stripe (outside any DB transaction) so it can never be paid.
-        if (!isPayable(updated)) {
-            cancelIntentQuietly(intent.getId());
-            requirePayable(updated); // throws with the matching message
-        }
-        if (!intent.getId().equals(updated.getStripePaymentIntentId())) {
-            // Lost the race — another request already persisted its intent id first.
-            return paymentMapper.toDto(retrieveExistingIntent(updated.getStripePaymentIntentId()));
-        }
-
-        return paymentMapper.toDto(intent);
-    }
-
     // Statuses Stripe allows us to cancel. "processing" is left out on purpose: the money may already
     // be moving, and that order should be left to finish rather than expired.
     private static final Set<String> CANCELABLE_INTENT_STATUSES = Set.of(
@@ -143,6 +103,29 @@ public class PaymentService {
             // e.g. payment_intent_unexpected_state: it changed between retrieve and cancel. Keep the order.
             log.warn("Could not cancel PaymentIntent {} for expiry: {}", paymentIntentId, ex.getMessage());
             return false;
+        }
+    }
+
+    // Refunds a cancelled order's card payment. Called after the cancel is committed, outside any DB
+    // transaction. The idempotency key makes a retry of the same cancel return the first refund instead
+    // of creating a second one. Not setting payment_status here: the charge.refunded webhook does that.
+    public void refundOrder(UUID orderId, String paymentIntentId, BigDecimal amount) {
+        int fractionDigits = Currency.getInstance(stripeConfig.getCurrency().toUpperCase(Locale.ROOT))
+            .getDefaultFractionDigits();
+        long minorUnits = amount.movePointRight(fractionDigits).setScale(0, RoundingMode.HALF_UP).longValueExact();
+
+        RefundCreateParams params = RefundCreateParams.builder()
+            .setPaymentIntent(paymentIntentId)
+            .setAmount(minorUnits)
+            .putMetadata("order_id", orderId.toString())
+            .build();
+        RequestOptions options = RequestOptions.builder()
+            .setIdempotencyKey("refund-order-" + orderId)
+            .build();
+        try {
+            stripeClient.refunds().create(params, options);
+        } catch (StripeException ex) {
+            throw new PaymentException("Failed to refund PaymentIntent " + paymentIntentId + " for order " + orderId, ex);
         }
     }
 
@@ -194,6 +177,13 @@ public class PaymentService {
             return;
         }
 
+        // The order is created only once paid, so a succeeded payment with no order yet may belong to a draft
+        // checkout (the browser's finalizeCheckout normally got there first; this is the backup for a closed tab).
+        // Unknown intents are ignored by the listener.
+        if ("payment_intent.succeeded".equals(event.getType())) {
+            eventPublisher.publishEvent(new DraftPaymentSucceededEvent(ref.paymentIntentId()));
+        }
+
         // Not an order payment - hand it to GiftCardService via an event (a direct call created a
         // PaymentService <-> GiftCardService circular dependency). Unknown intents are ignored there.
         // M-14: the refund details travel along, so a partial refund no longer voids the whole card.
@@ -205,72 +195,6 @@ public class PaymentService {
     }
 
     // ---------- Private helpers ----------
-
-    // M-17: payment states after which no new charge may be taken. CANCELLED/REFUNDED/PARTIALLY_REFUNDED:
-    // the order's money was already voided or returned (wallet funds included), so a later succeeded
-    // webhook would mark a dead order PAID. Only PAID used to be checked.
-    private static final Set<PaymentStatus> NOT_PAYABLE_STATUSES = EnumSet.of(
-        PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED, PaymentStatus.CANCELLED
-    );
-
-    private static boolean isPayable(Order order) {
-        return order.getOrderStatus() != OrderStatus.CANCELLED
-            && !order.isStockReleased()
-            && !NOT_PAYABLE_STATUSES.contains(order.getPaymentStatus());
-    }
-
-    private static void requirePayable(Order order) {
-        if (order.getPaymentStatus() == PaymentStatus.PAID) {
-            throw new PaymentException("Order " + order.getId() + " is already fully paid — no payment intent needed");
-        }
-        // H-5: a cancelled or expired order has handed its stock back, so it must not be payable.
-        // M-17: the same goes for an order whose payment was cancelled or refunded.
-        if (!isPayable(order)) {
-            throw new PaymentException("Order " + order.getId() + " was cancelled or refunded and can no longer be paid");
-        }
-    }
-
-    // Best effort: if this fails the intent stays open, but it is not saved on the order, so
-    // createPaymentIntent never hands it out again; Stripe cancels abandoned intents eventually.
-    private void cancelIntentQuietly(String paymentIntentId) {
-        try {
-            stripeClient.paymentIntents().cancel(paymentIntentId);
-        } catch (StripeException ex) {
-            log.warn("Could not cancel PaymentIntent {} for an order that is no longer payable: {}",
-                paymentIntentId, ex.getMessage());
-        }
-    }
-
-    @Transactional(readOnly = true)
-    protected Order loadAndAuthorizeOrder(UUID orderId, UUID currentUserId, boolean isAdmin) {
-        Order order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
-
-        if (!isAdmin && (order.getUser() == null || !order.getUser().getId().equals(currentUserId))) {
-            throw new AccessDeniedException("Not your order");
-        }
-        return order;
-    }
-
-    @Transactional
-    protected Order persistPaymentIntentId(UUID orderId, UUID userId, String paymentIntentId) {
-        Order order = orderRepository.findByIdForUpdate(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
-
-        // M-17: the caller cancels the new intent when the order is no longer payable; it must not be saved.
-        if (order.getStripePaymentIntentId() == null && isPayable(order)) {
-            order.setStripePaymentIntentId(paymentIntentId);
-            orderRepository.save(order);
-
-            eventPublisher.publishEvent(new PaymentStatusChangedEvent(
-                order.getId(), userId,
-                null,
-                PaymentStatus.PENDING,
-                "payment_intent.created"
-            ));
-        }
-        return order;
-    }
 
     public String ensureStripeCustomer(User user) {
         if (user.getStripeCustomerId() != null) {
@@ -409,6 +333,10 @@ public class PaymentService {
         }
 
         order.setPaymentStatus(next);
+        // The delivery estimate counts from here.
+        if (next == PaymentStatus.PAID && order.getPaidAt() == null) {
+            order.setPaidAt(OffsetDateTime.now());
+        }
         orderRepository.save(order);
 
         // Only a canceled intent is really dead. A failed one can still be retried and paid, so
@@ -441,11 +369,16 @@ public class PaymentService {
         };
     }
 
-    private PaymentIntent retrieveExistingIntent(String stripePaymentIntentId) {
+    // ---------- Checkout payments: the order doesn't exist yet, the PaymentIntent belongs to a draft ----------
+
+    // Creates the Stripe charge for a draft. Called outside any DB transaction. The idempotency key makes a
+    // retry of the same draft hand back the same intent instead of a second charge.
+    public PaymentIntentDto createDraftPaymentIntent(PendingCheckout draft, User customer) {
+        String stripeCustomerId = self.ensureStripeCustomer(customer);
         try {
-            return stripeClient.paymentIntents().retrieve(stripePaymentIntentId);
+            return paymentMapper.toDto(self.createStripeDraftIntent(draft, stripeCustomerId));
         } catch (StripeException ex) {
-            throw new PaymentException("Failed to retrieve PaymentIntent " + stripePaymentIntentId, ex);
+            throw new PaymentException("Failed to create PaymentIntent for checkout " + draft.getId(), ex);
         }
     }
 
@@ -453,38 +386,52 @@ public class PaymentService {
         retryFor = { ApiConnectionException.class, ApiException.class },
         backoff = @Backoff(delay = 500, multiplier = 2)
     )
-    PaymentIntent createStripePaymentIntent(Order order, String stripeCustomerId) throws StripeException {
-        BigDecimal wallet = order.getWalletAmountApplied() != null ? order.getWalletAmountApplied() : BigDecimal.ZERO;
-        BigDecimal amountDue = order.getTotal().subtract(wallet);
-        if (amountDue.signum() <= 0) {
-            throw new PaymentException("Order " + order.getId() + " has nothing left to charge");
+    PaymentIntent createStripeDraftIntent(PendingCheckout draft, String stripeCustomerId) throws StripeException {
+        if (draft.getAmountDue().signum() <= 0) {
+            throw new PaymentException("Checkout " + draft.getId() + " has nothing left to charge");
         }
 
-        String currency = stripeConfig.getCurrency();
-        // Same fraction-digit source as PaymentMapper.toMajorUnits, so the two
-        // conversions stay inverse of each other for non-2-decimal currencies
-        // (JPY has 0 minor digits, KWD/BHD have 3).
-        int fractionDigits = Currency.getInstance(currency.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
-
-        long minorUnits = amountDue
-            .movePointRight(fractionDigits)
-            .setScale(0, RoundingMode.HALF_UP)
-            .longValueExact();
-
         PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-            .setAmount(minorUnits)
-            .setCurrency(currency)
+            .setAmount(toMinorUnits(draft.getAmountDue(), draft.getCurrency()))
+            .setCurrency(draft.getCurrency())
             .setCustomer(stripeCustomerId)
-            .putMetadata("order_id", order.getId().toString())
+            .putMetadata("draft_id", draft.getId().toString())
+            .putMetadata("user_id", draft.getUserId().toString())
             // Card only, same as gift cards (GiftCardStripeGateway): automatic payment methods also offered
             // Bank, Klarna, Cash App... from the Stripe account settings.
             .addPaymentMethodType("card")
             .build();
 
         RequestOptions options = RequestOptions.builder()
-            .setIdempotencyKey("order_" + order.getId() + "_payment_intent")
+            .setIdempotencyKey("draft_" + draft.getId() + "_payment_intent")
             .build();
 
         return stripeClient.paymentIntents().create(params, options);
+    }
+
+    public PaymentIntent retrieveIntent(String paymentIntentId) {
+        try {
+            return stripeClient.paymentIntents().retrieve(paymentIntentId);
+        } catch (StripeException ex) {
+            throw new PaymentException("Failed to retrieve PaymentIntent " + paymentIntentId, ex);
+        }
+    }
+
+    // Charge amount in Stripe minor units, from the same fraction-digit source as PaymentMapper.toMajorUnits
+    // (JPY has 0 minor digits, KWD/BHD have 3), so the two conversions stay inverse of each other.
+    public long toMinorUnits(BigDecimal amount, String currency) {
+        int fractionDigits = Currency.getInstance(currency.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
+        return amount.movePointRight(fractionDigits).setScale(0, RoundingMode.HALF_UP).longValueExact();
+    }
+
+    // Gives a whole payment back, for a checkout that was paid but can't become an order.
+    public void refundPaymentIntent(String paymentIntentId, String idempotencyKey) {
+        RefundCreateParams params = RefundCreateParams.builder().setPaymentIntent(paymentIntentId).build();
+        RequestOptions options = RequestOptions.builder().setIdempotencyKey(idempotencyKey).build();
+        try {
+            stripeClient.refunds().create(params, options);
+        } catch (StripeException ex) {
+            throw new PaymentException("Failed to refund PaymentIntent " + paymentIntentId, ex);
+        }
     }
 }

@@ -29,5 +29,12 @@ public record AdminOrderDto(
     // Must match the schema field name (AdminOrder.promoDiscountAmount): Spring GraphQL resolves record
     // components by name, so the old "promoDiscount" was always returned as null (H-12).
     BigDecimal promoDiscountAmount,
-    BigDecimal walletAmountApplied
+    BigDecimal walletAmountApplied,
+    String trackingNumber,
+    String contactName,
+    String contactPhone,
+    String contactEmail,
+    OffsetDateTime paidAt,
+    String cancelReason,
+    OffsetDateTime cancelledAt
 ) {}

@@ -7,6 +7,7 @@ import com.verdant.salon_ecomm.dtos.giftcards.events.OrderPaymentVoidedEvent;
 import com.verdant.salon_ecomm.dtos.order.OrderPage;
 import com.verdant.salon_ecomm.dtos.order.PlaceOrderInput;
 import com.verdant.salon_ecomm.dtos.order.admin.*;
+import com.verdant.salon_ecomm.dtos.order.events.OrderCancelledByCustomerEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
@@ -15,7 +16,8 @@ import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
 import com.verdant.salon_ecomm.dtos.product.events.ProductStockChangedEvent;
 import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
-import com.verdant.salon_ecomm.exceptions.UnpaidOrderLimitException;
+import com.verdant.salon_ecomm.config.StripeConfig;
+import com.verdant.salon_ecomm.exceptions.CheckoutFailedException;
 import com.verdant.salon_ecomm.mappers.OrderMapper;
 import com.verdant.salon_ecomm.models.entities.*;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
@@ -25,12 +27,14 @@ import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.orders.*;
 import com.verdant.salon_ecomm.repositories.OrderItemRepository;
 import com.verdant.salon_ecomm.repositories.OrderRepository;
+import com.verdant.salon_ecomm.repositories.PendingCheckoutRepository;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.specifications.OrderSpec;
 import com.verdant.salon_ecomm.utils.PageRequests;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
@@ -40,12 +44,15 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -65,16 +72,20 @@ public class OrderService {
     private final GiftCardService giftCardService;
     private final PromoCodeService promoCodeService;
     private final ShippingService shippingService;
+    private final PendingCheckoutRepository pendingCheckoutRepository;
+    private final StripeConfig stripeConfig;
     private final ApplicationEventPublisher eventPublisher;
 
-    // Unpaid states in which an order still holds reserved stock and can still be abandoned.
+    // How long a draft checkout may wait for its payment. Long enough for 3-D Secure and a slow customer;
+    // past it, UnpaidOrderExpiryJob cancels the Stripe intent and deletes the draft.
+    @Value("${app.orders.draft-ttl-minutes:30}")
+    private long draftTtlMinutes;
+
+    // Unpaid states of ORDERS created before drafts existed (legacy PENDING rows). New orders are only written
+    // once paid, so nothing new enters these states, but old rows still hold stock until the expiry job frees them.
     // PROCESSED is left out: an async payment (e.g. bank debit) in that state may still succeed.
     static final Set<PaymentStatus> UNPAID_RESERVING_STATUSES =
         EnumSet.of(PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION, PaymentStatus.FAILED);
-
-    // How many unpaid orders one customer may keep open at once. Soft limit (two parallel
-    // checkouts can both pass the count); its job is to stop one account draining all stock.
-    private static final int MAX_OPEN_UNPAID_ORDERS = 3;
 
     // ---------- Queries ----------
 
@@ -153,21 +164,12 @@ public class OrderService {
     // ---------- Mutations ----------
 
     @Transactional
+    // Staff order paid in cash: no card step, the order is created as PAID right away. Card and bank go
+    // through createAdminDraft (the order is created only after the payment succeeds).
     public AdminOrderDto createAdminOrder(@Valid AdminCreateOrderInput input, User actor) {
-        if (input.fullName() == null || input.fullName().isBlank()) {
-            throw BusinessRuleException.invalid("Customer full name is required for admin order creation");
-        }
-        if (input.phone() == null || input.phone().isBlank()) {
-            throw BusinessRuleException.invalid("Customer phone number is required for admin order creation");
-        }
-        if (input.fullName().trim().length() > 100) {
-            throw BusinessRuleException.invalid("Customer full name must be at most 100 characters");
-        }
-        if (input.phone().trim().length() > 20) {
-            throw BusinessRuleException.invalid("Customer phone number must be at most 20 characters");
-        }
-        if (input.items() == null || input.items().isEmpty()) {
-            throw BusinessRuleException.invalid("At least one item is required");
+        validateAdminCreateInput(input);
+        if (!ADMIN_METHOD_CASH.equals(requireAdminPaymentMethod(input.paymentMethod()))) {
+            throw BusinessRuleException.invalid("Card and bank orders are created after the payment succeeds.");
         }
 
         // The name/phone typed here belong to this order only; the customer's saved profile is left alone.
@@ -187,10 +189,14 @@ public class OrderService {
 
         List<DeliveryOption> deliveryOptions = pendingItems.stream().map(OrderItem::getDeliveryOption).toList();
         Order savedOrder = buildAndSaveOrder(
-            user, address, input.paymentMethod(), subtotal, promoDiscount, deliveryOptions
+            user, address, ADMIN_METHOD_CASH, subtotal, promoDiscount, deliveryOptions
         );
         savedOrder.setContactName(input.fullName().trim());
         savedOrder.setContactPhone(input.phone().trim());
+        savedOrder.setContactEmail(resolveAdminContactEmail(input, user));
+        // Cash is handed over at the till, so there is nothing to wait for.
+        savedOrder.setPaymentStatus(PaymentStatus.PAID);
+        savedOrder.setPaidAt(OffsetDateTime.now());
 
         pendingItems.forEach(item -> item.setOrder(savedOrder));
         List<OrderItem> savedItems = orderItemRepository.saveAll(pendingItems);
@@ -230,9 +236,17 @@ public class OrderService {
             }
             order.setContactPhone(input.phone().trim());
         }
+        if (input.email() != null && !input.email().isBlank()) {
+            requireValidEmail(input.email().trim());
+            order.setContactEmail(input.email().trim());
+        }
         if (input.paymentMethod() != null) { order.setPaymentMethod(input.paymentMethod()); }
         if (input.orderStatus() != null) { order.setOrderStatus(input.orderStatus()); }
         if (input.paymentStatus() != null) { order.setPaymentStatus(input.paymentStatus()); }
+        // The delivery estimate counts from payment, so note when staff mark an order paid by hand.
+        if (order.getPaymentStatus() == PaymentStatus.PAID && order.getPaidAt() == null) {
+            order.setPaidAt(OffsetDateTime.now());
+        }
 
         // Cancelling an order or marking its payment canceled must hand back any gift-card wallet
         // money used on it (idempotent - safe if the Stripe webhook already did it).
@@ -245,6 +259,11 @@ public class OrderService {
             && input.paymentStatus() == PaymentStatus.CANCELLED;
         if (orderJustCancelled || paymentJustVoided) {
             giftCardService.restoreWalletForOrder(order);
+        }
+        if (orderJustCancelled) {
+            markCancelled(order, OrderCancelledBy.STAFF, null);
+        } else if (previousOrderStatus == OrderStatus.CANCELLED && order.getOrderStatus() != OrderStatus.CANCELLED) {
+            clearCancellation(order); // staff re-opened it
         }
 
         // H-5: undoing a cancel takes the stock again first (fails with INSUFFICIENT_STOCK if it is
@@ -389,77 +408,260 @@ public class OrderService {
         return orderMapper.toAdminDto(savedOrder, items);
     }
 
+    // ---------- Checkout drafts: an order row is written only once it is paid ----------
+
+    private record LineRequest(UUID productId, int quantity, DeliveryOption deliveryOption) {}
+
+    // Customer checkout (card, or fully covered by the gift-card wallet). Prices the cart, validates the promo
+    // and stores all of it as a draft. Stock is only checked here, not held: it is taken when the order is
+    // created (createOrderFromDraft), and if it ran out by then the payment is refunded.
     @Transactional
-    public Order placeOrder(UUID userId, @Valid PlaceOrderInput input) {
-        // H-5: placing orders reserves stock before payment, so cap how many unpaid ones a
-        // customer can hold. Abandoned ones are expired by UnpaidOrderExpiryJob.
-        long openUnpaid = orderRepository.countOpenUnpaid(userId, OrderStatus.PLACED, UNPAID_RESERVING_STATUSES);
-        if (openUnpaid >= MAX_OPEN_UNPAID_ORDERS) {
-            throw new UnpaidOrderLimitException(
-                "You have " + openUnpaid + " unpaid orders. Complete or wait for them to expire before placing another.");
-        }
-
+    public PendingCheckout createCustomerDraft(UUID userId, @Valid PlaceOrderInput input) {
         List<CartItem> cartItems = cartService.getOwnedItems(userId, input.cartItemIds());
-
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
 
-        Address address = orderMapper.fromAddressInput(input.shippingAddress());
-
-        List<UUID> productIds = cartItems.stream()
-            .map(item -> item.getProduct().getId())
+        List<LineRequest> lines = cartItems.stream()
+            .map(ci -> new LineRequest(ci.getProduct().getId(), ci.getQuantity(), ci.getDeliveryOption()))
             .toList();
-        Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(productIds);
 
-        List<OrderItem> pendingItems = new ArrayList<>();
-        BigDecimal subtotal = BigDecimal.ZERO;
-        for (CartItem cartItem : cartItems) {
-            OrderItem item = reserveStockAndBuildItem(cartItem, primaryImages);
-            subtotal = subtotal.add(item.getSubtotal());
-            pendingItems.add(item);
-        }
-
-        BigDecimal promoDiscount = BigDecimal.ZERO;
-        if (input.promoCode() != null && !input.promoCode().isBlank()) {
-            // M-11: locks the promo row until this order commits (per-customer limit can't be raced).
-            promoDiscount = promoCodeService.validateForOrder(userId, input.promoCode(), subtotal).discountAmount();
-        }
-
-        List<DeliveryOption> deliveryOptions = pendingItems.stream().map(OrderItem::getDeliveryOption).toList();
-        Order savedOrder = buildAndSaveOrder(
-            user, address, input.paymentMethod(), subtotal, promoDiscount, deliveryOptions
+        return buildDraft(
+            user, null, lines, orderMapper.fromAddressInput(input.shippingAddress()),
+            input.fullName().trim(), input.phone().trim(), input.email().trim(),
+            "card", input.promoCode(), Boolean.TRUE.equals(input.useWalletBalance())
         );
+    }
 
-        Order finalSavedOrder = savedOrder;
-        pendingItems.forEach(item -> item.setOrder(finalSavedOrder));
-        orderItemRepository.saveAll(pendingItems);
+    // Staff paying by card or bank for a customer. Same draft; the staff member types the customer's card.
+    @Transactional
+    public PendingCheckout createAdminDraft(@Valid AdminCreateOrderInput input, User actor) {
+        validateAdminCreateInput(input);
+        String method = requireAdminPaymentMethod(input.paymentMethod());
+        if (method.equals(ADMIN_METHOD_CASH)) {
+            throw BusinessRuleException.invalid("Cash orders need no card payment. Place the order directly.");
+        }
+        User customer = resolveCustomer(input.userId(), input.email());
+        List<LineRequest> lines = input.items().stream()
+            .map(i -> new LineRequest(i.productId(), i.quantity(), i.deliveryOption()))
+            .toList();
 
-        if (promoDiscount.signum() > 0) {
-            if (input.promoCode() == null) {
-                throw new IllegalStateException("Promo discount applied without a promo code");
-            }
-            promoCodeService.recordRedemption(userId, input.promoCode(), promoDiscount, savedOrder);
+        return buildDraft(
+            customer, actor.getId(), lines, orderMapper.fromAddressInput(input.shippingAddress()),
+            input.fullName().trim(), input.phone().trim(), resolveAdminContactEmail(input, customer),
+            method, input.promoCode(), false
+        );
+    }
+
+    private PendingCheckout buildDraft(
+        User customer, UUID createdByUserId, List<LineRequest> requests, Address address,
+        String name, String phone, String email, String paymentMethod, String promoCode, boolean useWallet
+    ) {
+        if (requests.isEmpty()) {
+            throw BusinessRuleException.invalid("At least one item is required");
         }
 
-        // M-21 flow: useWalletBalance (schema default false) -> lock the customer's spendable cards ->
-        // draw soonest-expiring first, up to the order total -> record walletAmountApplied; if the wallet
-        // covered everything the order is PAID now, otherwise Stripe is charged total - walletAmountApplied.
-        // This never ran before: the schema input had no useWalletBalance field, so the value was always null.
-        if (Boolean.TRUE.equals(input.useWalletBalance())) {
-            GiftCardBalanceApplicationResult result =
-                giftCardService.applyBalanceToOrder(userId, savedOrder.getTotal(), savedOrder);
-            if (result.totalApplied().signum() > 0) {
-                savedOrder.setWalletAmountApplied(result.totalApplied());
-                if (result.totalApplied().compareTo(savedOrder.getTotal()) >= 0) {
-                    savedOrder.setPaymentStatus(PaymentStatus.PAID);
-                }
-                savedOrder = orderRepository.save(savedOrder);
+        Map<UUID, Product> products = new HashMap<>();
+        Map<UUID, Integer> wantedByProduct = new HashMap<>();
+        for (LineRequest request : requests) {
+            Product product = products.computeIfAbsent(request.productId(), id ->
+                productRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id)));
+            requireOrderable(product); // M-19
+            wantedByProduct.merge(request.productId(), request.quantity(), Integer::sum);
+        }
+        // A check only, not a hold: it fails early for something that is already sold out.
+        wantedByProduct.forEach((productId, wanted) -> {
+            int inStock = productRepository.findStockLevel(productId)
+                .map(level -> level.stockQuantity() != null ? level.stockQuantity() : 0)
+                .orElse(0);
+            if (inStock < wanted) {
+                throw new InsufficientStockException(
+                    "Not enough stock for product " + productId + " (requested " + wanted + ")");
+            }
+        });
+
+        List<PendingCheckout.Line> lines = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (LineRequest request : requests) {
+            BigDecimal unitPrice = products.get(request.productId()).effectivePrice(); // H-4, frozen on the draft
+            lines.add(new PendingCheckout.Line(
+                request.productId(), request.quantity(), request.deliveryOption(), unitPrice));
+            subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(request.quantity())));
+        }
+
+        String code = promoCode != null && !promoCode.isBlank() ? promoCode.trim() : null;
+        BigDecimal promoDiscount = BigDecimal.ZERO;
+        if (code != null) {
+            // M-11: locks the promo row until this transaction ends. The redemption itself is recorded when the
+            // order is created, so an abandoned checkout never uses up the customer's allowance.
+            promoDiscount = promoCodeService.validateForOrder(customer.getId(), code, subtotal).discountAmount();
+        }
+
+        BigDecimal deliveryFee = shippingService.calculateDeliveryFee(
+            requests.stream().map(LineRequest::deliveryOption).toList());
+        BigDecimal total = subtotal.subtract(promoDiscount).add(deliveryFee);
+
+        // The wallet is drawn when the order is created, not now; this only fixes how much Stripe is asked for.
+        BigDecimal wallet = BigDecimal.ZERO;
+        if (useWallet) {
+            wallet = giftCardService.getMyWalletBalance(customer.getId()).min(total).max(BigDecimal.ZERO);
+        }
+
+        return pendingCheckoutRepository.save(PendingCheckout.builder()
+            .userId(customer.getId())
+            .createdByUserId(createdByUserId)
+            .items(lines)
+            .shippingAddress(address)
+            .contactName(name)
+            .contactPhone(phone)
+            .contactEmail(email)
+            .paymentMethod(paymentMethod)
+            .promoCode(code)
+            .promoDiscountAmount(promoDiscount)
+            .subtotal(subtotal)
+            .deliveryFee(deliveryFee)
+            .total(total)
+            .walletAmountApplied(wallet)
+            .amountDue(total.subtract(wallet))
+            .currency(stripeConfig.getCurrency())
+            .expiresAt(OffsetDateTime.now().plusMinutes(draftTtlMinutes))
+            .build());
+    }
+
+    // The one place a paid checkout becomes an order. Runs in its own transaction (REQUIRES_NEW) so a failure
+    // rolls back only this attempt, even when called from inside the Stripe webhook's transaction.
+    //
+    // Idempotent: finalizeCheckout (the browser) and the payment_intent.succeeded webhook can both call it. The
+    // draft row is locked, so the second caller waits, then finds the draft gone and returns the order that exists.
+    //
+    // paymentIntentId is null for an order the gift-card wallet covered in full (nothing was charged).
+    // Throws CheckoutFailedException (everything rolled back, draft kept) when the money can't be turned into
+    // an order; the caller refunds it.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Order createOrderFromDraft(UUID draftId, String paymentIntentId) {
+        PendingCheckout draft = pendingCheckoutRepository.findByIdForUpdate(draftId).orElse(null);
+        if (draft == null) {
+            if (paymentIntentId != null) {
+                Optional<Order> existing = orderRepository.findByStripePaymentIntentId(paymentIntentId);
+                if (existing.isPresent()) return existing.get();
+            }
+            throw new ResourceNotFoundException("This checkout was not found or has expired.");
+        }
+
+        User customer = userRepository.findById(draft.getUserId())
+            .orElseThrow(() -> new CheckoutFailedException("The customer account no longer exists."));
+        User actor = draft.getCreatedByUserId() != null
+            ? userRepository.findById(draft.getCreatedByUserId()).orElse(null) : null;
+
+        Map<UUID, Product> products = productRepository.findAllById(
+                draft.getItems().stream().map(PendingCheckout.Line::productId).distinct().toList())
+            .stream().collect(Collectors.toMap(Product::getId, p -> p));
+        Map<UUID, MediaImageDto> primaryImages = resolvePrimaryImages(new ArrayList<>(products.keySet()));
+
+        // Stock is taken now, atomically per line. A sold-out line aborts (and rolls back) the whole order.
+        for (PendingCheckout.Line line : draft.getItems()) {
+            Product product = products.get(line.productId());
+            if (product == null) {
+                throw new CheckoutFailedException("An item in your order is no longer available.");
+            }
+            try {
+                reserveStock(line.productId(), line.quantity());
+            } catch (InsufficientStockException ex) {
+                throw new CheckoutFailedException("\"" + product.getName() + "\" sold out while you were paying.");
             }
         }
 
-        cartService.removeItems(userId, input.cartItemIds());
-        eventPublisher.publishEvent(new OrderPlacedEvent(savedOrder, user));
-        return savedOrder;
+        Order order = orderMapper.toEntity(
+            customer, draft.getShippingAddress(), draft.getPaymentMethod(),
+            draft.getSubtotal(), draft.getDeliveryFee(), draft.getTotal());
+        order.setPromoDiscountAmount(draft.getPromoDiscountAmount());
+        order.setOrderCode(generateOrderCode());
+        order.setTrackingNumber(generateTrackingNumber());
+        order.setContactName(draft.getContactName());
+        order.setContactPhone(draft.getContactPhone());
+        order.setContactEmail(draft.getContactEmail());
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(OffsetDateTime.now());
+        order.setStripePaymentIntentId(paymentIntentId);
+        order = orderRepository.save(order);
+
+        BigDecimal wallet = draft.getWalletAmountApplied();
+        if (wallet.signum() > 0) {
+            GiftCardBalanceApplicationResult drawn = giftCardService.applyBalanceToOrder(customer.getId(), wallet, order);
+            if (drawn.totalApplied().compareTo(wallet) < 0) {
+                throw new CheckoutFailedException("Your gift card balance changed while you were paying.");
+            }
+            order.setWalletAmountApplied(drawn.totalApplied());
+            order = orderRepository.save(order);
+        }
+
+        List<OrderItem> items = new ArrayList<>();
+        for (PendingCheckout.Line line : draft.getItems()) {
+            OrderItem item = orderMapper.toItemEntity(
+                order, products.get(line.productId()), resolveImageUrl(primaryImages, line.productId()),
+                line.quantity(), line.deliveryOption());
+            // The order is created at what the customer was charged, not at today's price.
+            item.setUnitPrice(line.unitPrice());
+            item.setSubtotal(line.unitPrice().multiply(BigDecimal.valueOf(line.quantity())));
+            items.add(item);
+        }
+        orderItemRepository.saveAll(items);
+
+        if (draft.getPromoCode() != null && draft.getPromoDiscountAmount().signum() > 0) {
+            // Honoured as validated when the draft was made, even if the limit was reached since.
+            promoCodeService.recordRedemption(
+                customer.getId(), draft.getPromoCode(), draft.getPromoDiscountAmount(), order);
+        }
+
+        // Only what was paid for leaves the cart; a Buy Again click made meanwhile keeps its extra quantity.
+        if (draft.getCreatedByUserId() == null) {
+            cartService.consumePaidQuantities(customer.getId(), draft.getItems());
+        }
+
+        pendingCheckoutRepository.delete(draft);
+
+        if (paymentIntentId != null) {
+            eventPublisher.publishEvent(new PaymentStatusChangedEvent(
+                order.getId(), customer.getId(), PaymentStatus.PENDING, PaymentStatus.PAID, "payment_intent.succeeded"));
+        }
+        if (actor != null) {
+            eventPublisher.publishEvent(new OrderCreatedByAdminEvent(order, actor));
+        } else {
+            eventPublisher.publishEvent(new OrderPlacedEvent(order, customer));
+        }
+        return order;
+    }
+
+    public Optional<PendingCheckout> findDraft(UUID draftId) {
+        return pendingCheckoutRepository.findById(draftId);
+    }
+
+    public Optional<PendingCheckout> findDraftByPaymentIntent(String paymentIntentId) {
+        return pendingCheckoutRepository.findByStripePaymentIntentId(paymentIntentId);
+    }
+
+    public Optional<Order> findOrderByPaymentIntent(String paymentIntentId) {
+        return orderRepository.findByStripePaymentIntentId(paymentIntentId);
+    }
+
+    public List<PendingCheckout> findCustomerDrafts(UUID userId) {
+        return pendingCheckoutRepository.findByUserIdAndCreatedByUserIdIsNull(userId);
+    }
+
+    public List<PendingCheckout> findExpiredDrafts(OffsetDateTime cutoff, int limit) {
+        return pendingCheckoutRepository.findExpired(cutoff, PageRequest.of(0, limit));
+    }
+
+    @Transactional
+    public void attachPaymentIntent(UUID draftId, String paymentIntentId) {
+        PendingCheckout draft = pendingCheckoutRepository.findByIdForUpdate(draftId)
+            .orElseThrow(() -> new ResourceNotFoundException("This checkout was not found or has expired."));
+        draft.setStripePaymentIntentId(paymentIntentId);
+    }
+
+    @Transactional
+    public void discardDraft(UUID draftId) {
+        pendingCheckoutRepository.findByIdForUpdate(draftId).ifPresent(pendingCheckoutRepository::delete);
     }
 
     @Transactional
@@ -512,6 +714,7 @@ public class OrderService {
         if (status != OrderStatus.PLACED && status != OrderStatus.PROCESSING) return;
 
         order.setOrderStatus(OrderStatus.CANCELLED);
+        markCancelled(order, OrderCancelledBy.SYSTEM, "Payment was cancelled");
         releaseStock(order);
         orderRepository.save(order);
     }
@@ -537,6 +740,7 @@ public class OrderService {
         PaymentStatus previousPayment = order.getPaymentStatus();
         order.setOrderStatus(OrderStatus.CANCELLED);
         order.setPaymentStatus(PaymentStatus.CANCELLED);
+        markCancelled(order, OrderCancelledBy.SYSTEM, "Payment was not completed in time");
         giftCardService.restoreWalletForOrder(order); // idempotent
         releaseStock(order);
         orderRepository.save(order);
@@ -581,6 +785,7 @@ public class OrderService {
         );
         order.setPromoDiscountAmount(promoDiscount);
         order.setOrderCode(generateOrderCode());
+        order.setTrackingNumber(generateTrackingNumber());
 
         return orderRepository.save(order);
     }
@@ -616,6 +821,47 @@ public class OrderService {
     }
 
     private record ItemBuildResult(List<OrderItem> items, BigDecimal subtotal) {}
+
+    private static final String ADMIN_METHOD_CASH = "cash";
+    private static final Set<String> ADMIN_PAYMENT_METHODS = Set.of("card", "bank", ADMIN_METHOD_CASH);
+
+    private void validateAdminCreateInput(AdminCreateOrderInput input) {
+        if (input.fullName() == null || input.fullName().isBlank()) {
+            throw BusinessRuleException.invalid("Customer full name is required for admin order creation");
+        }
+        if (input.phone() == null || input.phone().isBlank()) {
+            throw BusinessRuleException.invalid("Customer phone number is required for admin order creation");
+        }
+        if (input.fullName().trim().length() > 100) {
+            throw BusinessRuleException.invalid("Customer full name must be at most 100 characters");
+        }
+        if (input.phone().trim().length() > 20) {
+            throw BusinessRuleException.invalid("Customer phone number must be at most 20 characters");
+        }
+        if (input.items() == null || input.items().isEmpty()) {
+            throw BusinessRuleException.invalid("At least one item is required");
+        }
+    }
+
+    // Staff pick how the customer pays: card, bank (same Stripe card form, recorded as "bank") or cash.
+    private String requireAdminPaymentMethod(String paymentMethod) {
+        String method = paymentMethod == null ? "" : paymentMethod.trim().toLowerCase(Locale.ROOT);
+        if (!ADMIN_PAYMENT_METHODS.contains(method)) {
+            throw BusinessRuleException.invalid("Payment method must be card, bank or cash");
+        }
+        return method;
+    }
+
+    // An order never exists without an email: the one typed for it, else the customer's account email.
+    private String resolveAdminContactEmail(AdminCreateOrderInput input, User customer) {
+        String email = input.email() != null && !input.email().isBlank()
+            ? input.email().trim() : customer.getEmail();
+        if (email == null || email.isBlank()) {
+            throw BusinessRuleException.invalid("Customer email is required for admin order creation");
+        }
+        requireValidEmail(email);
+        return email;
+    }
 
     private Order findOrderOrThrow(UUID id) {
         return orderRepository.findById(id)
@@ -759,21 +1005,112 @@ public class OrderService {
         }
     }
 
-    private OrderItem reserveStockAndBuildItem(CartItem cartItem, Map<UUID, MediaImageDto> primaryImages) {
-        Product product = cartItem.getProduct();
-        int quantity = cartItem.getQuantity();
-
-        // M-19: the item may have been unpublished after it went into the cart.
-        requireOrderable(product);
-        reserveStock(product.getId(), quantity);
-
-        String productImage = resolveImageUrl(primaryImages, product.getId());
-        return orderMapper.toItemEntity(null, product, productImage, quantity, cartItem.getDeliveryOption());
-    }
-
     private String generateOrderCode() {
         Long sequenceValue = orderRepository.getNextOrderCodeSequenceValue();
         return "VS-" + String.format("%08d", sequenceValue);
+    }
+
+    // No 0/O/1/I so a code read aloud or off a screenshot can't be mistyped.
+    private static final String TRACKING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int TRACKING_CODE_LENGTH = 8;
+    private static final int TRACKING_MAX_ATTEMPTS = 10;
+    private static final SecureRandom TRACKING_RANDOM = new SecureRandom();
+
+    // Random, unique per order. The existsBy check avoids most collisions; the unique index
+    // (uq_orders_tracking_number) is the final guard against two concurrent orders drawing the same code.
+    String generateTrackingNumber() {
+        for (int attempt = 0; attempt < TRACKING_MAX_ATTEMPTS; attempt++) {
+            StringBuilder code = new StringBuilder("VT-");
+            for (int i = 0; i < TRACKING_CODE_LENGTH; i++) {
+                code.append(TRACKING_ALPHABET.charAt(TRACKING_RANDOM.nextInt(TRACKING_ALPHABET.length())));
+            }
+            String candidate = code.toString();
+            if (!orderRepository.existsByTrackingNumber(candidate)) return candidate;
+        }
+        throw new IllegalStateException("Could not generate a unique tracking number");
+    }
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
+    private void requireValidEmail(String email) {
+        if (email.length() > 255) {
+            throw BusinessRuleException.invalid("Customer email must be at most 255 characters");
+        }
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            throw BusinessRuleException.invalid("Customer email is not valid");
+        }
+    }
+
+    private void markCancelled(Order order, OrderCancelledBy by, String reason) {
+        order.setCancelledBy(by);
+        order.setCancelledAt(OffsetDateTime.now());
+        order.setCancelReason(reason);
+    }
+
+    private void clearCancellation(Order order) {
+        order.setCancelledBy(null);
+        order.setCancelledAt(null);
+        order.setCancelReason(null);
+    }
+
+    // ---------- Customer cancellation ----------
+
+    // What the cancellation left to do outside the DB transaction: refund this much to the card (null = nothing).
+    public record CustomerCancelResult(Order order, String paymentIntentId, BigDecimal cardRefundAmount) {}
+
+    // Whether the customer may cancel: paid, and not yet shipped.
+    public static boolean isCancellableByCustomer(Order order) {
+        OrderStatus status = order.getOrderStatus();
+        return (status == OrderStatus.PLACED || status == OrderStatus.PROCESSING)
+            && order.getPaymentStatus() == PaymentStatus.PAID;
+    }
+
+    private static final int MAX_CANCEL_NOTE_LENGTH = 150;
+
+    // Only the DB side. The card refund is a Stripe call and is done by OrderCancellationService after
+    // this transaction commits, so a slow Stripe call never holds the order row lock (see M-26).
+    @Transactional
+    public CustomerCancelResult cancelOrderForCustomer(
+        UUID userId, UUID orderId, OrderCancelReason reason, String note
+    ) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("Not your order");
+        }
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+            throw BusinessRuleException.conflict("This order is already cancelled.");
+        }
+        if (!isCancellableByCustomer(order)) {
+            throw BusinessRuleException.conflict(
+                "This order can no longer be cancelled because it has already shipped or isn't paid.");
+        }
+
+        String trimmedNote = note != null ? note.trim() : "";
+        if (trimmedNote.length() > MAX_CANCEL_NOTE_LENGTH) {
+            throw BusinessRuleException.invalid("Cancel note must be at most " + MAX_CANCEL_NOTE_LENGTH + " characters");
+        }
+        String storedReason = reason == OrderCancelReason.OTHER && !trimmedNote.isEmpty()
+            ? reason.label() + ": " + trimmedNote
+            : reason.label();
+
+        OrderStatus previousStatus = order.getOrderStatus();
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        markCancelled(order, OrderCancelledBy.CUSTOMER, storedReason);
+        releaseStock(order);
+        giftCardService.restoreWalletForOrder(order); // idempotent
+        Order saved = orderRepository.save(order);
+
+        // Only the part Stripe actually charged is refunded to the card; wallet money went back above.
+        BigDecimal wallet = saved.getWalletAmountApplied() != null ? saved.getWalletAmountApplied() : BigDecimal.ZERO;
+        BigDecimal cardPortion = saved.getTotal().subtract(wallet);
+        boolean refundCard = saved.getStripePaymentIntentId() != null && cardPortion.signum() > 0;
+
+        eventPublisher.publishEvent(new OrderCancelledByCustomerEvent(
+            saved, saved.getUser(), previousStatus, refundCard ? cardPortion : BigDecimal.ZERO));
+
+        return new CustomerCancelResult(
+            saved, saved.getStripePaymentIntentId(), refundCard ? cardPortion : null);
     }
 
     private Sort toClientSort(OrderClientSort sort) {

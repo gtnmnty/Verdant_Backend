@@ -25,6 +25,11 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") UUID id);
 
+    boolean existsByTrackingNumber(String trackingNumber);
+
+    // One order per Stripe payment (unique index uq_orders_stripe_payment_intent_id).
+    Optional<Order> findByStripePaymentIntentId(String stripePaymentIntentId);
+
     @Query(value = "SELECT nextval('order_code_seq')", nativeQuery = true)
     Long getNextOrderCodeSequenceValue();
 
@@ -53,17 +58,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @Query("UPDATE Order o SET o.stockReleased = false WHERE o.id = :id AND o.stockReleased = true")
     int unclaimStockRelease(@Param("id") UUID id);
 
-    // Open unpaid orders still holding stock: the per-user cap in placeOrder.
-    @Query("""
-        SELECT COUNT(o) FROM Order o
-        WHERE o.user.id = :userId AND o.orderStatus = :status
-          AND o.paymentStatus IN :paymentStatuses AND o.stockReleased = false
-        """)
-    long countOpenUnpaid(@Param("userId") UUID userId,
-                         @Param("status") OrderStatus status,
-                         @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
-
-    // Candidates for UnpaidOrderExpiryJob, oldest first.
+    // Candidates for UnpaidOrderExpiryJob, oldest first. Only legacy rows: new orders are written once paid.
     @Query("""
         SELECT o FROM Order o
         WHERE o.orderStatus = :status AND o.paymentStatus IN :paymentStatuses

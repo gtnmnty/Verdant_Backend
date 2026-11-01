@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.services.events.listeners.order;
 
 import com.verdant.salon_ecomm.models.entities.Order;
+import com.verdant.salon_ecomm.dtos.order.events.OrderCancelledByCustomerEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderCreatedByAdminEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderPlacedEvent;
 import com.verdant.salon_ecomm.dtos.order.events.OrderUpdatedEvent;
@@ -70,6 +71,20 @@ public class OrderAuditListener {
                 event.actor()
             );
         }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderCancelledByCustomer(OrderCancelledByCustomerEvent event) {
+        Order order = event.order();
+        auditLogService.recordSelfService(
+            AuditEntityType.ORDER,
+            order.getId(),
+            AuditActionType.CANCELLED,
+            "Order " + order.getOrderCode() + " cancelled",
+            "Cancelled by customer " + event.customer().getFullName() + ": " + order.getCancelReason()
+                + (event.refundAmount().signum() > 0 ? " (card refund " + event.refundAmount().toPlainString() + ")" : ""),
+            event.customer()
+        );
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
