@@ -8,5 +8,5 @@ UPDATE promo_code_redemptions r
 SET released_at = COALESCE(o.cancelled_at, now())
 FROM orders o
 WHERE r.order_id = o.id
-  AND o.order_status = 'CANCELLED'
+  AND o.status = 'CANCELLED'
   AND r.released_at IS NULL;

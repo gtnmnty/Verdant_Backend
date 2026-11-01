@@ -66,7 +66,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
         DELETE FROM orders o
         WHERE o.id IN (
             SELECT x.id FROM orders x
-            WHERE x.order_status = 'CANCELLED'
+            WHERE x.status = 'CANCELLED'
               AND x.payment_status IN ('PENDING', 'REQUIRES_ACTION', 'FAILED', 'CANCELLED')
               AND x.paid_at IS NULL
               AND x.stock_released = true

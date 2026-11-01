@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
+import com.verdant.salon_ecomm.dtos.appointment.AppointmentEmailContent;
+import com.verdant.salon_ecomm.dtos.order.OrderEmailContent;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +14,7 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class EmailService {
@@ -47,6 +50,45 @@ public class EmailService {
     // call redeemPasswordReset(token, newPassword). The token is Base64-URL, so it needs no escaping.
     public String passwordResetUrl(String token) {
         return frontendUrl + "/reset-password?token=" + token;
+    }
+
+    // Links in order emails (the customer's order page and its tracking page).
+    public String orderUrl(UUID orderId) {
+        return frontendUrl + "/orders/" + orderId;
+    }
+
+    public String trackingUrl(UUID orderId) {
+        return frontendUrl + "/tracking/" + orderId;
+    }
+
+    // Order confirmation, status update, cancellation and refund all share one template. Every value is
+    // rendered with th:text, so names and cancel reasons typed by customers are HTML-escaped.
+    public void sendOrderEmail(String to, String subject, OrderEmailContent content) throws MessagingException {
+        Context context = new Context();
+        context.setVariable("brandName", BRAND_NAME);
+        context.setVariable("content", content);
+
+        String htmlBody = templateEngine.process("emails/order", context);
+        sendEmail(to, subject, htmlBody);
+    }
+
+    public String appointmentsUrl() {
+        return frontendUrl + "/appointments";
+    }
+
+    public String bookingUrl() {
+        return frontendUrl + "/book";
+    }
+
+    // Appointment booked, confirmed, rescheduled or cancelled. Values are rendered with th:text (escaped).
+    public void sendAppointmentEmail(String to, String subject, AppointmentEmailContent content)
+            throws MessagingException {
+        Context context = new Context();
+        context.setVariable("brandName", BRAND_NAME);
+        context.setVariable("content", content);
+
+        String htmlBody = templateEngine.process("emails/appointment", context);
+        sendEmail(to, subject, htmlBody);
     }
 
     public void sendNewsletterWelcomeEmail(String to, String unsubscribeUrl) throws MessagingException {
