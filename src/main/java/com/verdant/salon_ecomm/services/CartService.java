@@ -2,6 +2,7 @@ package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.models.entities.CartItem;
+import com.verdant.salon_ecomm.models.entities.PendingCheckout;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
@@ -151,6 +152,26 @@ public class CartService {
         return getCart(userId);
     }
     
+    // After a paid order: take exactly the bought quantities out of the cart (delete a row once it hits 0).
+    // Matched by product + delivery option, not by cart row id: the customer may have added more of the same
+    // item in another tab while paying, and that extra quantity must stay in the cart.
+    @Transactional
+    public void consumePaidQuantities(UUID userId, List<PendingCheckout.Line> paidLines) {
+        for (PendingCheckout.Line line : paidLines) {
+            cartItemRepository
+                .findByUser_IdAndProduct_IdAndDeliveryOption(userId, line.productId(), line.deliveryOption())
+                .ifPresent(row -> {
+                    int left = row.getQuantity() - line.quantity();
+                    if (left > 0) {
+                        row.setQuantity(left);
+                        cartItemRepository.save(row);
+                    } else {
+                        cartItemRepository.delete(row);
+                    }
+                });
+        }
+    }
+
     public List<CartItem> getOwnedItems(UUID userId, List<UUID> cartItemIds) {
         return fetchOwnedOrThrow(userId, cartItemIds);
     }

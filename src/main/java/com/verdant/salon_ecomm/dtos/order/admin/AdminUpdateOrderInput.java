@@ -12,6 +12,7 @@ public record AdminUpdateOrderInput(
     // Saved on the order (contactName/contactPhone), never on the customer's profile.
     String fullName,
     String phone,
+    String email,
     @Valid AddressInput shippingAddress,
     String paymentMethod,
     OrderStatus orderStatus,

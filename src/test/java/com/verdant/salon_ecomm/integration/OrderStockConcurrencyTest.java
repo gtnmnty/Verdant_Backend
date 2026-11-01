@@ -3,9 +3,10 @@ package com.verdant.salon_ecomm.integration;
 import com.verdant.salon_ecomm.AbstractIntegrationTest;
 import com.verdant.salon_ecomm.dtos.AddressInput;
 import com.verdant.salon_ecomm.dtos.order.PlaceOrderInput;
-import com.verdant.salon_ecomm.exceptions.InsufficientStockException;
+import com.verdant.salon_ecomm.exceptions.CheckoutFailedException;
 import com.verdant.salon_ecomm.models.entities.CartItem;
 import com.verdant.salon_ecomm.models.entities.Order;
+import com.verdant.salon_ecomm.models.entities.PendingCheckout;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.repositories.ProductRepository;
@@ -25,8 +26,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-// Stock is reserved with one conditional UPDATE (stock >= qty), so parallel checkouts can never oversell or
-// drive stock negative; @Version catches lost updates on product edits.
+// Stock is taken when the order is created from a paid draft, with one conditional UPDATE (stock >= qty), so
+// parallel orders can never oversell or drive stock negative; @Version catches lost updates on product edits.
 class OrderStockConcurrencyTest extends AbstractIntegrationTest {
 
     private static final AddressInput ADDRESS =
@@ -37,8 +38,15 @@ class OrderStockConcurrencyTest extends AbstractIntegrationTest {
     @Autowired TestData data;
     @Autowired TransactionTemplate tx;
 
-    private static PlaceOrderInput checkout(CartItem item) {
-        return new PlaceOrderInput(List.of(item.getId()), ADDRESS, "card", false, null);
+    private static PlaceOrderInput checkout(CartItem... items) {
+        return new PlaceOrderInput(
+            java.util.Arrays.stream(items).map(CartItem::getId).toList(),
+            "Test Buyer", "0917000000", "buyer@test.verdant.local", ADDRESS, "card", false, null);
+    }
+
+    // A draft only checks stock, it never holds it, so every buyer gets one; stock is taken at order creation.
+    private PendingCheckout draft(User user, CartItem... items) {
+        return orderService.createCustomerDraft(user.getId(), checkout(items));
     }
 
     @Test
@@ -53,12 +61,15 @@ class OrderStockConcurrencyTest extends AbstractIntegrationTest {
             carts.add(data.cartItem(u, product, 1));
         }
 
+        List<PendingCheckout> drafts = new ArrayList<>();
+        for (int i = 0; i < buyers; i++) drafts.add(draft(users.get(i), carts.get(i)));
+
         List<Outcome<Order>> outcomes = Concurrently.run(buyers,
-            i -> () -> orderService.placeOrder(users.get(i).getId(), checkout(carts.get(i))));
+            i -> () -> orderService.createOrderFromDraft(drafts.get(i).getId(), "pi_race_" + drafts.get(i).getId()));
 
         assertThat(Concurrently.successes(outcomes)).isEqualTo(stock);
         assertThat(outcomes).filteredOn(o -> !o.succeeded())
-            .allSatisfy(o -> assertThat(o.error()).isInstanceOf(InsufficientStockException.class));
+            .allSatisfy(o -> assertThat(o.error()).isInstanceOf(CheckoutFailedException.class));
         assertThat(productRepository.findById(product.getId()).orElseThrow().getStockQuantity()).isZero();
     }
 
@@ -68,8 +79,11 @@ class OrderStockConcurrencyTest extends AbstractIntegrationTest {
         User a = data.customer(), b = data.customer();
         CartItem aCart = data.cartItem(a, product, 3), bCart = data.cartItem(b, product, 3);
 
+        PendingCheckout aDraft = draft(a, aCart), bDraft = draft(b, bCart);
+
         List<Outcome<Order>> outcomes = Concurrently.run(2,
-            i -> () -> orderService.placeOrder(i == 0 ? a.getId() : b.getId(), checkout(i == 0 ? aCart : bCart)));
+            i -> () -> orderService.createOrderFromDraft(
+                (i == 0 ? aDraft : bDraft).getId(), "pi_multi_" + i + "_" + aDraft.getId()));
 
         // 3 + 3 > 5: exactly one wins, and the loser's 3 units are not taken.
         assertThat(Concurrently.successes(outcomes)).isEqualTo(1);
@@ -77,17 +91,21 @@ class OrderStockConcurrencyTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void failedCheckoutReservesNothing() {
-        Product inStock = data.product(10), soldOut = data.product(0);
+    void failedOrderCreationTakesNoStockAndKeepsTheDraft() {
+        Product inStock = data.product(10), soonGone = data.product(1);
         User u = data.customer();
-        CartItem ok = data.cartItem(u, inStock, 2), gone = data.cartItem(u, soldOut, 1);
+        CartItem ok = data.cartItem(u, inStock, 2), gone = data.cartItem(u, soonGone, 1);
+        PendingCheckout draft = draft(u, ok, gone);
 
-        assertThatThrownBy(() -> orderService.placeOrder(u.getId(),
-            new PlaceOrderInput(List.of(ok.getId(), gone.getId()), ADDRESS, "card", false, null)))
-            .isInstanceOf(InsufficientStockException.class);
+        // The second item sells out while the customer is typing their card.
+        tx.executeWithoutResult(s -> productRepository.decrementStock(soonGone.getId(), 1));
 
-        // The whole order rolls back, including the reservation already made for the first item.
+        assertThatThrownBy(() -> orderService.createOrderFromDraft(draft.getId(), "pi_fail_" + draft.getId()))
+            .isInstanceOf(CheckoutFailedException.class);
+
+        // Everything rolls back, including the units already taken for the first item.
         assertThat(productRepository.findById(inStock.getId()).orElseThrow().getStockQuantity()).isEqualTo(10);
+        assertThat(orderService.findDraft(draft.getId())).isPresent();
     }
 
     @Test
@@ -112,7 +130,8 @@ class OrderStockConcurrencyTest extends AbstractIntegrationTest {
         Product staleEdit = productRepository.findById(product.getId()).orElseThrow();
         User u = data.customer();
 
-        orderService.placeOrder(u.getId(), checkout(data.cartItem(u, product, 1)));
+        PendingCheckout draft = draft(u, data.cartItem(u, product, 1));
+        orderService.createOrderFromDraft(draft.getId(), "pi_version_" + draft.getId());
 
         staleEdit.setStockQuantity(10);   // would silently undo the reservation
         assertThatThrownBy(() -> tx.executeWithoutResult(s -> productRepository.saveAndFlush(staleEdit)))

@@ -1,6 +1,7 @@
 package com.verdant.salon_ecomm.services;
 
 import com.verdant.salon_ecomm.models.entities.Order;
+import com.verdant.salon_ecomm.models.entities.PendingCheckout;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,25 +11,62 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+// Cleans up what customers abandon. Scheduling is switched on in config/SchedulingConfig (H-8).
+//
+// 1. Draft checkouts past expires_at: a draft holds no stock, so this only cancels its Stripe intent and deletes
+//    the row. A draft whose payment can't be cancelled was paid (or is processing): its order is created instead,
+//    in case the webhook missed it.
+// 2. Legacy unpaid ORDERS from before orders were written only once paid. They still hold reserved stock, which
+//    is returned here. No new rows reach this state.
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class UnpaidOrderExpiryJob {
-    // PlaceOrder reserves stock before payment. Orders left unpaid past the TTL are canceled
-    // and their stock (and any wallet money) returned, so abandoned checkouts can't drain inventory.
-    // Scheduling is switched on in config/SchedulingConfig (H-8).
     private static final int BATCH_SIZE = 50;
 
     private final OrderService orderService;
     private final PaymentService paymentService;
+    private final CheckoutService checkoutService;
 
-    // How long an unpaid order may hold its stock. Long enough for 3-D Secure and a slow customer, short
-    // because these leftovers are hidden from the customer's order list (see OrderSpec.paymentAttempted).
+    // How long a legacy unpaid order may hold its stock.
     @Value("${app.orders.unpaid-ttl-minutes:20}")
     private long unpaidTtlMinutes;
 
     @Scheduled(fixedDelayString = "${app.orders.unpaid-expiry-interval-ms:300000}") // default: every 5 min
     public void run() {
+        expireDrafts();
+        expireLegacyUnpaidOrders();
+    }
+
+    private void expireDrafts() {
+        List<PendingCheckout> expired;
+        try {
+            expired = orderService.findExpiredDrafts(OffsetDateTime.now(), BATCH_SIZE);
+        } catch (Exception e) {
+            log.error("Draft expiry: could not list expired drafts", e);
+            return;
+        }
+
+        int purged = 0;
+        for (PendingCheckout draft : expired) {
+            try {
+                String intentId = draft.getStripePaymentIntentId();
+                // Stripe first, outside any DB transaction: once canceled, the customer can no longer pay it.
+                if (intentId == null || paymentService.cancelPaymentIntentForExpiry(intentId)) {
+                    orderService.discardDraft(draft.getId());
+                    purged++;
+                } else {
+                    checkoutService.settleExpiredDraft(draft); // paid or processing: make the order
+                }
+            } catch (Exception e) {
+                // One bad draft must not stop the batch; it is retried on the next run.
+                log.error("Draft expiry failed for checkout {}", draft.getId(), e);
+            }
+        }
+        if (purged > 0) log.info("Draft expiry: removed {} abandoned checkouts", purged);
+    }
+
+    private void expireLegacyUnpaidOrders() {
         OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(unpaidTtlMinutes);
         List<Order> candidates;
         try {

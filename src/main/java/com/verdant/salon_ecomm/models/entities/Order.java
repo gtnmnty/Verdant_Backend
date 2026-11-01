@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.models.entities;
 
+import com.verdant.salon_ecomm.models.enums.orders.OrderCancelledBy;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import jakarta.persistence.*;
@@ -69,6 +70,27 @@ public class Order {
 
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
+
+    @Column(name = "contact_email", length = 255)
+    private String contactEmail;
+
+    // Short random code the customer uses to track the order (the order code is sequential, so guessable).
+    @Column(name = "tracking_number", length = 20)
+    private String trackingNumber;
+
+    // When the payment settled; the delivery estimate counts from here. Null while unpaid.
+    @Column(name = "paid_at")
+    private OffsetDateTime paidAt;
+
+    @Column(name = "cancel_reason", length = 200)
+    private String cancelReason;
+
+    @Column(name = "cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @Column(name = "cancelled_by", length = 20)
+    @Enumerated(EnumType.STRING)
+    private OrderCancelledBy cancelledBy;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;

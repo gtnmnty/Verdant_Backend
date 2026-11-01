@@ -1,5 +1,7 @@
 package com.verdant.salon_ecomm.resolvers;
 
+import com.verdant.salon_ecomm.dtos.checkout.CheckoutSessionDto;
+import com.verdant.salon_ecomm.dtos.checkout.PlaceOrderResult;
 import com.verdant.salon_ecomm.dtos.order.OrderItemDto;
 import com.verdant.salon_ecomm.dtos.order.OrderPage;
 import com.verdant.salon_ecomm.dtos.order.PlaceOrderInput;
@@ -13,6 +15,8 @@ import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.orders.*;
 import com.verdant.salon_ecomm.repositories.OrderItemRepository;
+import com.verdant.salon_ecomm.services.CheckoutService;
+import com.verdant.salon_ecomm.services.OrderCancellationService;
 import com.verdant.salon_ecomm.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -37,6 +41,8 @@ import com.verdant.salon_ecomm.security.SecurityHelper;
 public class OrderResolver {
 
     private final OrderService orderService;
+    private final OrderCancellationService orderCancellationService;
+    private final CheckoutService checkoutService;
     private final SecurityHelper securityHelper;
     private final OrderMapper orderMapper;
     private final OrderItemRepository orderItemRepository;
@@ -87,8 +93,35 @@ public class OrderResolver {
 
     @PreAuthorize("isAuthenticated()")
     @MutationMapping
-    public Order placeOrder(@Argument("input") PlaceOrderInput input, @AuthenticationPrincipal User principal) {
-        return orderService.placeOrder(principal.getId(), input);
+    public PlaceOrderResult placeOrder(@Argument("input") PlaceOrderInput input, @AuthenticationPrincipal User principal) {
+        return checkoutService.placeOrder(principal.getId(), input);
+    }
+
+    // The browser calls this right after Stripe confirms the card. The order is created here (or was already
+    // created by the webhook, in which case that order is returned).
+    @PreAuthorize("isAuthenticated()")
+    @MutationMapping
+    public Order finalizeCheckout(@Argument String paymentIntentId, @AuthenticationPrincipal User principal) {
+        return checkoutService.finalizeCheckout(
+            paymentIntentId, principal.getId(), securityHelper.isManagement(principal));
+    }
+
+    // Staff paying by card or bank for a customer: starts the Stripe form. Cash uses adminCreateOrder.
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
+    @MutationMapping
+    public CheckoutSessionDto adminStartOrderPayment(
+        @Argument("input") AdminCreateOrderInput input, @AuthenticationPrincipal User principal
+    ) {
+        return checkoutService.startAdminPayment(input, principal);
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @MutationMapping
+    public Order cancelMyOrder(
+        @Argument UUID id, @Argument OrderCancelReason reason, @Argument String note,
+        @AuthenticationPrincipal User principal
+    ) {
+        return orderCancellationService.cancelMyOrder(principal.getId(), id, reason, note);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
@@ -128,11 +161,11 @@ public class OrderResolver {
     @BatchMapping(typeName = "Order", field = "items")
     public Map<Order, List<OrderItemDto>> items(List<Order> orders) {
         List<UUID> orderIds = orders.stream().map(Order::getId).toList();
-        // The delivery estimate counts from when the order was placed; taken from the orders already in
-        // hand so the lazy item.getOrder() proxy isn't loaded just for a date.
+        // The delivery estimate counts from when the order was paid (null while unpaid, so no date is shown);
+        // taken from the orders already in hand so the lazy item.getOrder() proxy isn't loaded just for a date.
         Map<UUID, OffsetDateTime> placedAtByOrderId = orders.stream()
-            .filter(order -> order.getCreatedAt() != null)
-            .collect(Collectors.toMap(Order::getId, Order::getCreatedAt, (a, b) -> a));
+            .filter(order -> order.getPaidAt() != null)
+            .collect(Collectors.toMap(Order::getId, Order::getPaidAt, (a, b) -> a));
 
         Map<UUID, List<OrderItemDto>> itemsByOrderId = orderItemRepository.findByOrder_IdIn(orderIds).stream()
             .collect(Collectors.groupingBy(
@@ -149,6 +182,14 @@ public class OrderResolver {
             result.put(order, itemsByOrderId.getOrDefault(order.getId(), List.of()));
         }
         return result;
+    }
+
+    // Computed on the server so the client doesn't repeat the cancel rules. Only the order's owner sees true.
+    @SchemaMapping(typeName = "Order", field = "cancellable")
+    public boolean cancellable(Order order, @AuthenticationPrincipal User principal) {
+        boolean isOwner = order.getUser() != null && principal != null
+            && order.getUser().getId().equals(principal.getId());
+        return isOwner && OrderService.isCancellableByCustomer(order);
     }
 
     @SchemaMapping(typeName = "Order", field = "address")
