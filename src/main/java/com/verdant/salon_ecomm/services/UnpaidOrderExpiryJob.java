@@ -18,6 +18,7 @@ import java.util.List;
 //    in case the webhook missed it.
 // 2. Legacy unpaid ORDERS from before orders were written only once paid. They still hold reserved stock, which
 //    is returned here. No new rows reach this state.
+// 3. Cancelled legacy unpaid orders are deleted after a retention period.
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -32,10 +33,27 @@ public class UnpaidOrderExpiryJob {
     @Value("${app.orders.unpaid-ttl-minutes:20}")
     private long unpaidTtlMinutes;
 
+    // How long a cancelled legacy unpaid order is kept before it is deleted.
+    @Value("${app.orders.legacy-unpaid-retention-days:7}")
+    private long legacyUnpaidRetentionDays;
+
     @Scheduled(fixedDelayString = "${app.orders.unpaid-expiry-interval-ms:300000}") // default: every 5 min
     public void run() {
         expireDrafts();
         expireLegacyUnpaidOrders();
+        purgeLegacyUnpaidOrders();
+    }
+
+    // 3. Legacy unpaid orders that were cancelled (above, or earlier) are deleted after a retention period.
+    //    Runs out of work once the old rows are gone.
+    private void purgeLegacyUnpaidOrders() {
+        try {
+            int purged = orderService.purgeSettledUnpaidOrders(
+                OffsetDateTime.now().minusDays(legacyUnpaidRetentionDays), BATCH_SIZE);
+            if (purged > 0) log.info("Legacy unpaid-order purge: deleted {} cancelled unpaid orders", purged);
+        } catch (Exception e) {
+            log.error("Legacy unpaid-order purge failed", e);
+        }
     }
 
     private void expireDrafts() {

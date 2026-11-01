@@ -58,6 +58,27 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @Query("UPDATE Order o SET o.stockReleased = false WHERE o.id = :id AND o.stockReleased = true")
     int unclaimStockRelease(@Param("id") UUID id);
 
+    // Legacy orders that were never paid and are already settled: cancelled, stock back, no wallet money still
+    // attached. Items and promo redemptions go with them (ON DELETE CASCADE). Orders with a gift-card ledger row are
+    // kept: that foreign key doesn't cascade and the ledger must keep pointing at its order.
+    @Modifying
+    @Query(value = """
+        DELETE FROM orders o
+        WHERE o.id IN (
+            SELECT x.id FROM orders x
+            WHERE x.order_status = 'CANCELLED'
+              AND x.payment_status IN ('PENDING', 'REQUIRES_ACTION', 'FAILED', 'CANCELLED')
+              AND x.paid_at IS NULL
+              AND x.stock_released = true
+              AND COALESCE(x.wallet_amount_applied, 0) = 0
+              AND x.created_at < :cutoff
+              AND NOT EXISTS (SELECT 1 FROM gift_card_transactions t WHERE t.order_id = x.id)
+            ORDER BY x.created_at
+            LIMIT :limit
+        )
+        """, nativeQuery = true)
+    int purgeSettledUnpaidOrders(@Param("cutoff") OffsetDateTime cutoff, @Param("limit") int limit);
+
     // Candidates for UnpaidOrderExpiryJob, oldest first. Only legacy rows: new orders are written once paid.
     @Query("""
         SELECT o FROM Order o

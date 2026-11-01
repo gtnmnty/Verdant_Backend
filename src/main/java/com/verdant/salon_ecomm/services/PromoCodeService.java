@@ -124,6 +124,18 @@ public class PromoCodeService {
         return redemption;
     }
 
+    // Cancelled order: the customer gets the promo use back. Runs in the cancel's transaction. Idempotent.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void releaseRedemptions(UUID orderId) {
+        promoCodeRedemptionRepository.releaseForOrder(orderId);
+    }
+
+    // Staff re-opened a cancelled order: its promo use counts again.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void reacquireRedemptions(UUID orderId) {
+        promoCodeRedemptionRepository.reacquireForOrder(orderId);
+    }
+
     // ── Admin CRUD ───────────────────────────────────────────────
 
     @Transactional
