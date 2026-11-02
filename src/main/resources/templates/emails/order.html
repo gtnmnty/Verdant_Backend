@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; margin: 0; padding: 0;">
+<div style="background-color: #f5f5f5; padding: 20px;">
+    <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border-radius: 8px;">
+        <p style="margin: 0 0 4px; color: #888888; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;"
+           th:text="${brandName}"></p>
+        <h2 style="margin-top: 0;" th:text="${content.heading}"></h2>
+
+        <p style="line-height: 1.6;" th:if="${content.greetingName != null}">
+            Hi <span th:text="${content.greetingName}"></span>,
+        </p>
+        <p style="line-height: 1.6;" th:each="paragraph : ${content.paragraphs}" th:text="${paragraph}"></p>
+
+        <table style="width: 100%; margin: 20px 0 8px; font-size: 14px; border-collapse: collapse;">
+            <tr>
+                <td style="color: #888888; padding: 4px 0;">Order</td>
+                <td style="text-align: right; font-weight: bold;" th:text="${content.orderCode}"></td>
+            </tr>
+            <tr th:if="${content.trackingNumber != null}">
+                <td style="color: #888888; padding: 4px 0;">Tracking number</td>
+                <td style="text-align: right; font-weight: bold;" th:text="${content.trackingNumber}"></td>
+            </tr>
+        </table>
+
+        <table th:if="${!#lists.isEmpty(content.lines)}"
+               style="width: 100%; font-size: 14px; border-collapse: collapse; border-top: 1px solid #eeeeee;">
+            <tr th:each="line : ${content.lines}" style="border-bottom: 1px solid #eeeeee;">
+                <td style="padding: 10px 0;" th:text="${line.label}"></td>
+                <td style="padding: 10px 0; text-align: right; white-space: nowrap;" th:text="${line.value}"></td>
+            </tr>
+        </table>
+
+        <table th:if="${!#lists.isEmpty(content.summary)}"
+               style="width: 100%; margin-top: 8px; font-size: 14px; border-collapse: collapse;">
+            <tr th:each="row : ${content.summary}">
+                <td style="padding: 4px 0; color: #555555;" th:text="${row.label}"></td>
+                <td style="padding: 4px 0; text-align: right;" th:text="${row.value}"></td>
+            </tr>
+        </table>
+
+        <p style="margin: 28px 0;" th:if="${content.ctaUrl != null}">
+            <a th:href="${content.ctaUrl}"
+               style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 24px; display: inline-block;"
+               th:text="${content.ctaLabel}"></a>
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eeeeee; margin: 28px 0 16px;"/>
+        <p style="color: #888888; font-size: 12px; line-height: 1.5;">
+            You're receiving this because of an order placed with <span th:text="${brandName}"></span>.
+        </p>
+    </div>
+</div>
+</body>
+</html>
