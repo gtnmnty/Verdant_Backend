@@ -9,22 +9,23 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 @Component
 public class CartMapper {
 
-    public CartItemDto toDto(CartItem entity, Set<UUID> favoritedProductIds) {
+    // primaryImageUrls: product id -> URL of its primary media_images row, looked up by CartService. Product.images
+    // is the old column that the admin form no longer writes, so reading it left every cart image empty.
+    public CartItemDto toDto(CartItem entity, Set<UUID> favoritedProductIds, Map<UUID, String> primaryImageUrls) {
         if (entity == null) return null;
 
         ProductSummaryDto productSummary = null;
         Product product = entity.getProduct();
 
         if (product != null) {
-            String primaryImageUrl = (product.getImages() != null && product.getImages().length > 0)
-                ? product.getImages()[0]
-                : null;
+            String primaryImageUrl = primaryImageUrls.get(product.getId());
 
             productSummary = ProductSummaryDto.builder()
                 .id(product.getId())
@@ -48,9 +49,9 @@ public class CartMapper {
     }
 
     // L-17: favoritedProductIds is looked up by CartService; the mapper no longer touches the database.
-    public CartDto toCartDto(List<CartItem> items, Set<UUID> favoritedProductIds) {
+    public CartDto toCartDto(List<CartItem> items, Set<UUID> favoritedProductIds, Map<UUID, String> primaryImageUrls) {
         List<CartItemDto> itemDTOs = items.stream()
-            .map(item -> toDto(item, favoritedProductIds))
+            .map(item -> toDto(item, favoritedProductIds, primaryImageUrls))
             .toList();
 
         int totalItems = items.stream()

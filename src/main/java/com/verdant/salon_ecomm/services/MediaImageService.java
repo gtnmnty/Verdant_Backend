@@ -203,8 +203,18 @@ public class MediaImageService {
 
         // M-40: the merge function keeps the first image if an item ever has two primaries (possible before
         // V14). Plain toMap threw on the duplicate key, which broke primaryImage for the whole page.
-        return primaryImages.stream()
+        Map<UUID, MediaImageDto> result = primaryImages.stream()
             .collect(Collectors.toMap(MediaImage::getEntityId, this::toImageDTO, (first, duplicate) -> first));
+
+        // An item with photos but none flagged primary (the flag is only set when an upload is marked primary)
+        // shows its first photo instead of nothing, so carts, orders and cards never go blank.
+        List<UUID> withoutPrimary = entityIds.stream().filter(id -> !result.containsKey(id)).toList();
+        if (!withoutPrimary.isEmpty()) {
+            mediaImageRepository
+                .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(entityType, withoutPrimary)
+                .forEach(image -> result.putIfAbsent(image.getEntityId(), toImageDTO(image)));
+        }
+        return result;
     }
 
     private MediaImageDto toImageDTO(MediaImage image) {
