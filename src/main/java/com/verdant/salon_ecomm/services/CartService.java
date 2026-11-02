@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -37,15 +38,31 @@ public class CartService {
     private final ProductRepository productRepository;
     private final CartMapper cartMapper;
     private final FavoriteRepository favoriteRepository;
+    private final MediaImageService mediaImageService;
 
     public CartDto getCart(UUID userId) {
         List<CartItem> items = cartItemRepository.findByUser_IdOrderByAddedAtDesc(userId);
-        return cartMapper.toCartDto(items, favoritedProductIds(items, userId));
+        return cartMapper.toCartDto(items, favoritedProductIds(items, userId), primaryImageUrls(items));
     }
 
     public CartDto getSelectedCart(UUID userId, List<UUID> cartItemIds) {
         List<CartItem> items = fetchOwnedOrThrow(userId, cartItemIds);
-        return cartMapper.toCartDto(items, favoritedProductIds(items, userId));
+        return cartMapper.toCartDto(items, favoritedProductIds(items, userId), primaryImageUrls(items));
+    }
+
+    // Primary photo of every product in the cart, from media_images (what the admin product form uploads to).
+    // One query per cart, not per item.
+    private Map<UUID, String> primaryImageUrls(List<CartItem> items) {
+        List<UUID> productIds = items.stream()
+            .map(CartItem::getProduct)
+            .filter(java.util.Objects::nonNull)
+            .map(Product::getId)
+            .distinct()
+            .toList();
+        if (productIds.isEmpty()) return Map.of();
+
+        return mediaImageService.getPrimaryImagesByEntityIds(ItemType.PRODUCT, productIds).entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().url()));
     }
 
     // L-17: the favorites lookup used to run inside CartMapper, so a mapper was talking to the database.
