@@ -68,7 +68,7 @@ public class AuthenticationService {
         User user = new User();
         user.setFullName(input.getFullName().trim());
         user.setEmail(input.getEmail());
-        user.setPhone(input.getPhoneNumber());
+        user.setPhone(input.getPhone());
         user.setPasswordHash(passwordEncoder.encode(input.getPassword()));
         user.setRole(AccountRole.CUSTOMER);
         String plainCode = issueVerificationCode(user, 5);

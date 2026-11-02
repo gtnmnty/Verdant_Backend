@@ -25,7 +25,9 @@ public record AdminServiceDto(
     boolean isHomeService,
     boolean isFeatured,
     List<MediaImageDto> images,
-    List<StylistSummaryDto> stylistIds,
+    // Named to match AdminServiceDto.stylists in service.graphql; Spring GraphQL binds fields by name,
+    // so the old name "stylistIds" left the non-null stylists field resolving to null.
+    List<StylistSummaryDto> stylists,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
 ) {}

@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.dtos.user;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.verdant.salon_ecomm.validation.ValidPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -24,6 +25,7 @@ public class RegisterUserDto {
     @ToString.Exclude
     private String password;
 
+    @JsonAlias("phoneNumber")
     @Size(max = 20, message = "Phone number must be at most 20 characters")
-    private String phoneNumber;
+    private String phone;
 }

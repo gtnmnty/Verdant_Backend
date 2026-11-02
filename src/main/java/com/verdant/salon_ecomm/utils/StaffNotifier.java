@@ -37,6 +37,26 @@ public class StaffNotifier {
         AccountRole.RECEPTIONIST, AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER
     );
 
+    // What each staff role is allowed to be told about. Notifications are stored per recipient, so a role that
+    // isn't listed for a type never gets a row for it (nothing to hide later in the UI).
+    //   OWNER, ADMIN  everything
+    //   MANAGER       everything except account/security events
+    //   RECEPTIONIST  front-desk work only: appointments, orders and reviews
+    public static List<AccountRole> rolesFor(NotificationType type) {
+        String name = type.name();
+        boolean appointment = name.startsWith("APPOINTMENT_") || type == NotificationType.STYLIST_ASSIGNED;
+        boolean order = name.startsWith("ORDER_");
+        boolean review = name.startsWith("REVIEW_") || type == NotificationType.FAVORITE_ADDED;
+        boolean account = name.startsWith("ACCOUNT_") || name.startsWith("PASSWORD_")
+            || type == NotificationType.PHONE_NUMBER_CHANGED
+            || type == NotificationType.EMAIL_CHANGED
+            || type == NotificationType.NEW_LOGIN_DETECTED;
+
+        if (appointment || order || review) return STAFF_ROLES;
+        if (account) return List.of(AccountRole.ADMIN, AccountRole.OWNER);
+        return List.of(AccountRole.ADMIN, AccountRole.MANAGER, AccountRole.OWNER);
+    }
+
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
@@ -58,7 +78,7 @@ public class StaffNotifier {
     ) {
         List<UUID> recipients;
         try {
-            recipients = userRepository.findIdsByRoleInAndStatus(STAFF_ROLES, AccountStatus.ACTIVE);
+            recipients = userRepository.findIdsByRoleInAndStatus(rolesFor(type), AccountStatus.ACTIVE);
         } catch (RuntimeException e) {
             log.error("Could not load staff for a {} notification; none sent", type, e);
             return;
