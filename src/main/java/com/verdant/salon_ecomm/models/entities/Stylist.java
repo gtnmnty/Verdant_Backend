@@ -45,6 +45,9 @@ public class Stylist {
     @Column(name = "avatar_url", columnDefinition = "text")
     private String avatarUrl;
 
+    @Column(name = "avatar_public_id", length = 255)
+    private String avatarPublicId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id")
     private Branch branch;
