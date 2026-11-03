@@ -6,6 +6,7 @@ import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -20,6 +21,8 @@ public class ReviewNotificationListener {
     // M-38: staff fan-out through StaffNotifier (active staff only, one transaction, failures isolated).
     private final StaffNotifier staffNotifier;
 
+    // @Async: staff notifications / audit writes run after the response, so the customer isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewSubmitted(ReviewSubmittedEvent event) {
         Review review = event.review();

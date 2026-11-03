@@ -8,6 +8,7 @@ import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -19,6 +20,8 @@ public class BranchAuditListener {
     private final AuditLogService auditLogService;
 
     // M-29: single-branch create and update were not audited at all.
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBranchCreated(BranchCreatedEvent event) {
         Branch branch = event.branch();
@@ -32,6 +35,7 @@ public class BranchAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBranchUpdated(BranchUpdatedEvent event) {
         if (!event.hasChanges()) return;
@@ -49,6 +53,7 @@ public class BranchAuditListener {
     // One entry for the whole batch, not one per branch — matches the
     // convention used for bulk cancel/delete across the other modules.
     // M-30: a single delete now goes through deleteBranches too, so it is recorded here (by name).
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBranchesBulkDeleted(BranchesBulkDeletedEvent event) {
         if (event.branches().isEmpty()) return;

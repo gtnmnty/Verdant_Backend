@@ -10,6 +10,7 @@ import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -20,6 +21,8 @@ public class SalonServiceAuditListener {
 
     private final AuditLogService auditLogService;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceCreated(SalonServiceCreatedEvent event) {
         SalonService service = event.service();
@@ -33,6 +36,7 @@ public class SalonServiceAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceUpdated(SalonServiceUpdatedEvent event) {
         if (!event.hasChanges()) return;
@@ -48,6 +52,7 @@ public class SalonServiceAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceImageUpdated(SalonServiceImageUpdatedEvent event) {
         SalonService service = event.service();
@@ -61,6 +66,7 @@ public class SalonServiceAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceDeleted(SalonServiceDeletedEvent event) {
         SalonService service = event.service();
@@ -74,6 +80,7 @@ public class SalonServiceAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServicesBulkDeleted(SalonServicesBulkDeletedEvent event) {
         if (event.services().isEmpty()) return;

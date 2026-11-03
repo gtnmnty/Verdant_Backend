@@ -7,6 +7,7 @@ import com.verdant.salon_ecomm.dtos.user.VerifyResetCodeDto;
 import com.verdant.salon_ecomm.dtos.user.VerifyUserDto;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordChangedEvent;
 import com.verdant.salon_ecomm.dtos.user.events.UserPasswordResetCodeRequestedEvent;
+import com.verdant.salon_ecomm.dtos.user.events.UserVerificationCodeRequestedEvent;
 import com.verdant.salon_ecomm.exceptions.*;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
@@ -14,7 +15,6 @@ import com.verdant.salon_ecomm.models.enums.accounts.AccountStatus;
 import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.response.AuthResult;
 import jakarta.annotation.PostConstruct;
-import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,7 +32,6 @@ import java.util.UUID;
 public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final EmailService emailService;
     private final JwtService jwtService;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -53,11 +52,10 @@ public class AuthenticationService {
     // M-10 flow: duplicate check -> build user + hashed code -> saveAndFlush (DB constraints checked)
     // -> send the code -> commit. The email used to go out BEFORE save(), so input the DB rejected
     // (e.g. a null name) still mailed a code and then failed with a 500.
-    // Why the email is sent inside the transaction and not after commit: if SMTP fails, the exception
-    // rolls the signup back and the 503 "couldn't send this email" is true, so the user can simply
-    // retry. After commit, the same failure would leave an account with no code plus an error for a
-    // signup that did succeed, and the retry would answer "email already exists".
-    // Remaining gap: the commit failing after the email went out (rare) leaves a code for no account.
+    // The verification email is sent after commit and in the background (UserVerificationCodeListener), so the
+    // response doesn't wait on SMTP. Trade-off: if SMTP fails, the account already exists without a delivered
+    // code and the failure is only logged. The user recovers with "Resend Code" on the verify screen; sign-up
+    // used to roll back and answer 503 instead.
     @Transactional
     public User signUp(RegisterUserDto input) {
         // First, so no code is generated or mailed for an address that is already taken.
@@ -82,7 +80,8 @@ public class AuthenticationService {
             throw new DuplicateEmailException("Account with this email already exists!");
         }
 
-        sendVerificationEmail(saved, plainCode);
+        eventPublisher.publishEvent(
+            new UserVerificationCodeRequestedEvent(saved.getId(), saved.getEmail(), plainCode));
         return saved;
     }
 
@@ -155,6 +154,8 @@ public class AuthenticationService {
         userRepository.save(user);
     }
 
+    // @Transactional so the mail listener (AFTER_COMMIT, @Async) fires once the new code is saved.
+    @Transactional
     public void resendVerificationCode(String email){
         Optional<User> optionalUser = userRepository.findByEmail(email);
         if(optionalUser.isPresent()){
@@ -164,8 +165,9 @@ public class AuthenticationService {
             }
 
             String plainCode = issueVerificationCode(user, 5);
-            sendVerificationEmail(user, plainCode);
             userRepository.save(user);
+            eventPublisher.publishEvent(
+                new UserVerificationCodeRequestedEvent(user.getId(), user.getEmail(), plainCode));
         } else {
             throw new ResourceNotFoundException("User not found");
         }
@@ -238,15 +240,6 @@ public class AuthenticationService {
             && user.getResetPasswordCodeExpiration() != null
             && user.getResetPasswordCodeExpiration().isAfter(OffsetDateTime.now())
             && passwordEncoder.matches(code, user.getResetPasswordCode());
-    }
-
-    private void sendVerificationEmail(User user, String plainCode) {
-
-        try {
-            emailService.sendVerificationEmail(user.getEmail(), plainCode);
-        } catch (MessagingException e) {
-            throw new EmailDeliveryException("Failed to send verification email to: " + user.getEmail(), e);
-        }
     }
 
     private String generateVerificationCode() {

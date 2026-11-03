@@ -6,6 +6,7 @@ import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -16,6 +17,8 @@ public class ReviewAuditListener {
 
     private final AuditLogService auditLogService;
 
+    // @Async: staff notifications / audit writes run after the response, so the customer isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewSubmitted(ReviewSubmittedEvent event) {
         Review review = event.review();

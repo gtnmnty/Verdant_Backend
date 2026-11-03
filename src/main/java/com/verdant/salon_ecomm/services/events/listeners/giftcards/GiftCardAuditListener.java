@@ -7,6 +7,7 @@ import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import com.verdant.salon_ecomm.utils.PiiMasking;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -18,6 +19,8 @@ public class GiftCardAuditListener {
     private final AuditLogService auditLogService;
 
     // Fired from the Stripe webhook once the purchase is paid, so it's a System entry.
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardPurchased(GiftCardPurchasedEvent event) {
         GiftCard card = event.giftCard();
@@ -29,6 +32,7 @@ public class GiftCardAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardIssuedByAdmin(GiftCardIssuedByAdminEvent event) {
         GiftCard card = event.giftCard();
@@ -42,6 +46,7 @@ public class GiftCardAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardRedeemed(GiftCardRedeemedEvent event) {
         GiftCard card = event.giftCard();
@@ -53,6 +58,7 @@ public class GiftCardAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardAppliedToOrder(GiftCardAppliedToOrderEvent event) {
         auditLogService.recordSelfService(
@@ -66,6 +72,7 @@ public class GiftCardAuditListener {
     // M-12: the "flag for admin review". A SECURITY entry on the card, filterable in the admin audit log:
     // an order using this card's balance was cancelled, but the card is voided, so nothing went back.
     // An admin decides whether the customer is owed anything. Fired from webhooks or staff actions: System.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardRestoreBlocked(GiftCardRestoreBlockedEvent event) {
         GiftCard card = event.giftCard();
@@ -79,6 +86,7 @@ public class GiftCardAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardForfeited(GiftCardForfeitedEvent event) {
         GiftCard card = event.giftCard();

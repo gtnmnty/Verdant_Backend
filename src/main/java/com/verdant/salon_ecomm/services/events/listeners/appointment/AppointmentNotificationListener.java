@@ -61,6 +61,7 @@ public class AppointmentNotificationListener {
             null, null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentApproved(AppointmentApprovedEvent event) {
         Appointment appointment = event.appointment();
@@ -78,6 +79,7 @@ public class AppointmentNotificationListener {
         ));
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentRescheduled(AppointmentRescheduledEvent event) {
         Appointment appointment = event.appointment();
@@ -102,6 +104,7 @@ public class AppointmentNotificationListener {
             event.actor() != null ? event.actor().getFullName() : null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentCancelled(AppointmentCancelledEvent event) {
         Appointment appointment = event.appointment();
@@ -126,6 +129,7 @@ public class AppointmentNotificationListener {
             event.actor() != null ? event.actor().getFullName() : null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentCompleted(AppointmentCompletedEvent event) {
         Appointment appointment = event.appointment();
@@ -181,6 +185,7 @@ public class AppointmentNotificationListener {
             event.actor() != null ? event.actor().getFullName() : null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentDeleted(AppointmentDeletedEvent event) {
         Appointment appointment = event.appointment();
@@ -206,6 +211,7 @@ public class AppointmentNotificationListener {
     // ── Bulk operations: ONE staff/admin notification for the whole batch, ──────
     // ── plus an individual heads-up to each affected customer.               ──
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkCancelled(AppointmentsBulkCancelledEvent event) {
         UUID actorId = actorIdOrNull(event.actor());
@@ -235,6 +241,7 @@ public class AppointmentNotificationListener {
             appointments.getFirst().getId(), actorId, actorName);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkDeleted(AppointmentsBulkDeletedEvent event) {
         UUID actorId = actorIdOrNull(event.actor());

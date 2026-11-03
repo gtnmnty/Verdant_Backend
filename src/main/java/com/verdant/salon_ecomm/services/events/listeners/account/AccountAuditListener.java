@@ -11,6 +11,7 @@ import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import com.verdant.salon_ecomm.utils.PiiMasking;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -23,6 +24,8 @@ public class AccountAuditListener {
 
     private final AuditLogService auditLogService;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountCreated(AccountCreatedEvent event) {
         User account = event.account();
@@ -36,6 +39,7 @@ public class AccountAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountUpdated(AccountUpdatedEvent event) {
         if (!event.hasChanges()) return;
@@ -54,6 +58,7 @@ public class AccountAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountPasswordResetRequested(AccountPasswordResetRequestedEvent event) {
         auditLogService.record(
@@ -68,6 +73,7 @@ public class AccountAuditListener {
     }
 
     // One entry for the whole batch, not one per account.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountsSuspended(AccountsSuspendedEvent event) {
         if (event.accounts().isEmpty()) return;
@@ -87,6 +93,7 @@ public class AccountAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountsDeleted(AccountsDeletedEvent event) {
         if (event.accounts().isEmpty()) return;

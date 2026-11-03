@@ -14,6 +14,7 @@ import com.verdant.salon_ecomm.services.NotificationService;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -28,6 +29,8 @@ public class AccountNotificationListener {
     private final NotificationService notificationService;
     private final StaffNotifier staffNotifier;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountCreated(AccountCreatedEvent event) {
         User account = event.account();
@@ -36,6 +39,7 @@ public class AccountNotificationListener {
             account.getId(), event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountUpdated(AccountUpdatedEvent event) {
         if (!event.hasChanges()) return;
@@ -68,6 +72,7 @@ public class AccountNotificationListener {
             account.getId(), event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountPasswordResetRequested(AccountPasswordResetRequestedEvent event) {
         // A just-created account gets its set-password email (AccountPasswordResetEmailListener);
@@ -88,6 +93,7 @@ public class AccountNotificationListener {
         ));
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountsSuspended(AccountsSuspendedEvent event) {
         if (event.accounts().isEmpty()) return;
@@ -114,6 +120,7 @@ public class AccountNotificationListener {
             event.accounts().getFirst().getId(), actorId, actorName);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAccountsDeleted(AccountsDeletedEvent event) {
         if (event.accounts().isEmpty()) return;

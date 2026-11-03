@@ -11,6 +11,7 @@ import com.verdant.salon_ecomm.services.NotificationService;
 import com.verdant.salon_ecomm.utils.PiiMasking;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -25,6 +26,8 @@ public class GiftCardNotificationListener {
     private final StaffNotifier staffNotifier;
     private final UserRepository userRepository;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardPurchased(GiftCardPurchasedEvent event) {
         GiftCard card = event.giftCard();
@@ -44,6 +47,7 @@ public class GiftCardNotificationListener {
         // The recipient email with the code is sent by GiftCardEmailListener.
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardIssuedByAdmin(GiftCardIssuedByAdminEvent event) {
         GiftCard card = event.giftCard();
@@ -68,6 +72,7 @@ public class GiftCardNotificationListener {
             event.actor().getId(), event.actor().getFullName());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardRedeemed(GiftCardRedeemedEvent event) {
         GiftCard card = event.giftCard();
@@ -86,6 +91,7 @@ public class GiftCardNotificationListener {
             null, null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardAppliedToOrder(GiftCardAppliedToOrderEvent event) {
         notificationService.create(new NotificationCreateDto(
@@ -100,6 +106,7 @@ public class GiftCardNotificationListener {
         // visible via the order's own notification/audit trail instead.
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGiftCardForfeited(GiftCardForfeitedEvent event) {
         if (event.owner() == null) return; // unredeemed card expiring — no one to notify
