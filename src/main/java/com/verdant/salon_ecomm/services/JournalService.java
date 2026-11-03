@@ -6,6 +6,8 @@ import com.verdant.salon_ecomm.dtos.journal.admin.AdminJournalStoryDto;
 import com.verdant.salon_ecomm.dtos.journal.admin.AdminJournalStoryPage;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.JournalMapper;
+import com.verdant.salon_ecomm.models.entities.SalonService;
+import com.verdant.salon_ecomm.repositories.SalonServiceRepository;
 import com.verdant.salon_ecomm.models.entities.MediaImage;
 import com.verdant.salon_ecomm.models.entities.Product;
 import com.verdant.salon_ecomm.models.entities.StoredImage;
@@ -57,6 +59,7 @@ public class JournalService {
     private final JournalStoryRepository journalStoryRepository;
     private final JournalStoryProductRepository journalStoryProductRepository;
     private final ProductRepository productRepository;
+    private final SalonServiceRepository salonServiceRepository;
     private final MediaImageRepository mediaImageRepository;
     private final CloudinaryService cloudinaryService;
     private final JournalMapper journalMapper;
@@ -78,8 +81,11 @@ public class JournalService {
         // Inactive products are hidden from the public page (they can't be bought).
         Map<UUID, List<JournalProductDto>> products = loadProducts(idsOf(result.getContent()), true);
 
+        Map<String, String> serviceImages = serviceImageUrls(result.getContent());
+
         List<JournalStoryDto> items = result.getContent().stream()
-            .map(s -> journalMapper.toPublicDto(s, products.getOrDefault(s.getId(), List.of())))
+            .map(s -> journalMapper.toPublicDto(s, products.getOrDefault(s.getId(), List.of()),
+                serviceImages.get(s.getService())))
             .toList();
         return new JournalStoryPage(items, pageable.getPageNumber() + 1, pageable.getPageSize(),
             (int) result.getTotalElements(), result.getTotalPages());
@@ -90,7 +96,8 @@ public class JournalService {
     public JournalStoryDto getPublishedStory(UUID id) {
         return journalStoryRepository.findByIdAndStatus(id, JournalStoryStatus.PUBLISHED)
             .map(story -> journalMapper.toPublicDto(story,
-                loadProducts(List.of(story.getId()), true).getOrDefault(story.getId(), List.of())))
+                loadProducts(List.of(story.getId()), true).getOrDefault(story.getId(), List.of()),
+                serviceImageUrls(List.of(story)).get(story.getService())))
             .orElse(null);
     }
 
@@ -114,8 +121,11 @@ public class JournalService {
         Page<JournalStory> result = journalStoryRepository.findAll(spec, pageable);
         Map<UUID, List<JournalProductDto>> products = loadProducts(idsOf(result.getContent()), false);
 
+        Map<String, String> serviceImages = serviceImageUrls(result.getContent());
+
         List<AdminJournalStoryDto> items = result.getContent().stream()
-            .map(s -> journalMapper.toAdminDto(s, products.getOrDefault(s.getId(), List.of())))
+            .map(s -> journalMapper.toAdminDto(s, products.getOrDefault(s.getId(), List.of()),
+                serviceImages.get(s.getService())))
             .toList();
         return new AdminJournalStoryPage(items, pageable.getPageNumber() + 1, pageable.getPageSize(),
             (int) result.getTotalElements(), result.getTotalPages());
@@ -136,7 +146,7 @@ public class JournalService {
         String clientName = requireText(input.clientName(), MAX_CLIENT_NAME, "Client name");
         String quote = requireText(input.quote(), MAX_QUOTE, "Quote");
         String service = requireText(input.service(), MAX_SERVICE, "Service");
-        String stylist = requireText(input.stylist(), MAX_STYLIST, "Stylist");
+        String stylist = stylistOrEmpty(input.stylist()); // product stories have no stylist
         if (input.category() == null) throw BusinessRuleException.invalid("Category is required");
         List<UUID> productIds = distinctIds(input.productIds());
         JournalStoryStatus status = input.status() != null ? input.status() : JournalStoryStatus.DRAFT;
@@ -189,7 +199,7 @@ public class JournalService {
         String clientName = optionalText(input.clientName(), MAX_CLIENT_NAME, "Client name");
         String quote = optionalText(input.quote(), MAX_QUOTE, "Quote");
         String service = optionalText(input.service(), MAX_SERVICE, "Service");
-        String stylist = optionalText(input.stylist(), MAX_STYLIST, "Stylist");
+        String stylist = input.stylist() == null ? null : stylistOrEmpty(input.stylist()); // "" clears it
         List<UUID> productIds = input.productIds() == null ? null : distinctIds(input.productIds());
 
         if (hasFile(resultImage)) validateImage(resultImage, "Result image");
@@ -275,7 +285,8 @@ public class JournalService {
     private AdminJournalStoryDto toAdminDto(JournalStory story) {
         // Admin sees every linked product, including inactive ones, so they can fix them.
         Map<UUID, List<JournalProductDto>> products = loadProducts(List.of(story.getId()), false);
-        return journalMapper.toAdminDto(story, products.getOrDefault(story.getId(), List.of()));
+        return journalMapper.toAdminDto(story, products.getOrDefault(story.getId(), List.of()),
+            serviceImageUrls(List.of(story)).get(story.getService()));
     }
 
     private List<UUID> idsOf(List<JournalStory> stories) {
@@ -319,6 +330,36 @@ public class JournalService {
             urls.putIfAbsent(image.getEntityId(), image.getUrl());
         }
         return urls;
+    }
+
+    // Primary image (falling back to the first) of the service each story names, keyed by the story's service
+    // text. `service` is plain text so a renamed/removed service simply has no entry. Two queries total.
+    private Map<String, String> serviceImageUrls(Collection<JournalStory> stories) {
+        Set<String> names = stories.stream().map(JournalStory::getService).collect(Collectors.toSet());
+        if (names.isEmpty()) return Map.of();
+        List<SalonService> services = salonServiceRepository.findByNameIn(names);
+        if (services.isEmpty()) return Map.of();
+
+        Map<UUID, String> nameById = new HashMap<>();
+        services.forEach(sv -> nameById.put(sv.getId(), sv.getName()));
+        List<MediaImage> images = mediaImageRepository
+            .findByEntityTypeAndEntityIdInOrderBySortOrderAsc(ItemType.SALON_SERVICE, nameById.keySet());
+
+        Map<UUID, String> urls = new HashMap<>();
+        for (MediaImage image : images) {
+            if (image.isPrimary()) urls.put(image.getEntityId(), image.getUrl());
+        }
+        for (MediaImage image : images) {
+            urls.putIfAbsent(image.getEntityId(), image.getUrl());
+        }
+        Map<String, String> byName = new HashMap<>();
+        urls.forEach((id, url) -> byName.putIfAbsent(nameById.get(id), url));
+        return byName;
+    }
+
+    private String stylistOrEmpty(String value) {
+        if (value == null || value.isBlank()) return "";
+        return requireText(value, MAX_STYLIST, "Stylist");
     }
 
     private List<Product> loadProductsInOrder(List<UUID> ids) {

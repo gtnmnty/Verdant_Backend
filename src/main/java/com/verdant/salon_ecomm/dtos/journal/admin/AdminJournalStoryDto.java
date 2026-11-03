@@ -19,6 +19,7 @@ public record AdminJournalStoryDto(
     JournalStoryStatus status,
     JournalImageDto resultImage,
     JournalImageDto productImage,
+    String serviceImageUrl,
     List<JournalProductDto> products,
     OffsetDateTime publishedAt,
     OffsetDateTime createdAt,

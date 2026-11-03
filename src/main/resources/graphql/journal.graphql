@@ -44,6 +44,8 @@ type JournalStory {
     stylist: String!
     resultImage: JournalImage!
     productImage: JournalImage
+    # Primary image of the service named in `service` (null if that service no longer exists).
+    serviceImageUrl: String
     products: [JournalProduct!]!
     publishedAt: DateTime
 }
@@ -66,6 +68,8 @@ type AdminJournalStory {
     status: JournalStoryStatus!
     resultImage: JournalImage!
     productImage: JournalImage
+    # Primary image of the service named in `service` (null if that service no longer exists).
+    serviceImageUrl: String
     products: [JournalProduct!]!
     publishedAt: DateTime
     createdAt: DateTime

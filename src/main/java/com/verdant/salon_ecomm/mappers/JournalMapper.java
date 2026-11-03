@@ -38,7 +38,7 @@ public class JournalMapper {
         );
     }
 
-    public JournalStoryDto toPublicDto(JournalStory story, List<JournalProductDto> products) {
+    public JournalStoryDto toPublicDto(JournalStory story, List<JournalProductDto> products, String serviceImageUrl) {
         return new JournalStoryDto(
             story.getId(),
             story.getClientName(),
@@ -48,12 +48,13 @@ public class JournalMapper {
             story.getStylist(),
             toImageDto(story.getResultImage()),
             toImageDto(story.getProductImage()),
+            serviceImageUrl,
             products,
             story.getPublishedAt()
         );
     }
 
-    public AdminJournalStoryDto toAdminDto(JournalStory story, List<JournalProductDto> products) {
+    public AdminJournalStoryDto toAdminDto(JournalStory story, List<JournalProductDto> products, String serviceImageUrl) {
         return new AdminJournalStoryDto(
             story.getId(),
             story.getClientName(),
@@ -64,6 +65,7 @@ public class JournalMapper {
             story.getStatus(),
             toImageDto(story.getResultImage()),
             toImageDto(story.getProductImage()),
+            serviceImageUrl,
             products,
             story.getPublishedAt(),
             story.getCreatedAt(),

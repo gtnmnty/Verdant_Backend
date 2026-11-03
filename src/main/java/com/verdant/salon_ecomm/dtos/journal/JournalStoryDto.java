@@ -15,7 +15,8 @@ public record JournalStoryDto(
     String service,
     String stylist,
     JournalImageDto resultImage,
-    JournalImageDto productImage,   // optional inset photo
+    JournalImageDto productImage,   // legacy uploaded inset photo
+    String serviceImageUrl,         // primary image of the service named in `service`, if it still exists
     List<JournalProductDto> products,
     OffsetDateTime publishedAt
 ) {}
