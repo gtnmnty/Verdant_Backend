@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface StylistRepository extends JpaRepository<Stylist, UUID>, JpaSpecificationExecutor<Stylist> {
@@ -20,6 +21,9 @@ public interface StylistRepository extends JpaRepository<Stylist, UUID>, JpaSpec
     // query for the whole batch instead of looping per branch id.
     @Query("SELECT DISTINCT s.branch.id FROM Stylist s WHERE s.branch.id IN :branchIds")
     List<UUID> findDistinctBranchIdsWithStylists(@Param("branchIds") Collection<UUID> branchIds);
+
+    // A stylist's login account is matched to their roster entry by email.
+    Optional<Stylist> findByEmailIgnoreCase(String email);
 
     @Override
     @EntityGraph(attributePaths = {"branch"})

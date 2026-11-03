@@ -216,6 +216,7 @@ public class AccountService {
         // The JWT filter and token rotation already reject a locked account; deleting the refresh
         // tokens as well means nothing usable is left behind if the account is later re-activated.
         if (input.status() != null && isLockedOutStatus(input.status()) && !isLockedOutStatus(previousStatus)) {
+            requireCanSuspend(actor);
             refreshTokenService.deleteByUserId(user.getId());
         }
 
@@ -280,6 +281,7 @@ public class AccountService {
 
         List<User> accounts = accountRepository.findAllById(requestedIds);
         assertAllFound(requestedIds, accounts);
+        requireCanSuspend(actor);
         accounts.forEach(a -> requireCanManage(actor, a));
 
         if (actor != null && requestedIds.contains(actor.getId())) {
@@ -442,6 +444,13 @@ public class AccountService {
             || status == AccountStatus.BANNED
             || status == AccountStatus.INACTIVE
             || status == AccountStatus.DELETED;
+    }
+
+    // Only a MANAGER or OWNER may suspend (or otherwise lock out) an account. ADMINs can still edit and delete.
+    private void requireCanSuspend(User actor) {
+        if (actor == null || (actor.getRole() != AccountRole.OWNER && actor.getRole() != AccountRole.MANAGER)) {
+            throw new ForbiddenException("Only a manager or owner can suspend accounts.");
+        }
     }
 
     // Blocks acting on an account that is equally or more senior than the actor

@@ -8,6 +8,7 @@ import com.verdant.salon_ecomm.dtos.account.CreateAccountInput;
 import com.verdant.salon_ecomm.dtos.account.AccountDto;
 import com.verdant.salon_ecomm.dtos.account.UpdateAccountInput;
 import com.verdant.salon_ecomm.models.entities.User;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.services.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -28,13 +29,19 @@ public class AccountResolver {
 
     // ---------- Queries ----------
 
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','OWNER')")
+    // RECEPTIONIST may look customers up (to book appointments for them) but only ever sees CUSTOMER accounts.
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','ADMIN','MANAGER','OWNER')")
     @QueryMapping
     public AccountPage accounts(
         @Argument AccountFilterInput filter,
         @Argument int page,
-        @Argument int pageSize
+        @Argument int pageSize,
+        @AuthenticationPrincipal User principal
     ) {
+        if (principal.getRole() == AccountRole.RECEPTIONIST) {
+            filter = new AccountFilterInput(
+                filter != null ? filter.search() : null, AccountRole.CUSTOMER, filter != null ? filter.status() : null);
+        }
         return accountService.getAccounts(filter, page, pageSize);
     }
 

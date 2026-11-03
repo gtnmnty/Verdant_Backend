@@ -48,6 +48,14 @@ public class AppointmentEmailListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentBooked(AppointmentBookedEvent event) {
         Appointment appointment = event.appointment();
+        if (!event.isSelfService()) {
+            // Booked by staff: already confirmed, so no "request received / pending" wording.
+            send(appointment, "Appointment confirmed", new Body(
+                "Your appointment is confirmed",
+                List.of("Our team has booked an appointment for you. We look forward to seeing you."),
+                "View appointment", emailService.appointmentsUrl()));
+            return;
+        }
         send(appointment, "Appointment request received", new Body(
             "We've received your appointment request",
             List.of("Thank you for booking with us. Our concierge will review your request and confirm it shortly. "

@@ -32,7 +32,7 @@ public class BranchResolver {
         return branchService.getBranches();
     }
 
-    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','OWNER')")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')") // receptionists pick a branch when booking
     @QueryMapping
     public AdminBranchPage adminBranches(
         @Argument BranchStatus status,

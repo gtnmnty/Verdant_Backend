@@ -64,7 +64,8 @@ public class AppointmentResolver {
         return appointmentService.getRebookDetails(appointmentId, principal.getId());
     }
 
-    @PreAuthorize("hasAnyRole('RECEPTIONIST','MANAGER','ADMIN','OWNER')")
+    // STYLIST is allowed here but only ever gets their own appointments (see getAdminAppointmentsFor).
+    @PreAuthorize("hasAnyRole('STYLIST','RECEPTIONIST','MANAGER','ADMIN','OWNER')")
     @QueryMapping
     public AdminAppointmentPage adminAppointments(
         @Argument AppointmentStatus status,
@@ -74,10 +75,11 @@ public class AppointmentResolver {
         @Argument String search,
         @Argument AdminAppointmentSort sort,
         @Argument int page,
-        @Argument int pageSize
+        @Argument int pageSize,
+        @AuthenticationPrincipal User principal
     ) {
-        return appointmentService.getAdminAppointments(
-            status, stylistId, branch,
+        return appointmentService.getAdminAppointmentsFor(
+            principal, status, stylistId, branch,
             serviceType, search, sort,
             page, pageSize
         );
