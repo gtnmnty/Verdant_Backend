@@ -10,10 +10,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface SalonServiceRepository extends JpaRepository<SalonService, UUID>, JpaSpecificationExecutor<SalonService> {
+    List<SalonService> findByNameIn(Collection<String> names);
+
     @Modifying
     @Query("UPDATE SalonService s SET s.reviewCount = :count, s.averageRating = :avg WHERE s.id = :id")
     int updateReviewAggregates(@Param("id") UUID id, @Param("count") int count, @Param("avg") BigDecimal avg);
