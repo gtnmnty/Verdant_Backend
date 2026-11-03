@@ -8,6 +8,7 @@ import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -20,6 +21,8 @@ public class BranchNotificationListener {
     private final StaffNotifier staffNotifier;
 
     // M-29: single-branch create and update now notify staff, like the other catalog changes.
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBranchCreated(BranchCreatedEvent event) {
         Branch branch = event.branch();
@@ -27,6 +30,7 @@ public class BranchNotificationListener {
             "Branch added", branch.getName() + " was added.", event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBranchUpdated(BranchUpdatedEvent event) {
         if (!event.hasChanges()) return;
@@ -36,6 +40,7 @@ public class BranchNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBranchesBulkDeleted(BranchesBulkDeletedEvent event) {
         if (event.branches().isEmpty()) return;

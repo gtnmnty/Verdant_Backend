@@ -14,6 +14,7 @@ import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.services.NotificationService;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -28,6 +29,8 @@ public class OrderNotificationListener {
     private final NotificationService notificationService;
     private final StaffNotifier staffNotifier;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPlaced(OrderPlacedEvent event) {
         Order order = event.order();
@@ -50,6 +53,7 @@ public class OrderNotificationListener {
             null, null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderCreatedByAdmin(OrderCreatedByAdminEvent event) {
         Order order = event.order();
@@ -59,6 +63,7 @@ public class OrderNotificationListener {
             event.actor().getId(), event.actor().getFullName());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderUpdated(OrderUpdatedEvent event) {
         Order order = event.order();
@@ -115,6 +120,7 @@ public class OrderNotificationListener {
         }
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderCancelledByCustomer(OrderCancelledByCustomerEvent event) {
         Order order = event.order();
@@ -139,6 +145,7 @@ public class OrderNotificationListener {
             null, null);
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrdersDeleted(OrdersDeletedEvent event) {
         if (event.orders().isEmpty()) return;

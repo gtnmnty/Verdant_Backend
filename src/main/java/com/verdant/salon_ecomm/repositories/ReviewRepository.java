@@ -22,11 +22,16 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
 
     Optional<Review> findByUser_IdAndTargetTypeAndTargetId(UUID userId, ItemType targetType, UUID targetId);
 
-    @Query("SELECT COALESCE(AVG(r.stars), 0) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
-    BigDecimal findAverageRatingByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
+    // Average and count in one query (one database round trip instead of two).
+    @Query("SELECT AVG(r.stars) AS averageStars, COUNT(r) AS reviewCount FROM Review r "
+        + "WHERE r.targetType = :targetType AND r.targetId = :targetId")
+    ReviewAggregates findAggregatesByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
 
-    @Query("SELECT COUNT(r) FROM Review r WHERE r.targetType = :targetType AND r.targetId = :targetId")
-    int countByTargetId(@Param("targetType") ItemType targetType, @Param("targetId") UUID targetId);
+    interface ReviewAggregates {
+        Double getAverageStars();   // null when there are no reviews
+
+        long getReviewCount();
+    }
 
     // Overrides JpaSpecificationExecutor's default findAll(spec, pageable) to
     // attach an EntityGraph — Review.user is @ManyToOne(LAZY), and this call

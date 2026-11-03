@@ -10,6 +10,7 @@ import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -20,6 +21,8 @@ public class SalonServiceNotificationListener {
 
     private final StaffNotifier staffNotifier;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceCreated(SalonServiceCreatedEvent event) {
         SalonService service = event.service();
@@ -29,6 +32,7 @@ public class SalonServiceNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceUpdated(SalonServiceUpdatedEvent event) {
         if (!event.hasChanges()) return;
@@ -40,6 +44,7 @@ public class SalonServiceNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceImageUpdated(SalonServiceImageUpdatedEvent event) {
         SalonService service = event.service();
@@ -49,6 +54,7 @@ public class SalonServiceNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServiceDeleted(SalonServiceDeletedEvent event) {
         SalonService service = event.service();
@@ -58,6 +64,7 @@ public class SalonServiceNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSalonServicesBulkDeleted(SalonServicesBulkDeletedEvent event) {
         if (event.services().isEmpty()) return;

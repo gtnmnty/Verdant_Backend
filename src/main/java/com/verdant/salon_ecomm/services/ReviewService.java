@@ -170,9 +170,11 @@ public class ReviewService {
     // ---------- Shared internals ----------
 
     private void updateAggregatesFor(ItemType targetType, UUID targetId) {
-        BigDecimal avg = reviewRepository.findAverageRatingByTargetId(targetType, targetId)
-            .setScale(2, RoundingMode.HALF_UP);
-        int count = reviewRepository.countByTargetId(targetType, targetId);
+        ReviewRepository.ReviewAggregates aggregates = reviewRepository.findAggregatesByTargetId(targetType, targetId);
+        BigDecimal avg = aggregates.getAverageStars() == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.valueOf(aggregates.getAverageStars()).setScale(2, RoundingMode.HALF_UP);
+        int count = (int) aggregates.getReviewCount();
 
         int rowsUpdated = switch (targetType) {
             case PRODUCT -> productRepository.updateReviewAggregates(targetId, count, avg);

@@ -12,6 +12,7 @@ import com.verdant.salon_ecomm.models.enums.notification.NotificationType;
 import com.verdant.salon_ecomm.models.enums.notification.ReferenceType;
 import com.verdant.salon_ecomm.utils.StaffNotifier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -25,6 +26,8 @@ public class ProductNotificationListener {
     // M-38: staff fan-out goes through StaffNotifier (active staff only, one transaction, failures isolated).
     private final StaffNotifier staffNotifier;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProductCreated(ProductCreatedEvent event) {
         Product product = event.product();
@@ -34,6 +37,7 @@ public class ProductNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProductUpdated(ProductUpdatedEvent event) {
         Product product = event.product();
@@ -51,12 +55,14 @@ public class ProductNotificationListener {
     }
 
     // M-29: stock moved by an order (checkout, admin order edit, cancel/expiry restock).
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProductStockChanged(ProductStockChangedEvent event) {
         alertOnStockChange(event.productId(), event.productName(), event.previousStock(),
             event.newStock(), event.lowStockThreshold(), event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProductDeleted(ProductDeletedEvent event) {
         Product product = event.product();
@@ -66,6 +72,7 @@ public class ProductNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProductImageUpdated(ProductImageUpdatedEvent event) {
         Product product = event.product();
@@ -75,6 +82,7 @@ public class ProductNotificationListener {
             event.actor());
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProductsBulkDeleted(ProductsBulkDeletedEvent event) {
         if (event.products().isEmpty()) return;

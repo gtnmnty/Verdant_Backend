@@ -6,6 +6,7 @@ import com.verdant.salon_ecomm.models.enums.audit.AuditActionType;
 import com.verdant.salon_ecomm.models.enums.audit.AuditEntityType;
 import com.verdant.salon_ecomm.services.AuditLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -16,6 +17,8 @@ public class AppointmentAuditListener {
 
     private final AuditLogService auditLogService;
 
+    // @Async: the audit/notification writes run after the response, so the caller isn't waiting on them.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentBooked(AppointmentBookedEvent event) {
         Appointment appointment = event.appointment();
@@ -43,6 +46,7 @@ public class AppointmentAuditListener {
         }
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentApproved(AppointmentApprovedEvent event) {
         Appointment appointment = event.appointment();
@@ -58,6 +62,7 @@ public class AppointmentAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentRescheduled(AppointmentRescheduledEvent event) {
         Appointment appointment = event.appointment();
@@ -77,6 +82,7 @@ public class AppointmentAuditListener {
         }
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentCancelled(AppointmentCancelledEvent event) {
         Appointment appointment = event.appointment();
@@ -95,6 +101,7 @@ public class AppointmentAuditListener {
         }
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentCompleted(AppointmentCompletedEvent event) {
         Appointment appointment = event.appointment();
@@ -108,6 +115,7 @@ public class AppointmentAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentUpdated(AppointmentUpdatedEvent event) {
         Appointment appointment = event.appointment();
@@ -121,6 +129,7 @@ public class AppointmentAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentDeleted(AppointmentDeletedEvent event) {
         Appointment appointment = event.appointment();
@@ -135,6 +144,7 @@ public class AppointmentAuditListener {
     }
 
     // Bulk operations get ONE log entry summarizing the whole batch, not one per appointment.
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkCancelled(AppointmentsBulkCancelledEvent event) {
         int count = event.appointments().size();
@@ -148,6 +158,7 @@ public class AppointmentAuditListener {
         );
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentsBulkDeleted(AppointmentsBulkDeletedEvent event) {
         int count = event.appointments().size();
