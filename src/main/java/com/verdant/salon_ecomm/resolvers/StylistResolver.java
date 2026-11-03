@@ -27,7 +27,7 @@ public class StylistResolver {
     private final StylistsService stylistsService;
 
     @QueryMapping
-    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN', 'RECEPTIONIST')") // receptionists pick a stylist when booking
     public AdminStylistsPage adminStylists(
         @Argument StylistAccountStatus status, @Argument UUID branchId, @Argument String search,
         @Argument List<UUID> serviceIds, @Argument StylistSort sort,

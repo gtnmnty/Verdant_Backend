@@ -105,7 +105,7 @@ public class SalonServiceResolver {
     }
 
     @QueryMapping
-    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN', 'RECEPTIONIST')") // receptionists pick a service when booking
     public AdminServicePage adminServices(
         @Argument String category, @Argument String search,
         @Argument ServiceSort sort, @Argument CollectionStatus status,

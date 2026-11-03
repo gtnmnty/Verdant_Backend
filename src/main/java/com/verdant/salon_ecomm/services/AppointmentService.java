@@ -9,6 +9,7 @@ import com.verdant.salon_ecomm.exceptions.InvalidAppointmentException;
 import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
 import com.verdant.salon_ecomm.mappers.AppointmentMapper;
 import com.verdant.salon_ecomm.models.entities.*;
+import com.verdant.salon_ecomm.models.enums.accounts.AccountRole;
 import com.verdant.salon_ecomm.models.enums.CollectionStatus;
 import com.verdant.salon_ecomm.models.enums.appointments.*;
 import com.verdant.salon_ecomm.repositories.*;
@@ -82,6 +83,23 @@ public class AppointmentService {
             throw new AccessDeniedException("Not your appointment");
         }
         return appointment;
+    }
+
+    // A STYLIST account sees only the appointments assigned to their own roster entry (matched by email).
+    // Anyone else keeps the filter they asked for. Returns an empty page when a stylist has no roster entry.
+    public AdminAppointmentPage getAdminAppointmentsFor(
+        User actor, AppointmentStatus status, UUID stylistId, String branch, AppointmentServiceType serviceType,
+        String search, AdminAppointmentSort sort, int page, int pageSize
+    ) {
+        if (actor != null && actor.getRole() == AccountRole.STYLIST) {
+            UUID own = stylistRepository.findByEmailIgnoreCase(actor.getEmail()).map(Stylist::getId).orElse(null);
+            if (own == null) {
+                return new AdminAppointmentPage(List.of(), PageRequests.page(page),
+                    PageRequests.size(pageSize, PageRequests.DEFAULT_MAX_SIZE), 0, 0);
+            }
+            stylistId = own;
+        }
+        return getAdminAppointments(status, stylistId, branch, serviceType, search, sort, page, pageSize);
     }
 
     public AdminAppointmentPage getAdminAppointments(
@@ -201,6 +219,11 @@ public class AppointmentService {
 
         Appointment appointment = appointmentMapper.toEntity(input, user, service, stylist, branch);
         appointment.setAppointmentCode(generateAppointmentCode());
+        // Staff booking for a customer needs no approval step: it is confirmed (UPCOMING) from the start.
+        // Customers booking for themselves still start PENDING.
+        if (isStaff && !user.getId().equals(actor.getId())) {
+            appointment.setStatus(AppointmentStatus.UPCOMING);
+        }
 
         Appointment saved = saveAppointmentSafely(appointment);
         eventPublisher.publishEvent(new AppointmentBookedEvent(saved, actor));
@@ -233,6 +256,12 @@ public class AppointmentService {
         requireOwnerOrAdmin(appointment, currentUserId, isAdmin);
         requireNotTerminal(appointment);
         requireFutureTime(newScheduledAt); // M-20
+        // Once staff approved an appointment the slot is confirmed: only staff can move it. (Before, a customer
+        // moving an approved appointment sent it back to PENDING.)
+        if (!isAdmin && appointment.getStatus() == AppointmentStatus.UPCOMING) {
+            throw BusinessRuleException.conflict(
+                "This appointment is already approved. Please contact the salon to reschedule it.");
+        }
 
         if (appointment.getStylist() != null) {
             validateNoOverlap(
@@ -245,11 +274,6 @@ public class AppointmentService {
 
         OffsetDateTime previousScheduledAt = appointment.getScheduledAt();
         appointment.setScheduledAt(newScheduledAt);
-        // Staff approval covered the old time slot. A customer moving an approved appointment
-        // sends it back for approval; staff reschedules keep the current status.
-        if (!isAdmin && appointment.getStatus() == AppointmentStatus.UPCOMING) {
-            appointment.setStatus(AppointmentStatus.PENDING);
-        }
         Appointment saved = saveAppointmentSafely(appointment);
 
         User actor = resolveActor(currentUserId);
@@ -316,6 +340,7 @@ public class AppointmentService {
         SalonService previousService = appointment.getService();
         Stylist previousStylist = appointment.getStylist();
         OffsetDateTime previousScheduledAt = appointment.getScheduledAt();
+        boolean autoApproved = false;
         Short previousGuests = appointment.getGuests();
         String previousNotes = appointment.getNotes();
         AppointmentServiceType previousServiceType = appointment.getServiceType();
@@ -339,7 +364,13 @@ public class AppointmentService {
         if (input.stylistId() != null) {
             Stylist stylist = stylistRepository.findById(input.stylistId())
                 .orElseThrow(() -> new ResourceNotFoundException("Stylist not found: " + input.stylistId()));
+            boolean newlyAssigned = previousStylist == null || !previousStylist.getId().equals(stylist.getId());
             appointment.setStylist(stylist);
+            // Assigning a stylist to a PENDING appointment confirms it, same as approveAppointment.
+            if (isAdmin && newlyAssigned && appointment.getStatus() == AppointmentStatus.PENDING) {
+                appointment.setStatus(AppointmentStatus.UPCOMING);
+                autoApproved = true;
+            }
         }
         // M-20: a new time must be in the future. Only checked when the time actually changes, so notes or
         // guests of a past appointment can still be corrected.
@@ -400,6 +431,9 @@ public class AppointmentService {
         if (!changes.isEmpty()) {
             User actor = resolveActor(currentUserId);
             eventPublisher.publishEvent(new AppointmentUpdatedEvent(saved, actor, changes));
+        }
+        if (autoApproved) {
+            eventPublisher.publishEvent(new AppointmentApprovedEvent(saved, resolveActor(currentUserId)));
         }
 
         return saved;
