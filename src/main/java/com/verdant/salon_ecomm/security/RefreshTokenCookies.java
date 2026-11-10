@@ -13,8 +13,6 @@ import org.springframework.stereotype.Component;
 public class RefreshTokenCookies {
 
     public static final String COOKIE_NAME = "refreshToken";
-    private static final String SAME_SITE_LAX = "Lax";
-
     private final RefreshTokenService refreshTokenService;
 
     // M-6: was app.production, which the local profile set to false and every other profile had to
@@ -22,6 +20,10 @@ public class RefreshTokenCookies {
     // plain http. Only application-local.properties turns it off (localhost has no TLS).
     @Value("${app.cookie.secure:true}")
     private boolean secure;
+
+    // NEW: reads app.cookie.same-site, defaults to Lax if not set
+    @Value("${app.cookie.same-site:Lax}")
+    private String sameSite;
 
     public ResponseCookie issue(String refreshToken) {
         return base(refreshToken)
@@ -39,6 +41,6 @@ public class RefreshTokenCookies {
             .httpOnly(true)
             .secure(secure)
             .path("/")
-            .sameSite(SAME_SITE_LAX);
+            .sameSite(sameSite);
     }
 }
