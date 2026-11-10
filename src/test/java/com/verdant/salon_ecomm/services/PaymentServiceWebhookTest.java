@@ -66,8 +66,8 @@ class PaymentServiceWebhookTest {
 
     @BeforeEach
     void setUp() {
-        service = new PaymentService(orderRepository, userRepository, webhookEventRepository, paymentMapper,
-            stripeConfig, stripeClient, eventPublisher, self);
+        service = new PaymentService(orderRepository, userRepository, webhookEventRepository,
+                                    paymentMapper, stripeConfig, stripeClient, eventPublisher);
         when(stripeConfig.getWebhookSecret()).thenReturn(SECRET);
     }
 
