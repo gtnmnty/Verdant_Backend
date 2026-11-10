@@ -15,14 +15,13 @@ import com.verdant.salon_ecomm.dtos.payment.DraftPaymentSucceededEvent;
 import com.verdant.salon_ecomm.dtos.payment.OrderPaymentDisputedEvent;
 import com.verdant.salon_ecomm.dtos.payment.PaymentIntentDto;
 import com.verdant.salon_ecomm.dtos.payment.PaymentStatusChangedEvent;
+import com.verdant.salon_ecomm.exceptions.InvalidWebhookSignatureException;
+import com.verdant.salon_ecomm.exceptions.PaymentException;
+import com.verdant.salon_ecomm.mappers.PaymentMapper;
 import com.verdant.salon_ecomm.models.entities.Order;
 import com.verdant.salon_ecomm.models.entities.PendingCheckout;
 import com.verdant.salon_ecomm.models.entities.User;
 import com.verdant.salon_ecomm.models.entities.stripe.WebhookEvent;
-import com.verdant.salon_ecomm.exceptions.InvalidWebhookSignatureException;
-import com.verdant.salon_ecomm.exceptions.PaymentException;
-import com.verdant.salon_ecomm.exceptions.ResourceNotFoundException;
-import com.verdant.salon_ecomm.mappers.PaymentMapper;
 import com.verdant.salon_ecomm.models.enums.PaymentStatus;
 import com.verdant.salon_ecomm.models.enums.orders.OrderStatus;
 import com.verdant.salon_ecomm.repositories.OrderRepository;
@@ -30,22 +29,18 @@ import com.verdant.salon_ecomm.repositories.UserRepository;
 import com.verdant.salon_ecomm.repositories.WebhookEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
-import java.util.Currency;
-import java.util.EnumSet;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -78,7 +73,8 @@ public class PaymentService {
     // bypasses the Spring AOP proxy). Set via constructor/setter injection by
     // Spring since it's declared as a dependency of this same bean type.
     @Lazy
-    private final PaymentService self;
+    @Autowired
+    private PaymentService self;
 
     // ---------- Mutations ----------
 
