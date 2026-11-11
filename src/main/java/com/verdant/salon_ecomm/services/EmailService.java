@@ -18,6 +18,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,7 +30,7 @@ public class EmailService {
     private final JavaMailSender emailSender;
     private final String fromEmail;
     private final String frontendUrl;
-    private final String resendApiKey;
+    private final String brevoapiKey;
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -41,13 +42,13 @@ public class EmailService {
         SpringTemplateEngine templateEngine,
         @Value("${app.mail.from:${spring.mail.username}}") String fromEmail,
         @Value("${app.frontend-url:${FRONTEND_URL:http://localhost:3000}}") String frontendUrl,
-        @Value("${RESEND_API_KEY:}") String resendApiKey
+        @Value("${BREVO_API_KEY:}") String brevoapiKey
     ) {
         this.emailSender = emailSender;
         this.templateEngine = templateEngine;
         this.fromEmail = fromEmail;
         this.frontendUrl = frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl;
-        this.resendApiKey = resendApiKey;
+        this.brevoapiKey = brevoapiKey;
     }
 
     //Link placed in every newsletter. The frontend page at this path must call unsubscribeFromNewsletter(token).
@@ -204,10 +205,10 @@ public class EmailService {
 
     private void sendEmail(String to, String subject, String htmlBody, Map<String, String> headers)
         throws MessagingException {
-        if (resendApiKey.isBlank()) {
+        if (brevoapiKey.isBlank()) {
             sendViaSmtp(to, subject, htmlBody, headers);
         } else {
-            sendViaResend(to, subject, htmlBody, headers);
+            sendViaBrevo(to, subject, htmlBody, headers);
         }
     }
 
@@ -225,26 +226,32 @@ public class EmailService {
         emailSender.send(mimeMessage);
     }
 
-    private void sendViaResend(String to, String subject, String htmlBody, Map<String, String> headers)
+    private void sendViaBrevo(String to, String subject, String htmlBody, Map<String, String> headers)
         throws MessagingException {
         try {
-            var body = Map.of("from", fromEmail, "to", List.of(to),
-                "subject", subject, "html", htmlBody, "headers", headers);
-            var req = HttpRequest.newBuilder(URI.create("https://api.resend.com/emails"))
-                .header("Authorization", "Bearer " + resendApiKey)
+            var body = new HashMap<String, Object>();
+            body.put("sender", Map.of("name", BRAND_NAME, "email", fromEmail));
+            body.put("to", List.of(Map.of("email", to)));
+            body.put("subject", subject);
+            body.put("htmlContent", htmlBody);
+            if (!headers.isEmpty()) body.put("headers", headers);
+
+            var req = HttpRequest.newBuilder(URI.create("https://api.brevo.com/v3/smtp/email"))
+                .header("api-key", brevoapiKey)
+                .header("accept", "application/json")
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(10))
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
                 .build();
             var res = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() >= 300) {
-                throw new MessagingException("Resend " + res.statusCode() + ": " + res.body());
+                throw new MessagingException("Brevo " + res.statusCode() + ": " + res.body());
             }
         } catch (IOException e) {
-            throw new MessagingException("Resend send failed", e);
+            throw new MessagingException("Brevo send failed", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new MessagingException("Resend send interrupted", e);
+            throw new MessagingException("Brevo send interrupted", e);
         }
     }
 
