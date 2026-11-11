@@ -1,5 +1,6 @@
 package com.verdant.salon_ecomm.services;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.verdant.salon_ecomm.dtos.appointment.AppointmentEmailContent;
 import com.verdant.salon_ecomm.dtos.order.OrderEmailContent;
 import jakarta.mail.MessagingException;
@@ -11,6 +12,11 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -19,26 +25,29 @@ import java.util.UUID;
 @Service
 public class EmailService {
 
-    private final JavaMailSender emailSender;
     private final SpringTemplateEngine templateEngine;
+    private final JavaMailSender emailSender;
     private final String fromEmail;
     private final String frontendUrl;
+    private final String resendApiKey;
+    private final HttpClient http = HttpClient.newHttpClient();
+    private final ObjectMapper mapper = new ObjectMapper();
 
     // Shown in the newsletter emails. Change it here if the public brand name differs.
     private static final String BRAND_NAME = "Verdant Luxe";
 
     public EmailService(
-            JavaMailSender emailSender,
-            SpringTemplateEngine templateEngine,
-            // app.mail.from is optional: bulk providers (SendGrid, Brevo, SES...) log in with a username that is
-            // NOT a valid From address, so set app.mail.from when you switch. Falls back to the old behavior.
-            @Value("${app.mail.from:${spring.mail.username}}") String fromEmail,
-            @Value("${app.frontend-url:${FRONTEND_URL:http://localhost:3000}}") String frontendUrl
+        JavaMailSender emailSender,
+        SpringTemplateEngine templateEngine,
+        @Value("${app.mail.from:${spring.mail.username}}") String fromEmail,
+        @Value("${app.frontend-url:${FRONTEND_URL:http://localhost:3000}}") String frontendUrl,
+        @Value("${RESEND_API_KEY:}") String resendApiKey
     ) {
         this.emailSender = emailSender;
         this.templateEngine = templateEngine;
         this.fromEmail = fromEmail;
         this.frontendUrl = frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl;
+        this.resendApiKey = resendApiKey;
     }
 
     //Link placed in every newsletter. The frontend page at this path must call unsubscribeFromNewsletter(token).
@@ -80,7 +89,7 @@ public class EmailService {
         return frontendUrl + "/book";
     }
 
-    // Appointment booked, confirmed, rescheduled or cancelled. Values are rendered with th:text (escaped).
+    // Appointment booked, confirmed, rescheduled or canceled. Values are rendered with th:text (escaped).
     public void sendAppointmentEmail(String to, String subject, AppointmentEmailContent content)
             throws MessagingException {
         Context context = new Context();
@@ -192,11 +201,20 @@ public class EmailService {
         sendEmail(to, subject, htmlBody, Map.of());
     }
 
+
     private void sendEmail(String to, String subject, String htmlBody, Map<String, String> headers)
-            throws MessagingException {
+        throws MessagingException {
+        if (resendApiKey.isBlank()) {
+            sendViaSmtp(to, subject, htmlBody, headers);
+        } else {
+            sendViaResend(to, subject, htmlBody, headers);
+        }
+    }
+
+    private void sendViaSmtp(String to, String subject, String htmlBody, Map<String, String> headers)
+        throws MessagingException {
         MimeMessage mimeMessage = emailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
-
         helper.setFrom(fromEmail);
         helper.setTo(to);
         helper.setSubject(subject);
@@ -204,8 +222,30 @@ public class EmailService {
         for (Map.Entry<String, String> header : headers.entrySet()) {
             mimeMessage.setHeader(header.getKey(), header.getValue());
         }
-
         emailSender.send(mimeMessage);
+    }
+
+    private void sendViaResend(String to, String subject, String htmlBody, Map<String, String> headers)
+        throws MessagingException {
+        try {
+            var body = Map.of("from", fromEmail, "to", List.of(to),
+                "subject", subject, "html", htmlBody, "headers", headers);
+            var req = HttpRequest.newBuilder(URI.create("https://api.resend.com/emails"))
+                .header("Authorization", "Bearer " + resendApiKey)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(10))
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
+                .build();
+            var res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() >= 300) {
+                throw new MessagingException("Resend " + res.statusCode() + ": " + res.body());
+            }
+        } catch (IOException e) {
+            throw new MessagingException("Resend send failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new MessagingException("Resend send interrupted", e);
+        }
     }
 
     // Sent to the OLD address after an email change, so the real owner can spot a hijack.
